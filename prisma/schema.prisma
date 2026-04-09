@@ -1,0 +1,37 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ProviderName {
+  melolo
+  meloshort
+  goodshort
+  dramawave
+  reelshort
+  freereels
+  flickreels
+  netshort
+}
+
+model Drama {
+  id              String       @id @default(uuid()) @db.Uuid
+  providerDramaId String
+  providerName    ProviderName
+  title           String
+  description     String       @default("")
+  thumbUrl        String       @default("")
+  episodeCount    Int          @default(0)
+  watchValue      String       @default("")
+  isNewBook       Boolean      @default(false)
+  tags            String[]     @default([])
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([providerName, providerDramaId])
+  @@index([providerName, updatedAt])
+}
