@@ -14,7 +14,6 @@ import { redirect } from "next/navigation";
 
 import { logoutUserAction } from "@/app/auth/actions";
 import { SiteFooter } from "@/components/site-footer";
-import { SiteHeader } from "@/components/site-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -81,7 +80,7 @@ export default async function ProfilePage() {
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
-      <SiteHeader current="account" />
+
 
       <section className="profile-panel overflow-hidden rounded-[2rem] p-4 sm:p-5">
         <div className="rounded-[1.8rem] border border-white/10 bg-[linear-gradient(180deg,rgba(49,33,64,0.54),rgba(28,19,33,0.38))] p-4 shadow-[0_24px_60px_rgba(0,0,0,0.28)]">

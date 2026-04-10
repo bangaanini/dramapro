@@ -166,11 +166,10 @@ export function SearchPanel({ providers, tags }: SearchPanelProps) {
               </Badge>
               <div>
                 <h2 className="text-2xl font-semibold text-white">
-                  Cari drama lebih cepat
+                  Cari drama favoritmu
                 </h2>
                 <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                  Ketik minimal 3 karakter, lalu sempitkan hasil dengan provider
-                  atau tag dari database.
+                  Ketik minimal 3 karakter
                 </p>
               </div>
             </div>
@@ -191,64 +190,11 @@ export function SearchPanel({ providers, tags }: SearchPanelProps) {
                 <input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Contoh: cinta keluarga CEO"
+                  placeholder="Contoh: CEO"
                   className="w-full bg-transparent text-sm text-white outline-none placeholder:text-[var(--muted-foreground)]"
                 />
               </div>
             </label>
-
-            <div className="space-y-3">
-              <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-foreground)]">
-                Provider shortcuts
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {providers.map((provider) => (
-                  <button
-                    key={provider.value}
-                    type="button"
-                    onClick={() => toggleProvider(provider.value)}
-                    className={cn(
-                      "rounded-full border px-3 py-2 text-sm transition",
-                      selectedProvider === provider.value
-                        ? "border-accent/30 bg-accent-soft text-white"
-                        : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:bg-white/8 hover:text-white",
-                    )}
-                  >
-                    {formatProviderName(provider.value)}{" "}
-                    <span className="text-[11px] text-[var(--muted-foreground)]">
-                      {provider.count}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-foreground)]">
-                Tag shortcuts
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {tags.map((tag) => (
-                  <button
-                    key={tag.value}
-                    type="button"
-                    onClick={() => toggleTag(tag.value)}
-                    className={cn(
-                      "rounded-full border px-3 py-2 text-sm transition",
-                      selectedTag === tag.value
-                        ? "border-accent/30 bg-accent-soft text-white"
-                        : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:bg-white/8 hover:text-white",
-                    )}
-                  >
-                    #{tag.value}{" "}
-                    <span className="text-[11px] text-[var(--muted-foreground)]">
-                      {tag.count}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
 
           <div className="rounded-[1.5rem] border border-white/10 bg-black/18 p-4">
             {!canSearch ? (
@@ -258,7 +204,7 @@ export function SearchPanel({ providers, tags }: SearchPanelProps) {
                 </div>
                 <div className="space-y-1">
                   <p className="font-medium text-white">
-                    Mulai dengan keyword minimal 3 karakter
+                    Ketik keyword minimal 3 karakter
                   </p>
                   <p className="text-sm text-[var(--muted)]">
                     Atau tekan shortcut provider/tag untuk menampilkan hasil
@@ -323,6 +269,61 @@ export function SearchPanel({ providers, tags }: SearchPanelProps) {
               </div>
             )}
           </div>
+
+            <div className="space-y-3">
+              <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-foreground)]">
+                Cari berdasarkan provider
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {providers.map((provider) => (
+                  <button
+                    key={provider.value}
+                    type="button"
+                    onClick={() => toggleProvider(provider.value)}
+                    className={cn(
+                      "rounded-full border px-3 py-2 text-sm transition",
+                      selectedProvider === provider.value
+                        ? "border-accent/30 bg-accent-soft text-white"
+                        : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:bg-white/8 hover:text-white",
+                    )}
+                  >
+                    {formatProviderName(provider.value)}{" "}
+                    <span className="text-[11px] text-[var(--muted-foreground)]">
+                      {provider.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-foreground)]">
+                Populer tag
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {tags.map((tag) => (
+                  <button
+                    key={tag.value}
+                    type="button"
+                    onClick={() => toggleTag(tag.value)}
+                    className={cn(
+                      "rounded-full border px-3 py-2 text-sm transition",
+                      selectedTag === tag.value
+                        ? "border-accent/30 bg-accent-soft text-white"
+                        : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:bg-white/8 hover:text-white",
+                    )}
+                  >
+                    #{tag.value}{" "}
+                    <span className="text-[11px] text-[var(--muted-foreground)]">
+                      {tag.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+
         </CardContent>
       </Card>
     </section>

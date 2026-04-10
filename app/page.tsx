@@ -5,7 +5,6 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { DramaCard } from "@/components/drama-card";
-import { SearchPanel } from "@/components/search-panel";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { UserLibraryHint } from "@/components/user-session-nav";
@@ -142,7 +141,6 @@ export default async function HomePage(props: PageProps<"/">) {
     newTotal,
     popularEntries,
     popularTotal,
-    shortcuts,
   ] =
     await Promise.all([
       prisma.drama.count(),
@@ -213,7 +211,7 @@ export default async function HomePage(props: PageProps<"/">) {
         </div>
       </section>
 
-      <SearchPanel providers={shortcuts.providers} tags={shortcuts.tags} />
+
 
       {totalDramas === 0 ? (
         <section className="mt-8">
@@ -237,8 +235,8 @@ export default async function HomePage(props: PageProps<"/">) {
       ) : (
         <>
           <DramaFeedSection
-            title="Home Picks"
-            description="Koleksi utama lintas provider untuk beranda."
+            title="Rekomendasi Untukmu"
+            description="Koleksi drama untukmu"
             entries={homeEntries}
             total={homeTotal}
             source="home"
@@ -247,7 +245,7 @@ export default async function HomePage(props: PageProps<"/">) {
           />
           <DramaFeedSection
             title="New Releases"
-            description="Drama terbaru yang masuk ke upstream feed."
+            description="Drama terbaru."
             entries={newEntries}
             total={newTotal}
             source="new"
@@ -255,8 +253,8 @@ export default async function HomePage(props: PageProps<"/">) {
             searchParams={searchParams}
           />
           <DramaFeedSection
-            title="Popular Now"
-            description="Judul yang sedang ramai saat provider mendukung feed ini."
+            title="Populer"
+            description="Drama populer"
             entries={popularEntries}
             total={popularTotal}
             source="popular"
