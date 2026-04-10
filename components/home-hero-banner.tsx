@@ -1,13 +1,15 @@
-"use client";
-
 import Image from "next/image";
 import Link from "next/link";
 import { Flame, PlayCircle, Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import type { HomeFeedEntry } from "@/lib/catalog-data";
-import { formatProviderName, shouldBypassImageOptimization } from "@/lib/utils";
+import {
+  cn,
+  formatProviderName,
+  shouldBypassImageOptimization,
+} from "@/lib/utils";
 
 type HomeHeroBannerProps = {
   items: HomeFeedEntry[];
@@ -65,11 +67,13 @@ export function HomeHeroBanner({ items }: HomeHeroBannerProps) {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <Link href={featuredItem.href} prefetch>
-                <Button size="lg" className="h-11 rounded-full px-5">
-                  <PlayCircle className="mr-2 size-4.5" />
-                  Tonton sekarang
-                </Button>
+              <Link
+                href={featuredItem.href}
+                prefetch
+                className={cn(buttonVariants({ size: "lg" }), "h-11 rounded-full px-5")}
+              >
+                <PlayCircle className="mr-2 size-4.5" />
+                Tonton sekarang
               </Link>
               <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/24 px-3 py-2 text-sm text-white/70 backdrop-blur">
                 <Sparkles className="size-4 text-accent" />
