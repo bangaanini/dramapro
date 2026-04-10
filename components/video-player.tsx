@@ -99,6 +99,7 @@ export function VideoPlayer({
   } | null>(null);
   const hasAttemptedAutoFullscreenRef = useRef(false);
   const favoriteRequestRef = useRef(false);
+  const attemptedSourceUrlsRef = useRef<Set<string>>(new Set());
   const initialResumeRef = useRef({
     episodeIndex: initialEpisode,
     positionSeconds: initialPositionSeconds,
@@ -153,6 +154,9 @@ export function VideoPlayer({
           : currentEpisode,
       );
     });
+    player.on("error", () => {
+      void handlePlayerSourceError();
+    });
 
     playerRef.current = player;
 
@@ -161,6 +165,10 @@ export function VideoPlayer({
       playerRef.current = null;
     };
   }, [episodeCount]);
+
+  useEffect(() => {
+    attemptedSourceUrlsRef.current.clear();
+  }, [internalDramaId, selectedEpisode]);
 
   useEffect(() => {
     const player = playerRef.current;
@@ -305,6 +313,9 @@ export function VideoPlayer({
       return;
     }
 
+    attemptedSourceUrlsRef.current.add(selectedSource.url);
+    setError(null);
+
     const shouldResumeInitialPosition =
       lastLoadedEpisodeRef.current !== stream.episodeIndex &&
       initialResumeRef.current.episodeIndex === stream.episodeIndex &&
@@ -386,6 +397,40 @@ export function VideoPlayer({
       });
     });
   }, [isMuted, selectedQuality, selectedSubtitle, stream]);
+
+  const handlePlayerSourceError = useEffectEvent(async () => {
+    const player = playerRef.current;
+
+    if (!player || !stream) {
+      return;
+    }
+
+    const currentSourceUrl = player.currentSrc() ?? "";
+    const currentIndex = stream.qualities.findIndex(
+      (quality) =>
+        quality.url === currentSourceUrl || quality.label === selectedQuality,
+    );
+
+    const nextQuality = stream.qualities.find(
+      (quality, index) =>
+        index > currentIndex && !attemptedSourceUrlsRef.current.has(quality.url),
+    );
+
+    if (nextQuality) {
+      setToast({
+        message: `Sumber ${selectedQuality ?? "utama"} gagal, beralih ke ${nextQuality.label}.`,
+        tone: "info",
+      });
+      setSelectedQuality(nextQuality.label);
+      return;
+    }
+
+    const playerError = player.error();
+    setError(
+      playerError?.message ||
+        "Media tidak bisa diputar dari semua kualitas yang tersedia.",
+    );
+  });
 
   useEffect(() => {
     const player = playerRef.current;

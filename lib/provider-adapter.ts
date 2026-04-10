@@ -757,7 +757,7 @@ function dedupeQualities(qualities: StreamResponse["qualities"]) {
   const seen = new Set<string>();
 
   return qualities.filter((quality) => {
-    const key = `${quality.label}::${quality.url}`;
+    const key = quality.url;
 
     if (!quality.url || seen.has(key)) {
       return false;
