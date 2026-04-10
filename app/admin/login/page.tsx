@@ -17,7 +17,7 @@ export default async function AdminLoginPage(
   const admin = await getCurrentAdmin();
 
   if (admin) {
-    redirect("/admin/sync");
+    redirect("/admin/users");
   }
 
   const searchParams = await props.searchParams;
