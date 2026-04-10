@@ -1,0 +1,180 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Heart, LoaderCircle } from "lucide-react";
+
+import { toggleFavoriteDramaAction } from "@/app/drama/actions";
+import { DramaCard } from "@/components/drama-card";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+
+type FavoriteEntry = {
+  id: string;
+  createdAt: string;
+  drama: {
+    id: string;
+    title: string;
+    thumbUrl: string;
+    providerName: string;
+    episodeCount: number;
+  };
+};
+
+type FavoritesResponse = {
+  entries: FavoriteEntry[];
+};
+
+type FavoritesGridProps = {
+  userId: string;
+};
+
+export function FavoritesGrid({ userId }: FavoritesGridProps) {
+  const [entries, setEntries] = useState<FavoriteEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [hasCachedData, setHasCachedData] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    const cacheKey = `dramapro.me.favorites.${userId}`;
+
+    try {
+      const cachedValue = window.sessionStorage.getItem(cacheKey);
+
+      if (cachedValue) {
+        const cachedPayload = JSON.parse(cachedValue) as FavoritesResponse;
+        setEntries(cachedPayload.entries);
+        setHasCachedData(true);
+        setIsLoading(false);
+      }
+    } catch {
+      window.sessionStorage.removeItem(cacheKey);
+    }
+
+    async function loadFavorites() {
+      try {
+        const response = await fetch("/api/me/favorites", {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error("Gagal memuat daftar favorit.");
+        }
+
+        const payload = (await response.json()) as FavoritesResponse;
+
+        if (!isMounted) {
+          return;
+        }
+
+        setEntries(payload.entries);
+        window.sessionStorage.setItem(cacheKey, JSON.stringify(payload));
+      } catch (loadError) {
+        if (!isMounted) {
+          return;
+        }
+
+        if (!hasCachedData) {
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : "Gagal memuat daftar favorit.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void loadFavorites();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [hasCachedData, userId]);
+
+  if (isLoading) {
+    return (
+      <Card className="glass-panel rounded-[1.8rem]">
+        <CardContent className="flex min-h-52 flex-col items-center justify-center gap-3 p-8 text-center">
+          <div className="rounded-full border border-white/10 bg-white/5 p-4">
+            <LoaderCircle className="size-7 animate-spin text-accent" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-semibold text-white">Memuat favorit</h2>
+            <p className="max-w-md text-sm text-[var(--muted)]">
+              Daftar drama favoritmu sedang disiapkan.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="glass-panel rounded-[1.8rem]">
+        <CardContent className="flex min-h-52 flex-col items-center justify-center gap-3 p-8 text-center">
+          <div className="rounded-full border border-white/10 bg-white/5 p-4">
+            <Heart className="size-7 text-accent" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-semibold text-white">
+              Favorit belum bisa dimuat
+            </h2>
+            <p className="max-w-md text-sm text-[var(--muted)]">{error}</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (entries.length === 0) {
+    return (
+      <Card className="glass-panel rounded-[1.8rem]">
+        <CardContent className="flex min-h-52 flex-col items-center justify-center gap-3 p-8 text-center">
+          <div className="rounded-full border border-white/10 bg-white/5 p-4">
+            <Heart className="size-7 text-accent" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-semibold text-white">
+              Belum ada drama favorit
+            </h2>
+            <p className="max-w-md text-sm text-[var(--muted)]">
+              Tekan tombol favorit di halaman watch untuk menyimpan judul ke
+              daftar ini.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+      {entries.map((entry) => (
+        <div key={entry.id} className="space-y-3">
+          <DramaCard
+            href={`/watch/${entry.drama.id}`}
+            title={entry.drama.title}
+            thumbUrl={entry.drama.thumbUrl}
+            providerName={entry.drama.providerName}
+            episodeCount={entry.drama.episodeCount}
+            extraMeta={`Disimpan ${new Intl.DateTimeFormat("id-ID", {
+              dateStyle: "medium",
+            }).format(new Date(entry.createdAt))}`}
+          />
+          <form action={toggleFavoriteDramaAction}>
+            <input type="hidden" name="dramaId" value={entry.drama.id} />
+            <input type="hidden" name="redirectTo" value="/favorites" />
+            <Button type="submit" variant="ghost" size="sm" className="w-full">
+              Hapus dari favorit
+            </Button>
+          </form>
+        </div>
+      ))}
+    </div>
+  );
+}
