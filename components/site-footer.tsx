@@ -116,7 +116,9 @@ export function SiteFooter() {
   return (
     <>
       <div className="h-30 sm:h-32" />
-      {typeof document !== "undefined" ? createPortal(navMarkup, document.body) : null}
+      {typeof document !== "undefined" && document.body
+        ? createPortal(navMarkup, document.body)
+        : null}
     </>
   );
 }

@@ -7,6 +7,7 @@ import { toggleFavoriteDramaAction } from "@/app/drama/actions";
 import { DramaCard } from "@/components/drama-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { safeSessionStorage } from "@/lib/safe-session-storage";
 
 type FavoriteEntry = {
   id: string;
@@ -32,23 +33,16 @@ export function FavoritesGrid({ userId }: FavoritesGridProps) {
   const [entries, setEntries] = useState<FavoriteEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [hasCachedData, setHasCachedData] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
     const cacheKey = `dramapro.me.favorites.${userId}`;
+    const cachedPayload =
+      safeSessionStorage.getJSON<FavoritesResponse>(cacheKey);
 
-    try {
-      const cachedValue = window.sessionStorage.getItem(cacheKey);
-
-      if (cachedValue) {
-        const cachedPayload = JSON.parse(cachedValue) as FavoritesResponse;
-        setEntries(cachedPayload.entries);
-        setHasCachedData(true);
-        setIsLoading(false);
-      }
-    } catch {
-      window.sessionStorage.removeItem(cacheKey);
+    if (cachedPayload) {
+      setEntries(cachedPayload.entries);
+      setIsLoading(false);
     }
 
     async function loadFavorites() {
@@ -68,13 +62,14 @@ export function FavoritesGrid({ userId }: FavoritesGridProps) {
         }
 
         setEntries(payload.entries);
-        window.sessionStorage.setItem(cacheKey, JSON.stringify(payload));
+        safeSessionStorage.setJSON(cacheKey, payload);
+        setError(null);
       } catch (loadError) {
         if (!isMounted) {
           return;
         }
 
-        if (!hasCachedData) {
+        if (!cachedPayload) {
           setError(
             loadError instanceof Error
               ? loadError.message
@@ -93,7 +88,7 @@ export function FavoritesGrid({ userId }: FavoritesGridProps) {
     return () => {
       isMounted = false;
     };
-  }, [hasCachedData, userId]);
+  }, [userId]);
 
   if (isLoading) {
     return (

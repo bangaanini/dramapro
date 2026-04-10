@@ -5,6 +5,7 @@ import { LoaderCircle, Sparkles } from "lucide-react";
 
 import { SearchPanel } from "@/components/search-panel";
 import { Card, CardContent } from "@/components/ui/card";
+import { safeSessionStorage } from "@/lib/safe-session-storage";
 
 type SearchShortcut = {
   value: string;
@@ -46,18 +47,14 @@ export function SearchPanelContainer({
     }
 
     let isMounted = true;
+    const cachedShortcuts =
+      safeSessionStorage.getJSON<SearchShortcutsResponse>(
+        SEARCH_SHORTCUTS_CACHE_KEY,
+      );
 
-    try {
-      const cachedValue = window.sessionStorage.getItem(SEARCH_SHORTCUTS_CACHE_KEY);
-
-      if (cachedValue) {
-        const cachedShortcuts = JSON.parse(cachedValue) as SearchShortcutsResponse;
-        setShortcuts(cachedShortcuts);
-        setIsLoading(false);
-        return;
-      }
-    } catch {
-      window.sessionStorage.removeItem(SEARCH_SHORTCUTS_CACHE_KEY);
+    if (cachedShortcuts) {
+      setShortcuts(cachedShortcuts);
+      setIsLoading(false);
     }
 
     async function loadShortcuts() {
@@ -77,22 +74,21 @@ export function SearchPanelContainer({
         }
 
         setShortcuts(payload);
-        window.sessionStorage.setItem(
-          SEARCH_SHORTCUTS_CACHE_KEY,
-          JSON.stringify(payload),
-        );
+        safeSessionStorage.setJSON(SEARCH_SHORTCUTS_CACHE_KEY, payload);
         setError(null);
       } catch (loadError) {
         if (!isMounted) {
           return;
         }
 
-        setShortcuts(EMPTY_SHORTCUTS);
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : "Gagal memuat shortcut pencarian.",
-        );
+        if (!cachedShortcuts) {
+          setShortcuts(EMPTY_SHORTCUTS);
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : "Gagal memuat shortcut pencarian.",
+          );
+        }
       } finally {
         if (isMounted) {
           setIsLoading(false);

@@ -6,6 +6,7 @@ import { History, LoaderCircle } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { safeSessionStorage } from "@/lib/safe-session-storage";
 import { formatProviderName } from "@/lib/utils";
 
 type HistoryEntry = {
@@ -33,23 +34,16 @@ export function HistoryList({ userId }: HistoryListProps) {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [hasCachedData, setHasCachedData] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
     const cacheKey = `dramapro.me.history.${userId}`;
+    const cachedPayload =
+      safeSessionStorage.getJSON<HistoryResponse>(cacheKey);
 
-    try {
-      const cachedValue = window.sessionStorage.getItem(cacheKey);
-
-      if (cachedValue) {
-        const cachedPayload = JSON.parse(cachedValue) as HistoryResponse;
-        setEntries(cachedPayload.entries);
-        setHasCachedData(true);
-        setIsLoading(false);
-      }
-    } catch {
-      window.sessionStorage.removeItem(cacheKey);
+    if (cachedPayload) {
+      setEntries(cachedPayload.entries);
+      setIsLoading(false);
     }
 
     async function loadHistory() {
@@ -69,13 +63,14 @@ export function HistoryList({ userId }: HistoryListProps) {
         }
 
         setEntries(payload.entries);
-        window.sessionStorage.setItem(cacheKey, JSON.stringify(payload));
+        safeSessionStorage.setJSON(cacheKey, payload);
+        setError(null);
       } catch (loadError) {
         if (!isMounted) {
           return;
         }
 
-        if (!hasCachedData) {
+        if (!cachedPayload) {
           setError(
             loadError instanceof Error
               ? loadError.message
@@ -94,7 +89,7 @@ export function HistoryList({ userId }: HistoryListProps) {
     return () => {
       isMounted = false;
     };
-  }, [hasCachedData, userId]);
+  }, [userId]);
 
   if (isLoading) {
     return (

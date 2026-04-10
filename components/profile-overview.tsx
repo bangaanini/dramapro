@@ -19,6 +19,7 @@ import { logoutUserAction } from "@/app/auth/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { safeSessionStorage } from "@/lib/safe-session-storage";
 
 type ProfileOverviewProps = {
   user: {
@@ -79,17 +80,12 @@ export function ProfileOverview({ user }: ProfileOverviewProps) {
   useEffect(() => {
     let isMounted = true;
     const cacheKey = `dramapro.me.profile.${user.id}`;
+    const cachedProfile =
+      safeSessionStorage.getJSON<ProfileResponse>(cacheKey);
 
-    try {
-      const cachedValue = window.sessionStorage.getItem(cacheKey);
-
-      if (cachedValue) {
-        const cachedProfile = JSON.parse(cachedValue) as ProfileResponse;
-        setProfileData(cachedProfile);
-        setIsLoading(false);
-      }
-    } catch {
-      window.sessionStorage.removeItem(cacheKey);
+    if (cachedProfile) {
+      setProfileData(cachedProfile);
+      setIsLoading(false);
     }
 
     async function loadProfile() {
@@ -109,7 +105,11 @@ export function ProfileOverview({ user }: ProfileOverviewProps) {
         }
 
         setProfileData(payload);
-        window.sessionStorage.setItem(cacheKey, JSON.stringify(payload));
+        safeSessionStorage.setJSON(cacheKey, payload);
+      } catch {
+        if (!cachedProfile) {
+          setProfileData(null);
+        }
       } finally {
         if (isMounted) {
           setIsLoading(false);

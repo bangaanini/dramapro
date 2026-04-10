@@ -7,6 +7,7 @@ import { HomeFeedSection } from "@/components/home-feed-section";
 import { HomeHeroSlider } from "@/components/home-hero-slider";
 import { Card, CardContent } from "@/components/ui/card";
 import type { HomeFeedEntry, HomeHeroSlide } from "@/lib/catalog-data";
+import { safeSessionStorage } from "@/lib/safe-session-storage";
 
 type HomeCatalogResponse = {
   totalDramas: number;
@@ -27,18 +28,12 @@ export function HomeCatalogPanel() {
 
   useEffect(() => {
     let isMounted = true;
+    const cachedCatalog =
+      safeSessionStorage.getJSON<HomeCatalogResponse>(HOME_CATALOG_CACHE_KEY);
 
-    try {
-      const cachedValue = window.sessionStorage.getItem(HOME_CATALOG_CACHE_KEY);
-
-      if (cachedValue) {
-        const cachedCatalog = JSON.parse(cachedValue) as HomeCatalogResponse;
-        setData(cachedCatalog);
-        setIsLoading(false);
-        return;
-      }
-    } catch {
-      window.sessionStorage.removeItem(HOME_CATALOG_CACHE_KEY);
+    if (cachedCatalog) {
+      setData(cachedCatalog);
+      setIsLoading(false);
     }
 
     async function loadCatalog() {
@@ -58,22 +53,21 @@ export function HomeCatalogPanel() {
         }
 
         setData(payload);
-        window.sessionStorage.setItem(
-          HOME_CATALOG_CACHE_KEY,
-          JSON.stringify(payload),
-        );
+        safeSessionStorage.setJSON(HOME_CATALOG_CACHE_KEY, payload);
         setError(null);
       } catch (loadError) {
         if (!isMounted) {
           return;
         }
 
-        setData(null);
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : "Gagal memuat katalog beranda.",
-        );
+        if (!cachedCatalog) {
+          setData(null);
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : "Gagal memuat katalog beranda.",
+          );
+        }
       } finally {
         if (isMounted) {
           setIsLoading(false);
