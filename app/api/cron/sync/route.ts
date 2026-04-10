@@ -1,21 +1,16 @@
 import { NextRequest } from "next/server";
 
-import { prisma } from "@/lib/prisma";
+import { getAdminFromRequest } from "@/lib/admin-auth";
 import {
   PROVIDERS,
-  ProviderType,
   UpstreamHttpError,
-  fetchProviderJson,
   isProviderType,
-  normalizeHomePayload,
+  isSyncSource,
+  SYNC_SOURCES,
 } from "@/lib/provider-adapter";
+import { runProviderSync } from "@/lib/sync-dramas";
 
 export const runtime = "nodejs";
-
-type SyncError = {
-  providerDramaId: string | null;
-  message: string;
-};
 
 function getSecretFromRequest(request: NextRequest) {
   const authorization = request.headers.get("authorization");
@@ -27,49 +22,19 @@ function getSecretFromRequest(request: NextRequest) {
   return request.headers.get("x-cron-secret");
 }
 
-async function fetchHomePayloadWithRetry(provider: ProviderType, page: number) {
-  let attempts = 0;
-
-  while (attempts < 2) {
-    try {
-      return await fetchProviderJson("home", provider, { page });
-    } catch (error) {
-      attempts += 1;
-
-      if (
-        error instanceof UpstreamHttpError &&
-        attempts < 2 &&
-        (error.status === 429 || error.status >= 500)
-      ) {
-        await new Promise((resolve) => setTimeout(resolve, 800));
-        continue;
-      }
-
-      throw error;
-    }
-  }
-
-  throw new Error("Home fetch retry loop exhausted.");
-}
-
 export async function GET(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
-
-  if (!cronSecret) {
-    return Response.json(
-      { error: "CRON_SECRET is not configured." },
-      { status: 500 },
-    );
-  }
-
   const suppliedSecret = getSecretFromRequest(request);
+  const admin = await getAdminFromRequest(request);
+  const hasValidSecret = Boolean(cronSecret && suppliedSecret === cronSecret);
 
-  if (suppliedSecret !== cronSecret) {
+  if (!admin && !hasValidSecret) {
     return Response.json({ error: "Unauthorized." }, { status: 401 });
   }
 
   const providerParam = request.nextUrl.searchParams.get("provider");
   const pageParam = request.nextUrl.searchParams.get("page") ?? "1";
+  const sourceParam = request.nextUrl.searchParams.get("source") ?? "home";
   const page = Number.parseInt(pageParam, 10);
 
   if (!providerParam || !isProviderType(providerParam)) {
@@ -77,6 +42,16 @@ export async function GET(request: NextRequest) {
       {
         error: "Invalid provider.",
         supportedProviders: PROVIDERS,
+      },
+      { status: 400 },
+    );
+  }
+
+  if (!isSyncSource(sourceParam)) {
+    return Response.json(
+      {
+        error: "Invalid source.",
+        supportedSources: SYNC_SOURCES,
       },
       { status: 400 },
     );
@@ -90,78 +65,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const payload = await fetchHomePayloadWithRetry(providerParam, page);
-    const dramas = normalizeHomePayload(providerParam, payload);
-    const errors: SyncError[] = [];
-
-    let created = 0;
-    let updated = 0;
-    let skipped = 0;
-
-    for (const drama of dramas) {
-      try {
-        if (!drama.providerDramaId || !drama.title) {
-          skipped += 1;
-          errors.push({
-            providerDramaId: drama.providerDramaId || null,
-            message: "Missing providerDramaId or title.",
-          });
-          continue;
-        }
-
-        const existing = await prisma.drama.findUnique({
-          where: {
-            providerName_providerDramaId: {
-              providerName: drama.providerName,
-              providerDramaId: drama.providerDramaId,
-            },
-          },
-          select: { id: true },
-        });
-
-        await prisma.drama.upsert({
-          where: {
-            providerName_providerDramaId: {
-              providerName: drama.providerName,
-              providerDramaId: drama.providerDramaId,
-            },
-          },
-          create: drama,
-          update: {
-            title: drama.title,
-            description: drama.description,
-            thumbUrl: drama.thumbUrl,
-            episodeCount: drama.episodeCount,
-            watchValue: drama.watchValue,
-            isNewBook: drama.isNewBook,
-            tags: drama.tags,
-          },
-        });
-
-        if (existing) {
-          updated += 1;
-        } else {
-          created += 1;
-        }
-      } catch (error) {
-        skipped += 1;
-        errors.push({
-          providerDramaId: drama.providerDramaId || null,
-          message:
-            error instanceof Error ? error.message : "Unknown database error.",
-        });
-      }
-    }
-
-    return Response.json({
-      provider: providerParam,
-      page,
-      processed: dramas.length,
-      created,
-      updated,
-      skipped,
-      errors,
-    });
+    const result = await runProviderSync(providerParam, page, sourceParam);
+    return Response.json(result);
   } catch (error) {
     if (error instanceof UpstreamHttpError) {
       return Response.json(

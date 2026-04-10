@@ -35,3 +35,24 @@ model Drama {
   @@unique([providerName, providerDramaId])
   @@index([providerName, updatedAt])
 }
+
+model AdminUser {
+  id           String         @id @default(uuid()) @db.Uuid
+  email        String         @unique
+  name         String
+  passwordHash String
+  sessions     AdminSession[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}
+
+model AdminSession {
+  id          String    @id @default(uuid()) @db.Uuid
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  adminUserId String    @db.Uuid
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@index([adminUserId, expiresAt])
+}

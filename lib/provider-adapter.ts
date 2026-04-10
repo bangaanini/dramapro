@@ -13,6 +13,8 @@ export const PROVIDERS = [
 ] as const;
 
 export type ProviderType = (typeof PROVIDERS)[number];
+export const SYNC_SOURCES = ["home", "new", "popular"] as const;
+export type SyncSource = (typeof SYNC_SOURCES)[number];
 
 type JsonRecord = Record<string, unknown>;
 
@@ -89,16 +91,21 @@ export function isProviderType(value: string): value is ProviderType {
   return PROVIDERS.includes(value as ProviderType);
 }
 
-export function buildHomeUrl(
+export function isSyncSource(value: string): value is SyncSource {
+  return SYNC_SOURCES.includes(value as SyncSource);
+}
+
+export function buildCollectionUrl(
   provider: ProviderType,
+  source: SyncSource,
   page: number,
   lang = DEFAULT_LANG,
 ) {
   switch (provider) {
     case "reelshort":
-      return `${API_BASE_URL}/reelshort/home?lang=${encodeURIComponent(lang)}`;
+      return `${API_BASE_URL}/reelshort/${source}?lang=${encodeURIComponent(lang)}`;
     default:
-      return `${API_BASE_URL}/${provider}/home?page=${page}&lang=${encodeURIComponent(lang)}`;
+      return `${API_BASE_URL}/${provider}/${source}?page=${page}&lang=${encodeURIComponent(lang)}`;
   }
 }
 
@@ -151,14 +158,14 @@ export function buildStreamUrl(provider: ProviderType, args: StreamBuildArgs) {
 }
 
 export async function fetchProviderJson(
-  kind: "home" | "detail" | "stream",
+  kind: SyncSource | "detail" | "stream",
   provider: ProviderType,
   args: StreamBuildArgs,
   options?: FetchJsonOptions,
 ) {
   const url =
-    kind === "home"
-      ? buildHomeUrl(provider, args.page ?? 1, args.lang)
+    kind === "home" || kind === "new" || kind === "popular"
+      ? buildCollectionUrl(provider, kind, args.page ?? 1, args.lang)
       : kind === "detail"
         ? buildDetailUrl(provider, requireStringArg(args.id, "id"), args.lang)
         : buildStreamUrl(provider, args);
@@ -166,7 +173,7 @@ export async function fetchProviderJson(
   return fetchJson(url, options);
 }
 
-export function normalizeHomePayload(
+export function normalizeCollectionPayload(
   provider: ProviderType,
   payload: unknown,
 ): NormalizedDramaMetadata[] {
