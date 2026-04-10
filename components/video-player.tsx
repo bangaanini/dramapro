@@ -5,7 +5,6 @@ import videojs from "video.js";
 import type Player from "video.js/dist/types/player";
 import {
   AlertCircle,
-  Captions,
   ChevronLeft,
   ChevronRight,
   FileText,
@@ -15,7 +14,10 @@ import {
   Minimize2,
   Pause,
   Play,
+  RotateCcw,
+  RotateCw,
   Share2,
+  Smartphone,
   Sparkles,
   Volume2,
   VolumeX,
@@ -80,8 +82,8 @@ export function VideoPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isChromeVisible, setIsChromeVisible] = useState(true);
   const [isEpisodeSheetOpen, setIsEpisodeSheetOpen] = useState(false);
-  const [isSubtitleSheetOpen, setIsSubtitleSheetOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isRotateHintVisible, setIsRotateHintVisible] = useState(false);
   const [shareNotice, setShareNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -134,7 +136,7 @@ export function VideoPlayer({
   }, [isMuted]);
 
   useEffect(() => {
-    if (!isEpisodeSheetOpen && !isSubtitleSheetOpen) {
+    if (!isEpisodeSheetOpen) {
       return;
     }
 
@@ -144,7 +146,7 @@ export function VideoPlayer({
     return () => {
       document.body.style.overflow = overflow;
     };
-  }, [isEpisodeSheetOpen, isSubtitleSheetOpen]);
+  }, [isEpisodeSheetOpen]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -159,6 +161,39 @@ export function VideoPlayer({
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isFullscreen) {
+      setIsRotateHintVisible(false);
+      return;
+    }
+
+    const updateRotateHint = () => {
+      setIsRotateHintVisible(window.innerHeight > window.innerWidth);
+    };
+
+    updateRotateHint();
+    window.addEventListener("resize", updateRotateHint);
+    window.addEventListener("orientationchange", updateRotateHint);
+
+    return () => {
+      window.removeEventListener("resize", updateRotateHint);
+      window.removeEventListener("orientationchange", updateRotateHint);
+    };
+  }, [isFullscreen]);
+
+  useEffect(() => {
+    if (!isFullscreen) {
+      return;
+    }
+
+    const { overflow } = document.body.style;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = overflow;
+    };
+  }, [isFullscreen]);
 
   useEffect(() => {
     if (!shareNotice) {
@@ -219,7 +254,7 @@ export function VideoPlayer({
         const nextStream = payload as StreamState;
         setStream(nextStream);
         setSelectedQuality(nextStream.defaultQuality);
-        setSelectedSubtitle(nextStream.subtitles[0]?.label ?? "off");
+        setSelectedSubtitle(getPreferredSubtitleLabel(nextStream.subtitles));
         setIsChromeVisible(true);
       } catch (loadError) {
         if (controller.signal.aborted) {
@@ -291,10 +326,13 @@ export function VideoPlayer({
             kind: "subtitles",
             srclang: subtitle.language || "und",
             label: subtitle.label,
+            default: subtitle.label === selectedSubtitle,
           },
           false,
         );
       }
+
+      applySubtitleSelection(player, selectedSubtitle);
 
       player.one("loadedmetadata", () => {
         if (currentTime > 0) {
@@ -310,9 +348,10 @@ export function VideoPlayer({
         }
 
         void requestBestEffortFullscreen();
+        applySubtitleSelection(player, selectedSubtitle);
       });
     });
-  }, [isMuted, selectedQuality, stream]);
+  }, [isMuted, selectedQuality, selectedSubtitle, stream]);
 
   useEffect(() => {
     const player = playerRef.current;
@@ -328,12 +367,7 @@ export function VideoPlayer({
       (_, index) => trackArrayLike[index],
     ).filter((track): track is TextTrack => Boolean(track));
 
-    for (const track of tracks) {
-      track.mode =
-        selectedSubtitle !== "off" && track.label === selectedSubtitle
-          ? "showing"
-          : "disabled";
-    }
+    applySubtitleSelection(player, selectedSubtitle, tracks);
   }, [selectedSubtitle, stream]);
 
   const qualityOptions = stream?.qualities ?? [];
@@ -362,6 +396,24 @@ export function VideoPlayer({
     }
 
     player.pause();
+  }
+
+  function seekBy(seconds: number) {
+    const player = playerRef.current;
+
+    if (!player) {
+      return;
+    }
+
+    const currentTime = player.currentTime() ?? 0;
+    const duration = player.duration() ?? Number.NaN;
+    const nextTime = currentTime + seconds;
+    const resolvedTime = Number.isFinite(duration)
+      ? Math.min(Math.max(0, nextTime), duration)
+      : Math.max(0, nextTime);
+
+    player.currentTime(resolvedTime);
+    setIsChromeVisible(true);
   }
 
   async function requestBestEffortFullscreen() {
@@ -610,14 +662,6 @@ export function VideoPlayer({
                 }
               />
               <PlayerAction
-                label="Subtitel"
-                onClick={() => {
-                  setIsChromeVisible(true);
-                  setIsSubtitleSheetOpen(true);
-                }}
-                icon={<Captions className="size-4" />}
-              />
-              <PlayerAction
                 label="Bagikan"
                 onClick={handleShare}
                 icon={<Share2 className="size-4" />}
@@ -651,13 +695,23 @@ export function VideoPlayer({
               </div>
 
               <div className="flex items-center justify-between gap-3 rounded-[1.4rem] border border-white/10 bg-black/40 px-3 py-3 backdrop-blur">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => changeEpisode(selectedEpisode - 1)}
-                disabled={selectedEpisode === 1 || isLoading}
-                className="h-11 min-w-11 rounded-full px-3"
-              >
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => seekBy(-10)}
+                  disabled={isLoading}
+                  className="h-11 min-w-11 rounded-full px-3"
+                >
+                  <RotateCcw className="size-4" />
+                </Button>
+
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => changeEpisode(selectedEpisode - 1)}
+                  disabled={selectedEpisode === 1 || isLoading}
+                  className="h-11 min-w-11 rounded-full px-3"
+                >
                   <ChevronLeft className="size-4" />
                 </Button>
 
@@ -673,6 +727,16 @@ export function VideoPlayer({
                     <Play className="size-5 fill-current" />
                   )}
                 </button>
+
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => seekBy(10)}
+                  disabled={isLoading}
+                  className="h-11 min-w-11 rounded-full px-3"
+                >
+                  <RotateCw className="size-4" />
+                </Button>
 
                 <Button
                   variant="secondary"
@@ -707,6 +771,15 @@ export function VideoPlayer({
                 <div className="flex items-start gap-3">
                   <AlertCircle className="mt-0.5 size-4 shrink-0" />
                   <span>{error}</span>
+                </div>
+              </div>
+            ) : null}
+
+            {isRotateHintVisible ? (
+              <div className="pointer-events-none absolute inset-x-5 top-24 z-40 rounded-3xl border border-white/10 bg-black/55 px-4 py-3 text-sm text-white backdrop-blur">
+                <div className="flex items-center gap-3">
+                  <Smartphone className="size-4 text-accent" />
+                  <span>Putar perangkat ke landscape untuk tampilan fullscreen yang lebih luas.</span>
                 </div>
               </div>
             ) : null}
@@ -753,8 +826,8 @@ export function VideoPlayer({
                   Subtitle
                 </p>
                 <p className="mt-2 font-medium text-white">
-                  {stream?.subtitles.length
-                    ? `${stream.subtitles.length} track tersedia`
+                  {subtitleOptions.length > 0
+                    ? `Otomatis ${selectedSubtitle === "off" ? "nonaktif" : selectedSubtitle}`
                     : "Belum ada subtitle tambahan"}
                 </p>
               </div>
@@ -801,66 +874,6 @@ export function VideoPlayer({
                     Kualitas akan muncul setelah stream siap.
                   </div>
                 )}
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
-                    Subtitle
-                  </h3>
-                  {subtitleOptions.length > 0 ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setIsChromeVisible(true);
-                        setIsSubtitleSheetOpen(true);
-                      }}
-                      className="rounded-full"
-                    >
-                      <Captions className="mr-2 size-4" />
-                      {selectedSubtitle === "off" ? "Off" : selectedSubtitle}
-                    </Button>
-                  ) : null}
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {subtitleOptions.length > 0 ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedSubtitle("off")}
-                        className={cn(
-                          "rounded-full border px-3 py-2 text-sm font-medium transition",
-                          selectedSubtitle === "off"
-                            ? "border-accent/35 bg-accent text-white"
-                            : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:text-white",
-                        )}
-                      >
-                        Off
-                      </button>
-                      {subtitleOptions.map((subtitle) => (
-                        <button
-                          key={`${subtitle.label}-${subtitle.url}`}
-                          type="button"
-                          onClick={() => setSelectedSubtitle(subtitle.label)}
-                          className={cn(
-                            "rounded-full border px-3 py-2 text-sm font-medium transition",
-                            selectedSubtitle === subtitle.label
-                              ? "border-accent/35 bg-accent text-white"
-                              : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:text-white",
-                          )}
-                        >
-                          {subtitle.label}
-                        </button>
-                      ))}
-                    </>
-                  ) : (
-                    <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-[var(--muted)]">
-                      Subtitle belum tersedia untuk episode ini.
-                    </div>
-                  )}
-                </div>
               </div>
             </div>
           </CardContent>
@@ -916,66 +929,55 @@ export function VideoPlayer({
         </div>
       ) : null}
 
-      {isSubtitleSheetOpen ? (
-        <div className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm">
-          <button
-            type="button"
-            onClick={() => setIsSubtitleSheetOpen(false)}
-            className="absolute inset-0"
-            aria-label="Close subtitle picker"
-          />
-          <div className="absolute inset-x-0 bottom-0 rounded-t-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(46,33,43,0.96),rgba(22,16,20,0.98))] p-5 shadow-[0_-24px_60px_rgba(0,0,0,0.4)]">
-            <div className="mx-auto mb-4 h-1.5 w-20 rounded-full bg-white/25" />
-            <div className="mx-auto w-full max-w-[460px] space-y-4">
-              <div className="text-center">
-                <h3 className="text-2xl font-semibold text-white">Pilih Subtitle</h3>
-                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                  Aktifkan subtitle jika tersedia untuk episode ini.
-                </p>
-              </div>
-
-              <div className="grid gap-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedSubtitle("off");
-                    setIsSubtitleSheetOpen(false);
-                  }}
-                  className={cn(
-                    "rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition",
-                    selectedSubtitle === "off"
-                      ? "border-accent/40 bg-accent text-white shadow-[0_14px_30px_rgba(255,122,69,0.28)]"
-                      : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:bg-white/8 hover:text-white",
-                  )}
-                >
-                  Matikan subtitle
-                </button>
-
-                {subtitleOptions.map((subtitle) => (
-                  <button
-                    key={`${subtitle.label}-${subtitle.url}-sheet`}
-                    type="button"
-                    onClick={() => {
-                      setSelectedSubtitle(subtitle.label);
-                      setIsSubtitleSheetOpen(false);
-                    }}
-                    className={cn(
-                      "rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition",
-                      selectedSubtitle === subtitle.label
-                        ? "border-accent/40 bg-accent text-white shadow-[0_14px_30px_rgba(255,122,69,0.28)]"
-                        : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:bg-white/8 hover:text-white",
-                    )}
-                  >
-                    {subtitle.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
+}
+
+function getPreferredSubtitleLabel(subtitles: StreamSubtitle[]) {
+  if (subtitles.length === 0) {
+    return "off";
+  }
+
+  const preferredSubtitle = subtitles.find((subtitle) =>
+    matchesIndonesianSubtitle(subtitle),
+  );
+
+  return preferredSubtitle?.label ?? subtitles[0]?.label ?? "off";
+}
+
+function matchesIndonesianSubtitle(subtitle: StreamSubtitle) {
+  const language = subtitle.language.toLowerCase();
+  const label = subtitle.label.toLowerCase();
+
+  return (
+    language === "id" ||
+    language === "id-id" ||
+    language.includes("indo") ||
+    language.includes("indones") ||
+    label.includes("indo") ||
+    label.includes("indones")
+  );
+}
+
+function applySubtitleSelection(
+  player: Player,
+  selectedSubtitle: string,
+  tracksOverride?: TextTrack[],
+) {
+  const trackList = player.remoteTextTracks();
+  const trackArrayLike = trackList as unknown as ArrayLike<TextTrack>;
+  const tracks =
+    tracksOverride ??
+    Array.from({ length: trackList.length }, (_, index) => trackArrayLike[index]).filter(
+      (track): track is TextTrack => Boolean(track),
+    );
+
+  for (const track of tracks) {
+    track.mode =
+      selectedSubtitle !== "off" && track.label === selectedSubtitle
+        ? "showing"
+        : "disabled";
+  }
 }
 
 function PlayerAction({
