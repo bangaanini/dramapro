@@ -5,11 +5,14 @@ import videojs from "video.js";
 import type Player from "video.js/dist/types/player";
 import {
   AlertCircle,
+  Captions,
   ChevronLeft,
   ChevronRight,
   FileText,
   ListVideo,
   LoaderCircle,
+  Maximize2,
+  Minimize2,
   Pause,
   Play,
   Share2,
@@ -60,13 +63,16 @@ export function VideoPlayer({
   watchValue,
 }: VideoPlayerProps) {
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
+  const playerShellRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<Player | null>(null);
   const lastLoadedEpisodeRef = useRef<number | null>(null);
   const hideChromeTimeoutRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
+  const hasAttemptedAutoFullscreenRef = useRef(false);
 
   const [selectedEpisode, setSelectedEpisode] = useState(1);
   const [selectedQuality, setSelectedQuality] = useState<string | null>(null);
+  const [selectedSubtitle, setSelectedSubtitle] = useState<string>("off");
   const [stream, setStream] = useState<StreamState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +80,8 @@ export function VideoPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isChromeVisible, setIsChromeVisible] = useState(true);
   const [isEpisodeSheetOpen, setIsEpisodeSheetOpen] = useState(false);
+  const [isSubtitleSheetOpen, setIsSubtitleSheetOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [shareNotice, setShareNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -126,7 +134,7 @@ export function VideoPlayer({
   }, [isMuted]);
 
   useEffect(() => {
-    if (!isEpisodeSheetOpen) {
+    if (!isEpisodeSheetOpen && !isSubtitleSheetOpen) {
       return;
     }
 
@@ -136,7 +144,21 @@ export function VideoPlayer({
     return () => {
       document.body.style.overflow = overflow;
     };
-  }, [isEpisodeSheetOpen]);
+  }, [isEpisodeSheetOpen, isSubtitleSheetOpen]);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const shell = playerShellRef.current;
+      const fullscreenElement = document.fullscreenElement;
+      setIsFullscreen(Boolean(shell && fullscreenElement === shell));
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
 
   useEffect(() => {
     if (!shareNotice) {
@@ -197,6 +219,7 @@ export function VideoPlayer({
         const nextStream = payload as StreamState;
         setStream(nextStream);
         setSelectedQuality(nextStream.defaultQuality);
+        setSelectedSubtitle(nextStream.subtitles[0]?.label ?? "off");
         setIsChromeVisible(true);
       } catch (loadError) {
         if (controller.signal.aborted) {
@@ -285,11 +308,36 @@ export function VideoPlayer({
         if (playAttempt && typeof playAttempt.catch === "function") {
           void playAttempt.catch(() => undefined);
         }
+
+        void requestBestEffortFullscreen();
       });
     });
   }, [isMuted, selectedQuality, stream]);
 
+  useEffect(() => {
+    const player = playerRef.current;
+
+    if (!player || !stream) {
+      return;
+    }
+
+    const trackList = player.remoteTextTracks();
+    const trackArrayLike = trackList as unknown as ArrayLike<TextTrack>;
+    const tracks = Array.from(
+      { length: trackList.length },
+      (_, index) => trackArrayLike[index],
+    ).filter((track): track is TextTrack => Boolean(track));
+
+    for (const track of tracks) {
+      track.mode =
+        selectedSubtitle !== "off" && track.label === selectedSubtitle
+          ? "showing"
+          : "disabled";
+    }
+  }, [selectedSubtitle, stream]);
+
   const qualityOptions = stream?.qualities ?? [];
+  const subtitleOptions = stream?.subtitles ?? [];
   const episodeNumbers = Array.from(
     { length: Math.max(episodeCount, 0) },
     (_, index) => index + 1,
@@ -314,6 +362,71 @@ export function VideoPlayer({
     }
 
     player.pause();
+  }
+
+  async function requestBestEffortFullscreen() {
+    if (hasAttemptedAutoFullscreenRef.current) {
+      return;
+    }
+
+    hasAttemptedAutoFullscreenRef.current = true;
+
+    if (typeof window === "undefined" || window.innerWidth >= 1024) {
+      return;
+    }
+
+    const shell = playerShellRef.current;
+    const videoElement = videoElementRef.current as
+      | (HTMLVideoElement & {
+          webkitEnterFullscreen?: () => void;
+        })
+      | null;
+
+    try {
+      if (shell?.requestFullscreen) {
+        await shell.requestFullscreen();
+        return;
+      }
+    } catch {
+      // Browser blocked fullscreen without a user gesture.
+    }
+
+    try {
+      videoElement?.webkitEnterFullscreen?.();
+    } catch {
+      // iOS Safari may still reject this outside a user interaction.
+    }
+  }
+
+  async function toggleFullscreen() {
+    const shell = playerShellRef.current;
+    const videoElement = videoElementRef.current as
+      | (HTMLVideoElement & {
+          webkitEnterFullscreen?: () => void;
+        })
+      | null;
+
+    setIsChromeVisible(true);
+
+    if (document.fullscreenElement && document.exitFullscreen) {
+      await document.exitFullscreen();
+      return;
+    }
+
+    try {
+      if (shell?.requestFullscreen) {
+        await shell.requestFullscreen();
+        return;
+      }
+    } catch {
+      // Fall through to platform-specific video fullscreen.
+    }
+
+    try {
+      videoElement?.webkitEnterFullscreen?.();
+    } catch {
+      setShareNotice("Browser ini menolak fullscreen otomatis.");
+    }
   }
 
   function changeEpisode(nextEpisode: number) {
@@ -411,7 +524,13 @@ export function VideoPlayer({
   return (
     <div className="space-y-5">
       <div className="mx-auto w-full max-w-[440px]">
-        <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-black shadow-[0_32px_80px_rgba(0,0,0,0.45)]">
+        <div
+          ref={playerShellRef}
+          className={cn(
+            "overflow-hidden rounded-[2rem] border border-white/10 bg-black shadow-[0_32px_80px_rgba(0,0,0,0.45)]",
+            isFullscreen && "drama-shell-fullscreen",
+          )}
+        >
           <div
             className="relative aspect-[9/16] bg-black"
             onTouchStart={handleTouchStart}
@@ -476,6 +595,27 @@ export function VideoPlayer({
                 label="Episode"
                 onClick={() => setIsEpisodeSheetOpen(true)}
                 icon={<ListVideo className="size-4" />}
+              />
+              <PlayerAction
+                label={isFullscreen ? "Keluar" : "Fullscreen"}
+                onClick={() => {
+                  void toggleFullscreen();
+                }}
+                icon={
+                  isFullscreen ? (
+                    <Minimize2 className="size-4" />
+                  ) : (
+                    <Maximize2 className="size-4" />
+                  )
+                }
+              />
+              <PlayerAction
+                label="Subtitel"
+                onClick={() => {
+                  setIsChromeVisible(true);
+                  setIsSubtitleSheetOpen(true);
+                }}
+                icon={<Captions className="size-4" />}
               />
               <PlayerAction
                 label="Bagikan"
@@ -548,8 +688,8 @@ export function VideoPlayer({
               </div>
 
               <div className="flex items-center justify-between text-[11px] text-white/72">
-                <span>Tap video untuk tampilkan kontrol</span>
-                <span>Swipe atas/bawah untuk ganti episode</span>
+                <span>Tap video untuk kontrol</span>
+                <span>Swipe untuk ganti episode</span>
               </div>
             </div>
 
@@ -662,6 +802,66 @@ export function VideoPlayer({
                   </div>
                 )}
               </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
+                    Subtitle
+                  </h3>
+                  {subtitleOptions.length > 0 ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setIsChromeVisible(true);
+                        setIsSubtitleSheetOpen(true);
+                      }}
+                      className="rounded-full"
+                    >
+                      <Captions className="mr-2 size-4" />
+                      {selectedSubtitle === "off" ? "Off" : selectedSubtitle}
+                    </Button>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {subtitleOptions.length > 0 ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSubtitle("off")}
+                        className={cn(
+                          "rounded-full border px-3 py-2 text-sm font-medium transition",
+                          selectedSubtitle === "off"
+                            ? "border-accent/35 bg-accent text-white"
+                            : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:text-white",
+                        )}
+                      >
+                        Off
+                      </button>
+                      {subtitleOptions.map((subtitle) => (
+                        <button
+                          key={`${subtitle.label}-${subtitle.url}`}
+                          type="button"
+                          onClick={() => setSelectedSubtitle(subtitle.label)}
+                          className={cn(
+                            "rounded-full border px-3 py-2 text-sm font-medium transition",
+                            selectedSubtitle === subtitle.label
+                              ? "border-accent/35 bg-accent text-white"
+                              : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:text-white",
+                          )}
+                        >
+                          {subtitle.label}
+                        </button>
+                      ))}
+                    </>
+                  ) : (
+                    <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-[var(--muted)]">
+                      Subtitle belum tersedia untuk episode ini.
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -710,6 +910,65 @@ export function VideoPlayer({
               </div>
               <div className="grid max-h-[55vh] grid-cols-4 gap-2 overflow-y-auto pr-1 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:grid-cols-5">
                 {renderEpisodeButtons(() => setIsEpisodeSheetOpen(false))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isSubtitleSheetOpen ? (
+        <div className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm">
+          <button
+            type="button"
+            onClick={() => setIsSubtitleSheetOpen(false)}
+            className="absolute inset-0"
+            aria-label="Close subtitle picker"
+          />
+          <div className="absolute inset-x-0 bottom-0 rounded-t-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(46,33,43,0.96),rgba(22,16,20,0.98))] p-5 shadow-[0_-24px_60px_rgba(0,0,0,0.4)]">
+            <div className="mx-auto mb-4 h-1.5 w-20 rounded-full bg-white/25" />
+            <div className="mx-auto w-full max-w-[460px] space-y-4">
+              <div className="text-center">
+                <h3 className="text-2xl font-semibold text-white">Pilih Subtitle</h3>
+                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                  Aktifkan subtitle jika tersedia untuk episode ini.
+                </p>
+              </div>
+
+              <div className="grid gap-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedSubtitle("off");
+                    setIsSubtitleSheetOpen(false);
+                  }}
+                  className={cn(
+                    "rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition",
+                    selectedSubtitle === "off"
+                      ? "border-accent/40 bg-accent text-white shadow-[0_14px_30px_rgba(255,122,69,0.28)]"
+                      : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:bg-white/8 hover:text-white",
+                  )}
+                >
+                  Matikan subtitle
+                </button>
+
+                {subtitleOptions.map((subtitle) => (
+                  <button
+                    key={`${subtitle.label}-${subtitle.url}-sheet`}
+                    type="button"
+                    onClick={() => {
+                      setSelectedSubtitle(subtitle.label);
+                      setIsSubtitleSheetOpen(false);
+                    }}
+                    className={cn(
+                      "rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition",
+                      selectedSubtitle === subtitle.label
+                        ? "border-accent/40 bg-accent text-white shadow-[0_14px_30px_rgba(255,122,69,0.28)]"
+                        : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:bg-white/8 hover:text-white",
+                    )}
+                  >
+                    {subtitle.label}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
