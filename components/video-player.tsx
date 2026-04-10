@@ -12,8 +12,8 @@ import videojs from "video.js";
 import type Player from "video.js/dist/types/player";
 import {
   AlertCircle,
-  ChevronLeft,
-  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   CheckCircle2,
   Heart,
   ListVideo,
@@ -451,7 +451,6 @@ export function VideoPlayer({
   }, []);
 
   const qualityOptions = stream?.qualities ?? [];
-  const subtitleOptions = stream?.subtitles ?? [];
   const episodeNumbers = Array.from(
     { length: Math.max(episodeCount, 0) },
     (_, index) => index + 1,
@@ -968,20 +967,24 @@ export function VideoPlayer({
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => seekBy(-10)}
-                  disabled={isLoading}
+                  onClick={() => changeEpisode(selectedEpisode - 1)}
+                  disabled={selectedEpisode === 1 || isLoading}
                   className="h-11 min-w-11 rounded-full px-3"
+                  aria-label="Episode sebelumnya"
+                  title="Episode sebelumnya"
                 >
-                  <RotateCcw className="size-4" />
+                  <ChevronsLeft className="size-4" />
                 </Button>
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => changeEpisode(selectedEpisode - 1)}
-                  disabled={selectedEpisode === 1 || isLoading}
+                  onClick={() => seekBy(-10)}
+                  disabled={isLoading}
                   className="h-11 min-w-11 rounded-full px-3"
+                  aria-label="Mundur 10 detik"
+                  title="Mundur 10 detik"
                 >
-                  <ChevronLeft className="size-4" />
+                  <RotateCcw className="size-4" />
                 </Button>
                 <button
                   type="button"
@@ -1001,6 +1004,8 @@ export function VideoPlayer({
                   onClick={() => seekBy(10)}
                   disabled={isLoading}
                   className="h-11 min-w-11 rounded-full px-3"
+                  aria-label="Maju 10 detik"
+                  title="Maju 10 detik"
                 >
                   <RotateCw className="size-4" />
                 </Button>
@@ -1010,8 +1015,10 @@ export function VideoPlayer({
                   onClick={() => changeEpisode(selectedEpisode + 1)}
                   disabled={selectedEpisode === episodeCount || isLoading}
                   className="h-11 min-w-11 rounded-full px-3"
+                  aria-label="Episode berikutnya"
+                  title="Episode berikutnya"
                 >
-                  <ChevronRight className="size-4" />
+                  <ChevronsRight className="size-4" />
                 </Button>
               </div>
 
