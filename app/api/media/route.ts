@@ -7,6 +7,7 @@ const MEDIA_HEADERS = {
 };
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const sourceUrl = request.nextUrl.searchParams.get("url");
@@ -53,6 +54,12 @@ export async function GET(request: NextRequest) {
     contentType.includes("mpegurl") ||
     contentType.includes("application/vnd.apple.mpegurl") ||
     contentType.includes("audio/x-mpegurl");
+  const isSubtitle =
+    upstreamUrl.pathname.endsWith(".vtt") ||
+    upstreamUrl.pathname.endsWith(".srt") ||
+    contentType.includes("text/vtt") ||
+    contentType.includes("application/x-subrip") ||
+    contentType.includes("text/plain");
 
   if (isPlaylist) {
     const playlist = await upstreamResponse.text();
@@ -62,7 +69,22 @@ export async function GET(request: NextRequest) {
       status: upstreamResponse.status,
       headers: {
         "Content-Type": "application/x-mpegURL; charset=utf-8",
-        "Cache-Control": "public, max-age=300, s-maxage=300",
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
+  if (isSubtitle) {
+    const subtitleText = await upstreamResponse.text();
+    const subtitleBody = upstreamUrl.pathname.endsWith(".srt")
+      ? convertSrtToVtt(subtitleText)
+      : subtitleText;
+
+    return new Response(subtitleBody, {
+      status: upstreamResponse.status,
+      headers: {
+        "Content-Type": "text/vtt; charset=utf-8",
+        "Cache-Control": "no-store",
       },
     });
   }
@@ -121,4 +143,14 @@ function rewritePlaylistLine(line: string, baseUrl: URL) {
 function buildProxyLine(target: string, baseUrl: URL) {
   const resolved = new URL(target, baseUrl).toString();
   return `/api/media?url=${encodeURIComponent(resolved)}`;
+}
+
+function convertSrtToVtt(input: string) {
+  const normalized = input.replace(/\r+/g, "");
+  const body = normalized.replace(
+    /(\d{2}:\d{2}:\d{2}),(\d{3})/g,
+    "$1.$2",
+  );
+
+  return body.startsWith("WEBVTT") ? body : `WEBVTT\n\n${body}`;
 }
