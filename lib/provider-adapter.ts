@@ -418,7 +418,9 @@ async function fetchJson(url: string, options?: FetchJsonOptions) {
   }
 
   if (!response.ok) {
-    const detail = readMessage(payload) ?? `Request failed with ${response.status}.`;
+    const detail =
+      readMessage(payload) ??
+      `Request failed with ${response.status} for ${url}.`;
     throw new UpstreamHttpError(detail, response.status, payload);
   }
 

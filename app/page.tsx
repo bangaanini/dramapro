@@ -8,6 +8,7 @@ import { buttonVariants } from "@/components/ui/button";
 import type { Drama, DramaFeed } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { SyncSource } from "@/lib/provider-adapter";
+import { shouldBypassImageOptimization } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -106,6 +107,7 @@ function DramaFeedSection({
                         fill
                         className="object-cover transition duration-500 group-hover:scale-[1.05]"
                         sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 16vw"
+                        unoptimized={shouldBypassImageOptimization(drama.thumbUrl)}
                       />
                     ) : (
                       <div className="flex h-full items-center justify-center bg-[linear-gradient(180deg,#2e1c18,#1a1110)] text-sm text-[var(--muted-foreground)]">

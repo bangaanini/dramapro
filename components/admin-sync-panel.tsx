@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PROVIDERS, SYNC_SOURCES, type ProviderType, type SyncSource } from "@/lib/provider-adapter";
 
-type SyncResult = {
+type SyncApiResult = {
   provider: string;
   source: string;
   page: number;
@@ -22,6 +22,12 @@ type SyncResult = {
   updated: number;
   skipped: number;
   errors: Array<{ providerDramaId: string | null; message: string }>;
+};
+
+type SyncResult = SyncApiResult & {
+  ok: boolean;
+  status: number;
+  detail?: string;
 };
 
 async function readResponsePayload(response: Response) {
@@ -58,6 +64,7 @@ export function AdminSyncPanel({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [results, setResults] = useState<SyncResult[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<string | null>(null);
 
   const providersToRun = useMemo(
     () =>
@@ -71,6 +78,7 @@ export function AdminSyncPanel({
     event.preventDefault();
     setIsSubmitting(true);
     setError(null);
+    setSummary(null);
     setResults([]);
 
     try {
@@ -83,37 +91,99 @@ export function AdminSyncPanel({
       const nextResults: SyncResult[] = [];
 
       for (const currentProvider of providersToRun) {
-        const response = await fetch(
-          `/api/cron/sync?provider=${encodeURIComponent(currentProvider)}&page=${pageNumber}&source=${encodeURIComponent(source)}`,
-        );
+        try {
+          const response = await fetch(
+            `/api/cron/sync?provider=${encodeURIComponent(currentProvider)}&page=${pageNumber}&source=${encodeURIComponent(source)}`,
+          );
 
-        const payload = await readResponsePayload(response);
+          const payload = await readResponsePayload(response);
 
-        if (!response.ok) {
-          throw new Error(
-            (typeof payload === "object" &&
-            payload &&
-            "error" in payload &&
-            typeof payload.error === "string"
-              ? payload.error
-              : null) ||
-              (!payload
-                ? `Sync ${currentProvider} gagal: server mengembalikan body kosong dengan status ${response.status}.`
+          if (!response.ok) {
+            const detail =
+              (typeof payload === "object" &&
+              payload &&
+              "detail" in payload &&
+              typeof payload.detail === "string"
+                ? payload.detail
                 : null) ||
-              `Sync ${currentProvider} gagal dengan status ${response.status}.`,
-          );
-        }
+              (typeof payload === "object" &&
+              payload &&
+              "error" in payload &&
+              typeof payload.error === "string"
+                ? payload.error
+                : null) ||
+              (!payload
+                ? `Server mengembalikan body kosong dengan status ${response.status}.`
+                : `Server mengembalikan status ${response.status}.`);
 
-        if (!payload || typeof payload !== "object") {
-          throw new Error(
-            `Sync ${currentProvider} berhasil dipanggil tetapi response tidak valid.`,
-          );
-        }
+            nextResults.push({
+              provider: currentProvider,
+              source,
+              page: pageNumber,
+              processed: 0,
+              created: 0,
+              updated: 0,
+              skipped: 0,
+              errors: [],
+              ok: false,
+              status: response.status,
+              detail,
+            });
+            continue;
+          }
 
-        nextResults.push(payload as SyncResult);
+          if (!payload || typeof payload !== "object") {
+            nextResults.push({
+              provider: currentProvider,
+              source,
+              page: pageNumber,
+              processed: 0,
+              created: 0,
+              updated: 0,
+              skipped: 0,
+              errors: [],
+              ok: false,
+              status: response.status,
+              detail: "Response sukses tetapi body tidak valid.",
+            });
+            continue;
+          }
+
+          const result = payload as SyncApiResult;
+          nextResults.push({
+            ...result,
+            ok: true,
+            status: response.status,
+          });
+        } catch (providerError) {
+          nextResults.push({
+            provider: currentProvider,
+            source,
+            page: pageNumber,
+            processed: 0,
+            created: 0,
+            updated: 0,
+            skipped: 0,
+            errors: [],
+            ok: false,
+            status: 0,
+            detail:
+              providerError instanceof Error
+                ? providerError.message
+                : "Terjadi error saat memanggil endpoint sync.",
+          });
+        }
       }
 
       setResults(nextResults);
+      const failedCount = nextResults.filter((result) => !result.ok).length;
+      const successCount = nextResults.length - failedCount;
+
+      setSummary(
+        failedCount > 0
+          ? `Sync selesai. ${successCount} provider berhasil, ${failedCount} provider gagal. Provider yang gagal tidak menghentikan provider lain.`
+          : `Sync selesai. ${successCount} provider berhasil diproses.`,
+      );
     } catch (submitError) {
       setError(
         submitError instanceof Error ? submitError.message : "Sync gagal dijalankan.",
@@ -219,6 +289,12 @@ export function AdminSyncPanel({
               {error}
             </div>
           ) : null}
+
+          {summary ? (
+            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[var(--muted)]">
+              {summary}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -244,6 +320,18 @@ export function AdminSyncPanel({
                     <Badge variant="secondary">{result.provider}</Badge>
                     <Badge variant="outline">{result.source}</Badge>
                     <Badge variant="outline">page {result.page}</Badge>
+                    <Badge
+                      className={
+                        result.ok
+                          ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-100"
+                          : "border-red-400/20 bg-red-500/10 text-red-100"
+                      }
+                    >
+                      {result.ok ? "success" : "failed"}
+                    </Badge>
+                    <Badge variant="outline">
+                      {result.status > 0 ? `status ${result.status}` : "request error"}
+                    </Badge>
                   </div>
                   <div className="mt-3 grid gap-2 text-sm text-[var(--muted)] sm:grid-cols-4">
                     <div>Processed: <span className="text-white">{result.processed}</span></div>
@@ -251,9 +339,16 @@ export function AdminSyncPanel({
                     <div>Updated: <span className="text-white">{result.updated}</span></div>
                     <div>Skipped: <span className="text-white">{result.skipped}</span></div>
                   </div>
+                  {result.detail ? (
+                    <div className="mt-3 rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs text-red-100">
+                      {result.detail}
+                    </div>
+                  ) : null}
                   {result.errors.length > 0 ? (
                     <div className="mt-3 rounded-xl border border-yellow-300/15 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-100">
-                      {result.errors[0].message}
+                      {result.errors.length === 1
+                        ? result.errors[0].message
+                        : `${result.errors.length} item mengalami issue. Contoh: ${result.errors[0].message}`}
                     </div>
                   ) : null}
                 </div>

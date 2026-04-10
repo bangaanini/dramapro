@@ -8,6 +8,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { VideoPlayer } from "@/components/video-player";
 import { prisma } from "@/lib/prisma";
+import { shouldBypassImageOptimization } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,7 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
                   fill
                   className="object-cover"
                   sizes="(max-width: 1024px) 100vw, 360px"
+                  unoptimized={shouldBypassImageOptimization(drama.thumbUrl)}
                 />
               ) : (
                 <div className="flex h-full items-center justify-center bg-[linear-gradient(180deg,#2e1c18,#1a1110)] text-sm text-[var(--muted-foreground)]">

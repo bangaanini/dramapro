@@ -24,6 +24,8 @@ function getSecretFromRequest(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   const providerParam = request.nextUrl.searchParams.get("provider");
+  const pageParam = request.nextUrl.searchParams.get("page") ?? "1";
+  const rawSourceParam = request.nextUrl.searchParams.get("source") ?? "home";
 
   try {
     const cronSecret = process.env.CRON_SECRET;
@@ -35,10 +37,7 @@ export async function GET(request: NextRequest) {
       return Response.json({ error: "Unauthorized." }, { status: 401 });
     }
 
-    const pageParam = request.nextUrl.searchParams.get("page") ?? "1";
-    const sourceParam = normalizeSyncSource(
-      request.nextUrl.searchParams.get("source") ?? "home",
-    );
+    const sourceParam = normalizeSyncSource(rawSourceParam);
     const page = Number.parseInt(pageParam, 10);
 
     if (!providerParam || !isProviderType(providerParam)) {
@@ -76,6 +75,8 @@ export async function GET(request: NextRequest) {
         {
           error: "Upstream request failed.",
           provider: providerParam,
+          source: rawSourceParam,
+          page: pageParam,
           status: error.status,
           detail: error.message,
         },
@@ -87,6 +88,9 @@ export async function GET(request: NextRequest) {
       {
         error:
           error instanceof Error ? error.message : "Unexpected sync failure.",
+        provider: providerParam,
+        source: rawSourceParam,
+        page: pageParam,
       },
       { status: 502 },
     );
