@@ -13,6 +13,8 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "awscover.netshort.com" },
       { protocol: "https", hostname: "zshipubcdn.farsunpteltd.com" },
       { protocol: "https", hostname: "zshipricf.farsunpteltd.com" },
+      { protocol: "https", hostname: "hwztchapter.dramaboxdb.com" },
+      { protocol: "https", hostname: "hwztvideo.dramaboxdb.com" },
     ],
   },
 };

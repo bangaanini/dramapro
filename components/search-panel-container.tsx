@@ -26,7 +26,7 @@ const EMPTY_SHORTCUTS: SearchShortcutsResponse = {
   providers: [],
   tags: [],
 };
-const SEARCH_SHORTCUTS_CACHE_KEY = "dramapro.search-shortcuts";
+const SEARCH_SHORTCUTS_CACHE_KEY = "dramapro.search-shortcuts.v2";
 
 export function SearchPanelContainer({
   initialProviders = [],
