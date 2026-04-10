@@ -5,15 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { DramaCard } from "@/components/drama-card";
+import { SearchPanel } from "@/components/search-panel";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { UserLibraryHint } from "@/components/user-session-nav";
 import type { Drama, DramaFeed } from "@/app/generated/prisma/client";
-import { prisma } from "@/lib/prisma";
+import { getHomepageCatalogData } from "@/lib/catalog-data";
 import type { SyncSource } from "@/lib/provider-adapter";
 import { getSearchShortcuts } from "@/lib/search-shortcuts";
-
-export const dynamic = "force-dynamic";
 
 const DEFAULT_SECTION_LIMIT = 12;
 const MAX_SECTION_LIMIT = 60;
@@ -133,7 +131,12 @@ export default async function HomePage(props: PageProps<"/">) {
   const newLimit = parseLimit(searchParams.new);
   const popularLimit = parseLimit(searchParams.popular);
 
-  const [
+  const [catalogData, shortcuts] = await Promise.all([
+    getHomepageCatalogData(homeLimit, newLimit, popularLimit),
+    getSearchShortcuts(),
+  ]);
+
+  const {
     totalDramas,
     homeEntries,
     homeTotal,
@@ -141,32 +144,7 @@ export default async function HomePage(props: PageProps<"/">) {
     newTotal,
     popularEntries,
     popularTotal,
-  ] =
-    await Promise.all([
-      prisma.drama.count(),
-      prisma.dramaFeed.findMany({
-        where: { source: "home" },
-        include: { drama: true },
-        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-        take: homeLimit,
-      }),
-      prisma.dramaFeed.count({ where: { source: "home" } }),
-      prisma.dramaFeed.findMany({
-        where: { source: "new" },
-        include: { drama: true },
-        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-        take: newLimit,
-      }),
-      prisma.dramaFeed.count({ where: { source: "new" } }),
-      prisma.dramaFeed.findMany({
-        where: { source: "popular" },
-        include: { drama: true },
-        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-        take: popularLimit,
-      }),
-      prisma.dramaFeed.count({ where: { source: "popular" } }),
-      getSearchShortcuts(),
-    ]);
+  } = catalogData;
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
@@ -191,12 +169,17 @@ export default async function HomePage(props: PageProps<"/">) {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <UserLibraryHint />
               <Link
                 href="/profile"
-                className={buttonVariants({ variant: "ghost", size: "sm" })}
+                className={buttonVariants({ variant: "secondary", size: "sm" })}
               >
                 Buka profil
+              </Link>
+              <Link
+                href="/search"
+                className={buttonVariants({ variant: "ghost", size: "sm" })}
+              >
+                Buka pencarian
               </Link>
             </div>
           </div>
@@ -210,6 +193,8 @@ export default async function HomePage(props: PageProps<"/">) {
           </div>
         </div>
       </section>
+
+      <SearchPanel providers={shortcuts.providers} tags={shortcuts.tags} />
 
 
 

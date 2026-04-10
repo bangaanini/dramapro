@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { revalidateTag } from "next/cache";
 
 import { getAdminFromRequest } from "@/lib/admin-auth";
 import {
@@ -68,6 +69,8 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await runProviderSync(providerParam, page, sourceParam);
+    revalidateTag("catalog-home", "max");
+    revalidateTag("catalog-shortcuts", "max");
     return Response.json(result);
   } catch (error) {
     if (error instanceof UpstreamHttpError) {

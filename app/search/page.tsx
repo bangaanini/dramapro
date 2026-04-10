@@ -5,8 +5,6 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getSearchShortcuts } from "@/lib/search-shortcuts";
 
-export const dynamic = "force-dynamic";
-
 export default async function SearchPage() {
   const shortcuts = await getSearchShortcuts();
 
