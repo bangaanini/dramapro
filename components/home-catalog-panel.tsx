@@ -4,27 +4,19 @@ import { useEffect, useState } from "react";
 import { LoaderCircle, Sparkles } from "lucide-react";
 
 import { HomeFeedSection } from "@/components/home-feed-section";
-import { SearchPanelContainer } from "@/components/search-panel-container";
+import { HomeHeroSlider } from "@/components/home-hero-slider";
 import { Card, CardContent } from "@/components/ui/card";
-import type { HomeFeedEntry } from "@/lib/catalog-data";
-
-type SearchShortcut = {
-  value: string;
-  count: number;
-};
+import type { HomeFeedEntry, HomeHeroSlide } from "@/lib/catalog-data";
 
 type HomeCatalogResponse = {
   totalDramas: number;
+  heroSlides: HomeHeroSlide[];
   homeEntries: HomeFeedEntry[];
   homeTotal: number;
   newEntries: HomeFeedEntry[];
   newTotal: number;
   popularEntries: HomeFeedEntry[];
   popularTotal: number;
-  shortcuts: {
-    providers: SearchShortcut[];
-    tags: SearchShortcut[];
-  };
 };
 const HOME_CATALOG_CACHE_KEY = "dramapro.home-catalog";
 
@@ -106,10 +98,10 @@ export function HomeCatalogPanel() {
                 <LoaderCircle className="size-6 animate-spin text-accent" />
               </div>
               <div className="space-y-2">
-                <p className="font-medium text-white">Menyiapkan panel pencarian</p>
+                <p className="font-medium text-white">Menyiapkan hero slider</p>
                 <p className="max-w-md text-sm text-[var(--muted)]">
-                  Shortcut provider dan feed beranda sedang dimuat agar transisi
-                  halaman tetap ringan.
+                  Sorotan drama populer dari tiap provider sedang dimuat agar
+                  beranda terasa lebih premium dan ringan.
                 </p>
               </div>
             </CardContent>
@@ -140,7 +132,6 @@ export function HomeCatalogPanel() {
   if (!data) {
     return (
       <>
-        <SearchPanelContainer />
         <section className="mt-8">
           <Card className="glass-panel rounded-[1.75rem]">
             <CardContent className="flex min-h-72 flex-col items-center justify-center gap-3 p-10 text-center">
@@ -164,10 +155,7 @@ export function HomeCatalogPanel() {
 
   return (
     <>
-      <SearchPanelContainer
-        initialProviders={data.shortcuts.providers}
-        initialTags={data.shortcuts.tags}
-      />
+      <HomeHeroSlider slides={data.heroSlides} />
 
       {data.totalDramas === 0 ? (
         <section className="mt-8">

@@ -1,8 +1,9 @@
 import { unstable_cache } from "next/cache";
 
+import type { ProviderName } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
-const MAX_HOME_SECTION_ITEMS = 60;
+const MAX_HOME_SECTION_ITEMS = 96;
 
 export type HomeFeedEntry = {
   id: string;
@@ -13,8 +14,14 @@ export type HomeFeedEntry = {
   episodeCount: number;
 };
 
+export type HomeHeroSlide = {
+  providerName: ProviderName;
+  items: HomeFeedEntry[];
+};
+
 type HomeCatalogPayload = {
   totalDramas: number;
+  heroSlides: HomeHeroSlide[];
   homeEntries: HomeFeedEntry[];
   homeTotal: number;
   newEntries: HomeFeedEntry[];
@@ -42,6 +49,27 @@ function toHomeFeedEntries(
     providerName: drama.providerName,
     episodeCount: drama.episodeCount,
   }));
+}
+
+function buildHeroSlides(popularEntries: HomeFeedEntry[]): HomeHeroSlide[] {
+  const groupedEntries = new Map<ProviderName, HomeFeedEntry[]>();
+
+  for (const entry of popularEntries) {
+    const providerName = entry.providerName as ProviderName;
+    const currentEntries = groupedEntries.get(providerName) ?? [];
+
+    if (currentEntries.length < 2) {
+      currentEntries.push(entry);
+      groupedEntries.set(providerName, currentEntries);
+    }
+  }
+
+  return Array.from(groupedEntries.entries())
+    .filter(([, items]) => items.length > 0)
+    .map(([providerName, items]) => ({
+      providerName,
+      items,
+    }));
 }
 
 const getCachedHomepageCatalogData = unstable_cache(
@@ -81,6 +109,7 @@ const getCachedHomepageCatalogData = unstable_cache(
 
     return {
       totalDramas,
+      heroSlides: buildHeroSlides(toHomeFeedEntries(popularEntries)),
       homeEntries: toHomeFeedEntries(homeEntries),
       homeTotal,
       newEntries: toHomeFeedEntries(newEntries),
