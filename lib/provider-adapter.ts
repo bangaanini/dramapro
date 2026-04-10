@@ -309,8 +309,6 @@ export async function resolveStreamRequest({
       };
     }
     case "dramawave": {
-      await validateEpisodeFromDetail(provider, providerDramaId, episodeIndex, lang);
-
       return {
         streamArgs: {
           id: providerDramaId,
@@ -358,7 +356,7 @@ export function normalizeStreamPayload({
 }: NormalizeStreamPayloadArgs): StreamResponse {
   const root = asRecord(payload);
   const data = asRecord(root?.data);
-  const subtitles = normalizeSubtitles(data?.subtitles);
+  const subtitles = normalizeProviderSubtitles(data);
   let qualities: StreamResponse["qualities"] = [];
 
   if (provider === "goodshort") {
@@ -554,7 +552,7 @@ function normalizeGoodshortStream(data: JsonRecord | null, episodeIndex: number)
     .map((entry) => ({
       label: readString(entry.type) || "Auto",
       url: readString(entry.filePath),
-      mimeType: inferMimeType(readString(entry.filePath)),
+      mimeType: "application/x-mpegURL" as const,
     }))
     .filter(isCompleteQuality);
 }
@@ -640,6 +638,8 @@ function normalizeGenericStream(data: JsonRecord | null) {
   }
 
   const directSources: Array<[string, unknown]> = [
+    ["HLS (External H.265)", data?.external_audio_h265_m3u8],
+    ["HLS (External H.264)", data?.external_audio_h264_m3u8],
     ["HLS (H.265)", data?.h265_m3u8],
     ["HLS (H.264)", data?.h264_m3u8],
     ["HLS", data?.m3u8_url],
@@ -683,6 +683,37 @@ function normalizeSubtitles(input: unknown) {
       };
     })
     .filter((subtitle) => Boolean(subtitle.url));
+}
+
+function normalizeProviderSubtitles(data: JsonRecord | null) {
+  const baseSubtitles = normalizeSubtitles(data?.subtitles);
+  const subtitleList = readArray(data?.subtitle_list) ?? [];
+
+  const mappedSubtitleList = subtitleList
+    .map((subtitle) => asRecord(subtitle))
+    .filter((subtitle): subtitle is JsonRecord => subtitle !== null)
+    .map((subtitle) => {
+      const language = readString(subtitle.language) || "und";
+      const type = readString(subtitle.type);
+      const displayName =
+        readString(subtitle.display_name) || readString(subtitle.label);
+      const label = displayName || (type ? `${language} • ${type}` : language);
+
+      return {
+        label,
+        language,
+        url:
+          readString(subtitle.vtt) ||
+          readString(subtitle.url) ||
+          readString(subtitle.subtitle),
+      };
+    })
+    .filter((subtitle) => Boolean(subtitle.url));
+
+  return [
+    ...baseSubtitles,
+    ...mappedSubtitleList,
+  ];
 }
 
 function dedupeQualities(qualities: StreamResponse["qualities"]) {
@@ -740,6 +771,10 @@ function parseQualityScore(label: string) {
 }
 
 function inferMimeType(url: string): "application/x-mpegURL" | "video/mp4" {
+  if (url.includes("/goodshort/play/")) {
+    return "application/x-mpegURL";
+  }
+
   return url.includes(".m3u8") ? "application/x-mpegURL" : "video/mp4";
 }
 
