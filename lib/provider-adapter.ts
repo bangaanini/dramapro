@@ -23,6 +23,13 @@ type FetchJsonOptions = {
   timeoutMs?: number;
 };
 
+const UPSTREAM_HEADERS = {
+  Accept: "application/json, text/plain, */*",
+  "Accept-Language": "id-ID,id;q=0.9,en;q=0.8",
+  "User-Agent":
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+};
+
 export type NormalizedDramaMetadata = {
   providerDramaId: string;
   providerName: ProviderType;
@@ -231,12 +238,12 @@ export function normalizeCollectionPayload(
 
   if (provider === "flickreels") {
     return data
+      .flatMap((item) => readArray(asRecord(item)?.playlets) ?? [])
       .map((item) => normalizeDramaMetadata(provider, asRecord(item)))
       .filter((item): item is NormalizedDramaMetadata => item !== null);
   }
 
-  const firstBlock = asRecord(data[0]);
-  const books = Array.isArray(firstBlock?.books) ? firstBlock.books : [];
+  const books = data.flatMap((block) => readArray(asRecord(block)?.books) ?? []);
 
   return books
     .map((item) => normalizeDramaMetadata(provider, asRecord(item)))
@@ -400,7 +407,8 @@ async function validateEpisodeFromDetail(
 
 async function fetchJson(url: string, options?: FetchJsonOptions) {
   const response = await fetch(url, {
-    signal: AbortSignal.timeout(options?.timeoutMs ?? 15000),
+    headers: UPSTREAM_HEADERS,
+    signal: AbortSignal.timeout(options?.timeoutMs ?? 25000),
     ...(typeof options?.revalidate === "number"
       ? { next: { revalidate: options.revalidate } }
       : {}),
@@ -447,7 +455,7 @@ function normalizeDramaMetadata(
   }
 
   if (provider === "flickreels") {
-    return {
+    const normalized = {
       providerDramaId: readString(item.id),
       providerName: provider,
       title: readString(item.title),
@@ -458,9 +466,11 @@ function normalizeDramaMetadata(
       isNewBook: false,
       tags: readStringArray(item.tags),
     };
+
+    return normalized.providerDramaId && normalized.title ? normalized : null;
   }
 
-  return {
+  const normalized = {
     providerDramaId: readString(item.drama_id),
     providerName: provider,
     title: readString(item.drama_name),
@@ -472,6 +482,8 @@ function normalizeDramaMetadata(
       readBoolean(item.is_new_book) || readBoolean(item.is_finished) || false,
     tags: readStringArray(item.tags),
   };
+
+  return normalized.providerDramaId && normalized.title ? normalized : null;
 }
 
 function findEpisodeEntry(detailData: JsonRecord, episodeIndex: number) {
@@ -731,7 +743,15 @@ function asRecord(value: unknown): JsonRecord | null {
 }
 
 function readString(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  if (typeof value === "number" || typeof value === "bigint") {
+    return String(value);
+  }
+
+  return "";
 }
 
 function readInt(value: unknown) {

@@ -44,19 +44,28 @@ async function fetchCollectionPayloadWithRetry(
   page: number,
 ) {
   let attempts = 0;
+  const maxAttempts = 3;
 
-  while (attempts < 2) {
+  while (attempts < maxAttempts) {
     try {
-      return await fetchProviderJson(source, provider, { page });
+      return await fetchProviderJson(source, provider, {
+        page,
+      });
     } catch (error) {
       attempts += 1;
+      const shouldRetryNetworkError =
+        error instanceof Error &&
+        (error.name === "AbortError" ||
+          error.message.toLowerCase().includes("fetch failed") ||
+          error.message.toLowerCase().includes("timed out"));
 
       if (
-        error instanceof UpstreamHttpError &&
-        attempts < 2 &&
-        (error.status === 429 || error.status >= 500)
+        attempts < maxAttempts &&
+        ((error instanceof UpstreamHttpError &&
+          (error.status === 403 || error.status === 429 || error.status >= 500)) ||
+          shouldRetryNetworkError)
       ) {
-        await new Promise((resolve) => setTimeout(resolve, 800));
+        await new Promise((resolve) => setTimeout(resolve, 800 * attempts));
         continue;
       }
 
@@ -64,7 +73,7 @@ async function fetchCollectionPayloadWithRetry(
     }
   }
 
-  throw new Error("Home fetch retry loop exhausted.");
+  throw new Error("Collection fetch retry loop exhausted.");
 }
 
 async function enrichDramaMetadata(
@@ -153,7 +162,7 @@ export async function runProviderSync(
         skipped += 1;
         errors.push({
           providerDramaId: enrichedDrama.providerDramaId || null,
-          message: "Missing providerDramaId or title.",
+          message: "Skipped malformed upstream item: missing providerDramaId or title.",
         });
         continue;
       }
