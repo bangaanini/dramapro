@@ -8,6 +8,7 @@ import type { HomeFeedEntry } from "@/lib/catalog-data";
 import {
   cn,
   formatProviderName,
+  normalizeDisplayImageUrl,
   shouldBypassImageOptimization,
 } from "@/lib/utils";
 
@@ -21,19 +22,20 @@ export function HomeHeroBanner({ items }: HomeHeroBannerProps) {
   }
 
   const [featuredItem, ...secondaryItems] = items;
+  const featuredThumbUrl = normalizeDisplayImageUrl(featuredItem.thumbUrl);
 
   return (
     <section className="relative mt-10 overflow-hidden rounded-[2.2rem] border border-white/8 bg-black/30">
       <div className="absolute inset-0">
-        {featuredItem.thumbUrl ? (
+        {featuredThumbUrl ? (
           <Image
-            src={featuredItem.thumbUrl}
+            src={featuredThumbUrl}
             alt={featuredItem.title}
             fill
             priority
             className="object-cover opacity-78"
             sizes="100vw"
-            unoptimized={shouldBypassImageOptimization(featuredItem.thumbUrl)}
+            unoptimized={shouldBypassImageOptimization(featuredThumbUrl)}
           />
         ) : null}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,152,98,0.28),transparent_30%)]" />
@@ -88,14 +90,16 @@ export function HomeHeroBanner({ items }: HomeHeroBannerProps) {
                 <div className="relative overflow-hidden rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,rgba(29,21,20,0.94),rgba(17,13,13,0.94))] p-3 shadow-[0_24px_60px_rgba(0,0,0,0.3)] transition duration-300 hover:-translate-y-1 hover:border-accent/35">
                   <div className="flex items-center gap-3">
                     <div className="relative h-24 w-18 shrink-0 overflow-hidden rounded-[1rem] border border-white/10 bg-white/5">
-                      {item.thumbUrl ? (
+                      {normalizeDisplayImageUrl(item.thumbUrl) ? (
                         <Image
-                          src={item.thumbUrl}
+                          src={normalizeDisplayImageUrl(item.thumbUrl)}
                           alt={item.title}
                           fill
                           className="object-cover transition duration-500 group-hover:scale-[1.05]"
                           sizes="96px"
-                          unoptimized={shouldBypassImageOptimization(item.thumbUrl)}
+                          unoptimized={shouldBypassImageOptimization(
+                            normalizeDisplayImageUrl(item.thumbUrl),
+                          )}
                         />
                       ) : (
                         <div className="flex h-full items-center justify-center text-xs text-white/40">

@@ -4,7 +4,11 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
-import { formatProviderName, shouldBypassImageOptimization } from "@/lib/utils";
+import {
+  formatProviderName,
+  normalizeDisplayImageUrl,
+  shouldBypassImageOptimization,
+} from "@/lib/utils";
 
 type DramaCardProps = {
   href: string;
@@ -25,18 +29,20 @@ export function DramaCard({
   ctaLabel = "Watch now",
   extraMeta,
 }: DramaCardProps) {
+  const displayThumbUrl = normalizeDisplayImageUrl(thumbUrl);
+
   return (
     <Link href={href} className="group">
       <Card className="glass-panel h-full overflow-hidden rounded-[1.6rem] border-white/8 transition duration-300 hover:-translate-y-1 hover:border-accent/35 hover:shadow-[0_24px_60px_rgba(0,0,0,0.42)]">
         <div className="relative aspect-[3/4] overflow-hidden bg-white/5">
-          {thumbUrl ? (
+          {displayThumbUrl ? (
             <Image
-              src={thumbUrl}
+              src={displayThumbUrl}
               alt={title}
               fill
               className="object-cover transition duration-500 group-hover:scale-[1.05]"
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 16vw"
-              unoptimized={shouldBypassImageOptimization(thumbUrl)}
+              unoptimized={shouldBypassImageOptimization(displayThumbUrl)}
             />
           ) : (
             <div className="flex h-full items-center justify-center bg-[linear-gradient(180deg,#2e1c18,#1a1110)] text-sm text-[var(--muted-foreground)]">

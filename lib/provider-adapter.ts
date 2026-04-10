@@ -1,3 +1,5 @@
+import { normalizeDisplayImageUrl } from "@/lib/utils";
+
 const API_BASE_URL = "https://api.sonzaix.indevs.in";
 export const DEFAULT_LANG = "id";
 
@@ -204,7 +206,7 @@ export function normalizeDetailMetadata(
       providerName: provider,
       title: readString(data.title),
       description: readString(data.introduce),
-      thumbUrl: readString(data.cover),
+      thumbUrl: normalizeDisplayImageUrl(readString(data.cover)),
       episodeCount: readInt(data.upload_num),
       watchValue: readString(data.likes),
       isNewBook: false,
@@ -217,7 +219,7 @@ export function normalizeDetailMetadata(
     providerName: provider,
     title: readString(data.drama_name),
     description: readString(data.description),
-    thumbUrl: readString(data.thumb_url),
+    thumbUrl: normalizeDisplayImageUrl(readString(data.thumb_url)),
     episodeCount: readInt(data.episode_count),
     watchValue:
       readString(data.watch_value) ||
@@ -460,7 +462,9 @@ function normalizeDramaMetadata(
       providerName: provider,
       title: readString(item.title),
       description: readString(item.introduce),
-      thumbUrl: readString(item.cover) || readString(item.cover_thumb),
+      thumbUrl: normalizeDisplayImageUrl(
+        readString(item.cover) || readString(item.cover_thumb),
+      ),
       episodeCount: readInt(item.total_episodes) || readInt(item.upload_num),
       watchValue: readString(item.likes) || readString(item.rank),
       isNewBook: false,
@@ -475,7 +479,7 @@ function normalizeDramaMetadata(
     providerName: provider,
     title: readString(item.drama_name),
     description: readString(item.description),
-    thumbUrl: readString(item.thumb_url),
+    thumbUrl: normalizeDisplayImageUrl(readString(item.thumb_url)),
     episodeCount: readInt(item.episode_count),
     watchValue: readString(item.watch_value),
     isNewBook:

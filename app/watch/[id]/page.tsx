@@ -12,7 +12,10 @@ import { SiteHeader } from "@/components/site-header";
 import { VideoPlayer } from "@/components/video-player";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/user-auth";
-import { shouldBypassImageOptimization } from "@/lib/utils";
+import {
+  normalizeDisplayImageUrl,
+  shouldBypassImageOptimization,
+} from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +57,8 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
   if (!drama) {
     notFound();
   }
+
+  const dramaThumbUrl = normalizeDisplayImageUrl(drama.thumbUrl);
 
   const relatedFilters =
     drama.tags.length > 0
@@ -118,12 +123,12 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
                 <div className="relative aspect-[3/4] overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/5">
                   {drama.thumbUrl ? (
                     <Image
-                      src={drama.thumbUrl}
+                      src={dramaThumbUrl}
                       alt={drama.title}
                       fill
                       className="object-cover"
                       sizes="160px"
-                      unoptimized={shouldBypassImageOptimization(drama.thumbUrl)}
+                      unoptimized={shouldBypassImageOptimization(dramaThumbUrl)}
                     />
                   ) : (
                     <div className="flex h-full items-center justify-center bg-[linear-gradient(180deg,#2e1c18,#1a1110)] text-sm text-[var(--muted-foreground)]">
@@ -233,22 +238,18 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
 
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                   {relatedDramas.map((relatedDrama) => (
-                    <Link
-                      key={relatedDrama.id}
-                      href={`/watch/${relatedDrama.id}`}
-                      className="group"
-                    >
+                    <Link key={relatedDrama.id} href={`/watch/${relatedDrama.id}`} className="group">
                       <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/5 transition duration-300 hover:-translate-y-1 hover:border-accent/35">
                         <div className="relative aspect-[3/4] overflow-hidden bg-black/30">
-                          {relatedDrama.thumbUrl ? (
+                          {normalizeDisplayImageUrl(relatedDrama.thumbUrl) ? (
                             <Image
-                              src={relatedDrama.thumbUrl}
+                              src={normalizeDisplayImageUrl(relatedDrama.thumbUrl)}
                               alt={relatedDrama.title}
                               fill
                               className="object-cover transition duration-500 group-hover:scale-[1.04]"
                               sizes="(max-width: 640px) 45vw, 200px"
                               unoptimized={shouldBypassImageOptimization(
-                                relatedDrama.thumbUrl,
+                                normalizeDisplayImageUrl(relatedDrama.thumbUrl),
                               )}
                             />
                           ) : (
