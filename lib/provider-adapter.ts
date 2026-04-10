@@ -380,6 +380,18 @@ export function normalizeStreamPayload({
   };
 }
 
+export function getProviderPayloadError(payload: unknown) {
+  const root = asRecord(payload);
+  const code = readInt(root?.code);
+  const message = readMessage(payload);
+
+  if (code >= 400) {
+    return message || `Upstream responded with code ${code}.`;
+  }
+
+  return null;
+}
+
 async function fetchDetailData(
   provider: ProviderType,
   providerDramaId: string,
@@ -586,6 +598,7 @@ function normalizeGenericStream(data: JsonRecord | null) {
   const qualities: StreamResponse["qualities"] = [];
   const streamQualities = readArray(data?.qualities) ?? [];
   const videos = readArray(data?.videos) ?? [];
+  const videoList = readArray(data?.videoList) ?? [];
 
   for (const quality of streamQualities) {
     const entry = asRecord(quality);
@@ -634,6 +647,30 @@ function normalizeGenericStream(data: JsonRecord | null) {
       mimeType: inferMimeType(
         readString(entry.url) || readString(entry.filePath),
       ),
+    });
+  }
+
+  for (const video of videoList) {
+    const entry = asRecord(video);
+
+    if (!entry) {
+      continue;
+    }
+
+    const dpi = readInt(entry.dpi);
+    const encode = readString(entry.encode);
+    const fallbackLabel =
+      dpi > 0 && encode ? `${dpi}p ${encode}` : dpi > 0 ? `${dpi}p` : encode || "Auto";
+    const url =
+      readString(entry.playUrl) ||
+      readString(entry.play_url) ||
+      readString(entry.url) ||
+      readString(entry.filePath);
+
+    qualities.push({
+      label: fallbackLabel,
+      url,
+      mimeType: inferMimeType(url),
     });
   }
 

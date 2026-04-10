@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 import {
+  getProviderPayloadError,
   ProviderType,
   StreamResponse,
   UpstreamHttpError,
@@ -68,6 +69,18 @@ export async function GET(request: NextRequest) {
       resolved.streamArgs,
       { revalidate: 3600 },
     );
+
+    const upstreamPayloadError = getProviderPayloadError(streamPayload);
+
+    if (upstreamPayloadError) {
+      return Response.json(
+        {
+          error: "Upstream stream resolution failed.",
+          detail: upstreamPayloadError,
+        },
+        { status: 502 },
+      );
+    }
 
     const normalized = normalizeStreamPayload({
       dramaId: drama.id,
