@@ -109,8 +109,8 @@ function rewritePlaylistLine(line: string, baseUrl: URL) {
     return buildProxyLine(trimmed, baseUrl);
   }
 
-  if (trimmed.startsWith("#EXT-X-MEDIA:") && trimmed.includes('URI="')) {
-    return trimmed.replace(/URI="([^"]+)"/, (_match, uri: string) => {
+  if (trimmed.includes('URI="')) {
+    return trimmed.replace(/URI="([^"]+)"/g, (_match, uri: string) => {
       return `URI="${buildProxyLine(uri, baseUrl)}"`;
     });
   }
