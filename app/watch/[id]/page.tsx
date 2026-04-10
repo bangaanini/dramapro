@@ -120,7 +120,7 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
                   <div className="flex flex-wrap gap-2">
                     <Badge className="border-accent/25 bg-accent-soft text-accent">
                       <Sparkles className="mr-1.5 size-3.5" />
-                      Streaming fresh
+                      Streaming
                     </Badge>
                     <Badge variant="secondary">{drama.providerName}</Badge>
                   </div>
