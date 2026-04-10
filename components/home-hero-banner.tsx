@@ -48,7 +48,7 @@ export function HomeHeroBanner({ items }: HomeHeroBannerProps) {
             <div className="flex flex-wrap items-center gap-2">
               <Badge className="border-accent/30 bg-accent-soft text-accent">
                 <Flame className="mr-2 size-3.5" />
-                Banner pilihan hari ini
+                Drama pilihan hari ini
               </Badge>
               <Badge className="border-white/10 bg-black/30 text-white backdrop-blur">
                 {formatProviderName(featuredItem.providerName)}
@@ -57,7 +57,7 @@ export function HomeHeroBanner({ items }: HomeHeroBannerProps) {
 
             <div className="space-y-3">
               <p className="text-xs font-medium uppercase tracking-[0.28em] text-white/55">
-                Drama unggulan untuk discovery cepat
+                Drama unggulan
               </p>
               <h2 className="max-w-2xl text-3xl font-semibold tracking-tight text-white sm:text-4xl lg:text-5xl">
                 {featuredItem.title}
