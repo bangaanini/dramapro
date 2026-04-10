@@ -586,7 +586,42 @@ function normalizeFlickreelsStream(data: JsonRecord | null, episodeIndex: number
 
 function normalizeGenericStream(data: JsonRecord | null) {
   const qualities: StreamResponse["qualities"] = [];
+  const streamQualities = readArray(data?.qualities) ?? [];
   const videos = readArray(data?.videos) ?? [];
+
+  for (const quality of streamQualities) {
+    const entry = asRecord(quality);
+
+    if (!entry) {
+      continue;
+    }
+
+    const width = readInt(entry.width);
+    const height = readInt(entry.height);
+    const fallbackLabel =
+      height > 0
+        ? `${height}p`
+        : width > 0
+          ? `${width}w`
+          : "Auto";
+
+    qualities.push({
+      label:
+        readString(entry.label) ||
+        readString(entry.quality) ||
+        readString(entry.type) ||
+        fallbackLabel,
+      url:
+        readString(entry.url) ||
+        readString(entry.play_url) ||
+        readString(entry.filePath),
+      mimeType: inferMimeType(
+        readString(entry.url) ||
+          readString(entry.play_url) ||
+          readString(entry.filePath),
+      ),
+    });
+  }
 
   for (const video of videos) {
     const entry = asRecord(video);
