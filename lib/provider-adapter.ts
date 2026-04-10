@@ -35,6 +35,8 @@ export type NormalizedDramaMetadata = {
   tags: string[];
 };
 
+export type ProviderDetailMetadata = Partial<NormalizedDramaMetadata>;
+
 export type StreamResponse = {
   dramaId: string;
   provider: ProviderType;
@@ -171,6 +173,43 @@ export async function fetchProviderJson(
         : buildStreamUrl(provider, args);
 
   return fetchJson(url, options);
+}
+
+export function normalizeDetailMetadata(
+  provider: ProviderType,
+  payload: unknown,
+): ProviderDetailMetadata {
+  const data = getDataRecord(payload);
+
+  if (provider === "flickreels") {
+    return {
+      providerDramaId: readString(data.playlet_id),
+      providerName: provider,
+      title: readString(data.title),
+      description: readString(data.introduce),
+      thumbUrl: readString(data.cover),
+      episodeCount: readInt(data.upload_num),
+      watchValue: readString(data.likes),
+      isNewBook: false,
+      tags: readStringArray(data.tags),
+    };
+  }
+
+  return {
+    providerDramaId: readString(data.drama_id),
+    providerName: provider,
+    title: readString(data.drama_name),
+    description: readString(data.description),
+    thumbUrl: readString(data.thumb_url),
+    episodeCount: readInt(data.episode_count),
+    watchValue:
+      readString(data.watch_value) ||
+      readString(data.hot_score) ||
+      readString(data.follow_count),
+    isNewBook:
+      readBoolean(data.is_new_book) || readBoolean(data.is_finished) || false,
+    tags: readStringArray(data.tags),
+  };
 }
 
 export function normalizeCollectionPayload(

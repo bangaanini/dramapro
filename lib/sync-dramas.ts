@@ -1,10 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import {
   ProviderType,
+  ProviderDetailMetadata,
   SyncSource,
   UpstreamHttpError,
   fetchProviderJson,
   normalizeCollectionPayload,
+  normalizeDetailMetadata,
 } from "@/lib/provider-adapter";
 
 export type SyncError = {
@@ -65,6 +67,71 @@ async function fetchCollectionPayloadWithRetry(
   throw new Error("Home fetch retry loop exhausted.");
 }
 
+async function enrichDramaMetadata(
+  drama: {
+    providerDramaId: string;
+    providerName: ProviderType;
+    title: string;
+    description: string;
+    thumbUrl: string;
+    episodeCount: number;
+    watchValue: string;
+    isNewBook: boolean;
+    tags: string[];
+  },
+) {
+  const shouldFetchDetail =
+    drama.episodeCount <= 0 || !drama.description || !drama.thumbUrl;
+
+  if (!shouldFetchDetail) {
+    return drama;
+  }
+
+  try {
+    const payload = await fetchProviderJson(
+      "detail",
+      drama.providerName,
+      { id: drama.providerDramaId },
+      { revalidate: 3600 },
+    );
+
+    const detail = normalizeDetailMetadata(drama.providerName, payload);
+
+    return mergeDramaMetadata(drama, detail);
+  } catch {
+    return drama;
+  }
+}
+
+function mergeDramaMetadata(
+  base: {
+    providerDramaId: string;
+    providerName: ProviderType;
+    title: string;
+    description: string;
+    thumbUrl: string;
+    episodeCount: number;
+    watchValue: string;
+    isNewBook: boolean;
+    tags: string[];
+  },
+  detail: ProviderDetailMetadata,
+) {
+  return {
+    ...base,
+    title: detail.title || base.title,
+    description: detail.description || base.description,
+    thumbUrl: detail.thumbUrl || base.thumbUrl,
+    episodeCount:
+      typeof detail.episodeCount === "number" && detail.episodeCount > 0
+        ? detail.episodeCount
+        : base.episodeCount,
+    watchValue: detail.watchValue || base.watchValue,
+    isNewBook: detail.isNewBook ?? base.isNewBook,
+    tags: detail.tags?.length ? detail.tags : base.tags,
+  };
+}
+
 export async function runProviderSync(
   provider: ProviderType,
   page: number,
@@ -80,10 +147,12 @@ export async function runProviderSync(
 
   for (const drama of dramas) {
     try {
-      if (!drama.providerDramaId || !drama.title) {
+      const enrichedDrama = await enrichDramaMetadata(drama);
+
+      if (!enrichedDrama.providerDramaId || !enrichedDrama.title) {
         skipped += 1;
         errors.push({
-          providerDramaId: drama.providerDramaId || null,
+          providerDramaId: enrichedDrama.providerDramaId || null,
           message: "Missing providerDramaId or title.",
         });
         continue;
@@ -92,29 +161,46 @@ export async function runProviderSync(
       const existing = await prisma.drama.findUnique({
         where: {
           providerName_providerDramaId: {
-            providerName: drama.providerName,
-            providerDramaId: drama.providerDramaId,
+            providerName: enrichedDrama.providerName,
+            providerDramaId: enrichedDrama.providerDramaId,
           },
         },
         select: { id: true },
       });
 
-      await prisma.drama.upsert({
+      const storedDrama = await prisma.drama.upsert({
         where: {
           providerName_providerDramaId: {
-            providerName: drama.providerName,
-            providerDramaId: drama.providerDramaId,
+            providerName: enrichedDrama.providerName,
+            providerDramaId: enrichedDrama.providerDramaId,
           },
         },
-        create: drama,
+        create: enrichedDrama,
         update: {
-          title: drama.title,
-          description: drama.description,
-          thumbUrl: drama.thumbUrl,
-          episodeCount: drama.episodeCount,
-          watchValue: drama.watchValue,
-          isNewBook: drama.isNewBook,
-          tags: drama.tags,
+          title: enrichedDrama.title,
+          description: enrichedDrama.description,
+          thumbUrl: enrichedDrama.thumbUrl,
+          episodeCount: enrichedDrama.episodeCount,
+          watchValue: enrichedDrama.watchValue,
+          isNewBook: enrichedDrama.isNewBook,
+          tags: enrichedDrama.tags,
+        },
+        select: { id: true },
+      });
+
+      await prisma.dramaFeed.upsert({
+        where: {
+          dramaId_source: {
+            dramaId: storedDrama.id,
+            source,
+          },
+        },
+        create: {
+          dramaId: storedDrama.id,
+          source,
+        },
+        update: {
+          updatedAt: new Date(),
         },
       });
 
