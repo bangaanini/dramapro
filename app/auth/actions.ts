@@ -15,7 +15,7 @@ import {
 export async function signInUserAction(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
-  const next = resolveSafeRedirectPath(String(formData.get("next") ?? "/library"));
+  const next = resolveSafeRedirectPath(String(formData.get("next") ?? "/profile"));
 
   if (!email.trim() || !password.trim()) {
     redirect(
@@ -39,7 +39,7 @@ export async function signUpUserAction(formData: FormData) {
   const name = String(formData.get("name") ?? "");
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
-  const next = resolveSafeRedirectPath(String(formData.get("next") ?? "/library"));
+  const next = resolveSafeRedirectPath(String(formData.get("next") ?? "/profile"));
 
   const result = await registerUser({ name, email, password });
 

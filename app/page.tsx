@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Flame, Sparkles } from "lucide-react";
 
-import { Prisma } from "@/app/generated/prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
@@ -13,6 +12,7 @@ import { UserLibraryHint } from "@/components/user-session-nav";
 import type { Drama, DramaFeed } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { SyncSource } from "@/lib/provider-adapter";
+import { getSearchShortcuts } from "@/lib/search-shortcuts";
 
 export const dynamic = "force-dynamic";
 
@@ -142,8 +142,7 @@ export default async function HomePage(props: PageProps<"/">) {
     newTotal,
     popularEntries,
     popularTotal,
-    providerCounts,
-    tagRows,
+    shortcuts,
   ] =
     await Promise.all([
       prisma.drama.count(),
@@ -168,42 +167,14 @@ export default async function HomePage(props: PageProps<"/">) {
         take: popularLimit,
       }),
       prisma.dramaFeed.count({ where: { source: "popular" } }),
-      prisma.drama.groupBy({
-        by: ["providerName"],
-        _count: {
-          _all: true,
-        },
-        orderBy: {
-          providerName: "asc",
-        },
-      }),
-      prisma.$queryRaw<Array<{ tag: string; count: number }>>(Prisma.sql`
-        SELECT tag, COUNT(*)::int AS count
-        FROM (
-          SELECT UNNEST(tags) AS tag
-          FROM "Drama"
-        ) AS tags_expanded
-        WHERE tag <> ''
-        GROUP BY tag
-        ORDER BY COUNT(*) DESC, tag ASC
-        LIMIT 16
-      `),
+      getSearchShortcuts(),
     ]);
-
-  const providerShortcuts = providerCounts.map((provider) => ({
-    value: provider.providerName,
-    count: provider._count._all,
-  }));
-  const tagShortcuts = tagRows.map((tag) => ({
-    value: tag.tag,
-    count: Number(tag.count),
-  }));
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
       <SiteHeader current="home" />
 
-      <section className="glass-panel relative overflow-hidden rounded-[2rem] px-6 py-8 sm:px-8 lg:px-10">
+      <section className="soft-panel relative overflow-hidden rounded-[2rem] px-6 py-8 sm:px-8 lg:px-10">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,122,69,0.18),transparent_28%)]" />
         <div className="relative flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl space-y-5">
@@ -224,10 +195,10 @@ export default async function HomePage(props: PageProps<"/">) {
             <div className="flex flex-wrap items-center gap-3">
               <UserLibraryHint />
               <Link
-                href="/library"
+                href="/profile"
                 className={buttonVariants({ variant: "ghost", size: "sm" })}
               >
-                Open library
+                Buka profil
               </Link>
             </div>
           </div>
@@ -242,7 +213,7 @@ export default async function HomePage(props: PageProps<"/">) {
         </div>
       </section>
 
-      <SearchPanel providers={providerShortcuts} tags={tagShortcuts} />
+      <SearchPanel providers={shortcuts.providers} tags={shortcuts.tags} />
 
       {totalDramas === 0 ? (
         <section className="mt-8">

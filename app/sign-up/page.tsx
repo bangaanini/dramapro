@@ -25,7 +25,7 @@ export default async function SignUpPage(props: PageProps<"/sign-up">) {
   const name = typeof searchParams.name === "string" ? searchParams.name : "";
   const email = typeof searchParams.email === "string" ? searchParams.email : "";
   const next = resolveSafeRedirectPath(
-    typeof searchParams.next === "string" ? searchParams.next : "/library",
+    typeof searchParams.next === "string" ? searchParams.next : "/profile",
   );
 
   return (

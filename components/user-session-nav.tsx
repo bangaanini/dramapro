@@ -36,11 +36,11 @@ export async function UserSessionNav() {
         {user.name}
       </Badge>
       <Link
-        href="/library"
+        href="/profile"
         className={buttonVariants({ variant: "secondary", size: "sm" })}
       >
         <LibraryBig className="mr-2 size-4" />
-        Library
+        Profil
       </Link>
       <form action={logoutUserAction}>
         <button
@@ -68,8 +68,8 @@ export async function UserLibraryHint() {
   }
 
   return (
-    <Link
-      href="/sign-up?next=/library"
+      <Link
+      href="/sign-up?next=/profile"
       className={buttonVariants({ variant: "secondary", size: "sm" })}
     >
       <Heart className="mr-2 size-4" />

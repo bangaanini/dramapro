@@ -23,7 +23,7 @@ export default async function SignInPage(props: PageProps<"/sign-in">) {
   const error =
     typeof searchParams.error === "string" ? searchParams.error : null;
   const next = resolveSafeRedirectPath(
-    typeof searchParams.next === "string" ? searchParams.next : "/library",
+    typeof searchParams.next === "string" ? searchParams.next : "/profile",
   );
 
   return (

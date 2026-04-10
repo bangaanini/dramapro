@@ -1,79 +1,100 @@
-import Link from "next/link";
-import { Heart, LibraryBig, ShieldCheck, Sparkles } from "lucide-react";
+"use client";
 
-import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
+import Link from "next/link";
+import { Heart, History, Home, Search, UserRound } from "lucide-react";
+import { usePathname } from "next/navigation";
+
+import { cn } from "@/lib/utils";
+
+const NAV_ITEMS = [
+  { href: "/search", label: "Cari", icon: Search, key: "search", prominent: false },
+  { href: "/favorites", label: "Favorit", icon: Heart, key: "favorites", prominent: false },
+  { href: "/", label: "HOME", icon: Home, key: "home", prominent: true },
+  { href: "/history", label: "Riwayat", icon: History, key: "history", prominent: false },
+  { href: "/profile", label: "Profil", icon: UserRound, key: "profile", prominent: false },
+] as const;
+
+function resolveCurrentKey(pathname: string) {
+  if (pathname === "/") {
+    return "home";
+  }
+
+  if (pathname.startsWith("/search")) {
+    return "search";
+  }
+
+  if (pathname.startsWith("/favorites")) {
+    return "favorites";
+  }
+
+  if (pathname.startsWith("/history")) {
+    return "history";
+  }
+
+  if (pathname.startsWith("/profile") || pathname.startsWith("/library")) {
+    return "profile";
+  }
+
+  return null;
+}
 
 export function SiteFooter() {
-  const year = new Date().getFullYear();
+  const pathname = usePathname();
+  const currentKey = resolveCurrentKey(pathname);
 
   return (
-    <footer className="mt-12 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
-      <div className="glass-panel rounded-[1.9rem] px-5 py-6 sm:px-6">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:items-end">
-          <div className="space-y-4">
-            <Badge className="border-accent/30 bg-accent-soft text-accent">
-              <Sparkles className="mr-2 size-3.5" />
-              Fresh links, local catalog
-            </Badge>
-            <div>
-              <h2 className="text-2xl font-semibold tracking-tight text-white">
-                Kembali ke home kapan saja, lanjutkan tontonan saat siap.
-              </h2>
-              <p className="mt-2 max-w-2xl text-sm leading-7 text-[var(--muted)]">
-                DramaPro dirancang mobile-first supaya katalog, player, favorit,
-                dan riwayat tetap terasa cepat dipakai dari layar kecil.
-              </p>
-            </div>
-          </div>
+    <>
+      <div className="h-30 sm:h-32" />
 
-          <div className="grid gap-3 text-sm text-[var(--muted)] sm:grid-cols-3">
-            <div className="space-y-3">
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
-                Explore
-              </p>
-              <div className="flex flex-col gap-2">
-                <Link href="/" className={buttonVariants({ variant: "secondary", size: "sm" })}>
-                  Home
-                </Link>
-                <Link
-                  href="/library"
-                  className={buttonVariants({ variant: "secondary", size: "sm" })}
+      <div className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-6">
+        <nav className="floating-nav-shell mx-auto flex w-full max-w-2xl items-end justify-between rounded-[2rem] px-3 py-3">
+          {NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const isActive = currentKey === item.key;
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "relative flex min-w-0 flex-1 flex-col items-center justify-center gap-2 text-center transition",
+                  item.prominent ? "pb-0" : "pt-1",
+                )}
+              >
+                <span
+                  className={cn(
+                    "relative inline-flex items-center justify-center rounded-full border transition",
+                    item.prominent
+                      ? cn(
+                          "size-16 -translate-y-7 shadow-[0_0_26px_rgba(168,85,247,0.38)] before:absolute before:inset-0 before:rounded-full before:bg-[radial-gradient(circle,rgba(199,132,255,0.22),transparent_66%)]",
+                          isActive
+                            ? "border-fuchsia-300/40 bg-[linear-gradient(180deg,#b55cff,#8b3dff)] text-white"
+                            : "border-white/12 bg-black text-white/85",
+                        )
+                      : cn(
+                          "size-11 border-transparent",
+                          isActive
+                            ? "bg-white/12 text-white shadow-[0_10px_24px_rgba(0,0,0,0.2)]"
+                            : "bg-transparent text-white/60",
+                        ),
+                  )}
                 >
-                  <LibraryBig className="mr-2 size-4" />
-                  Library
-                </Link>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
-                User
-              </p>
-              <div className="space-y-2">
-                <p className="flex items-center gap-2">
-                  <Heart className="size-4 text-accent" />
-                  Favorit tersimpan di akun
-                </p>
-                <p className="flex items-center gap-2">
-                  <ShieldCheck className="size-4 text-accent" />
-                  Session aman via cookie server
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
-                DramaPro
-              </p>
-              <p>8 provider di-normalisasi ke satu experience.</p>
-              <p className="text-[var(--muted-foreground)]">
-                Copyright {year} DramaPro
-              </p>
-            </div>
-          </div>
-        </div>
+                  <Icon className={item.prominent ? "size-7" : "size-6"} />
+                </span>
+                <span
+                  className={cn(
+                    "text-[11px] font-medium tracking-tight",
+                    isActive ? "text-white" : "text-white/58",
+                    item.prominent && "mt-[-0.8rem] font-semibold",
+                  )}
+                >
+                  {item.label}
+                </span>
+              </Link>
+            );
+          })}
+        </nav>
       </div>
-    </footer>
+    </>
   );
 }
