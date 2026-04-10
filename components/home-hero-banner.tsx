@@ -23,6 +23,9 @@ export function HomeHeroBanner({ items }: HomeHeroBannerProps) {
 
   const [featuredItem, ...secondaryItems] = items;
   const featuredThumbUrl = normalizeDisplayImageUrl(featuredItem.thumbUrl);
+  const synopsis =
+    featuredItem.description.trim() ||
+    "Drama paling ramai lintas provider dengan episode lengkap dan siap kamu putar sekarang.";
 
   return (
     <section className="relative mt-10 overflow-hidden rounded-[2.2rem] border border-white/8 bg-black/30">
@@ -57,14 +60,13 @@ export function HomeHeroBanner({ items }: HomeHeroBannerProps) {
 
             <div className="space-y-3">
               <p className="text-xs font-medium uppercase tracking-[0.28em] text-white/55">
-                Drama unggulan
+                Peringkat #1 lintas provider
               </p>
               <h2 className="max-w-2xl text-3xl font-semibold tracking-tight text-white sm:text-4xl lg:text-5xl">
                 {featuredItem.title}
               </h2>
               <p className="max-w-xl text-sm leading-7 text-white/72 sm:text-base">
-                Jelajahi drama unggulan tanpa slider yang berat, dengan fokus ke
-                judul populer yang langsung bisa kamu buka dari banner utama.
+                {synopsis}
               </p>
             </div>
 
@@ -79,7 +81,11 @@ export function HomeHeroBanner({ items }: HomeHeroBannerProps) {
               </Link>
               <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/24 px-3 py-2 text-sm text-white/70 backdrop-blur">
                 <Sparkles className="size-4 text-accent" />
-                <span>{featuredItem.episodeCount} episode tersedia</span>
+                <span>
+                  {featuredItem.watchValue
+                    ? `${featuredItem.watchValue} tayangan • ${featuredItem.episodeCount} episode`
+                    : `${featuredItem.episodeCount} episode tersedia`}
+                </span>
               </div>
             </div>
           </div>
@@ -110,16 +116,22 @@ export function HomeHeroBanner({ items }: HomeHeroBannerProps) {
 
                     <div className="min-w-0 space-y-2">
                       <Badge className="border-white/10 bg-white/7 text-white">
-                        #{index + 2} popular
+                        #{index + 2} teratas
                       </Badge>
                       <h3 className="line-clamp-2 text-base font-semibold leading-6 text-white">
                         {item.title}
                       </h3>
                       <p className="text-xs text-white/62">
                         {formatProviderName(item.providerName)} •{" "}
-                        {item.episodeCount > 0
-                          ? `${item.episodeCount} episodes`
-                          : "Episode info unavailable"}
+                        {item.watchValue
+                          ? `${item.watchValue} tayangan`
+                          : item.episodeCount > 0
+                            ? `${item.episodeCount} episode`
+                            : "Belum ada data episode"}
+                      </p>
+                      <p className="line-clamp-2 text-xs leading-5 text-white/48">
+                        {item.description.trim() ||
+                          "Drama populer yang sedang naik di katalog lintas provider."}
                       </p>
                     </div>
                   </div>

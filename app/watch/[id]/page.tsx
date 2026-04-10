@@ -85,7 +85,6 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
           <VideoPlayer
             internalDramaId={drama.id}
             title={drama.title}
-            providerName={drama.providerName}
             episodeCount={drama.episodeCount}
             watchValue={drama.watchValue}
             initialIsFavorite={Boolean(favorite)}

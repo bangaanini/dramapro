@@ -61,7 +61,6 @@ type StreamState = {
 type VideoPlayerProps = {
   internalDramaId: string;
   title: string;
-  providerName: string;
   episodeCount: number;
   watchValue: string;
   initialIsFavorite: boolean;
@@ -78,7 +77,6 @@ type PlayerToast = {
 export function VideoPlayer({
   internalDramaId,
   title,
-  providerName,
   episodeCount,
   watchValue,
   initialIsFavorite,
@@ -883,7 +881,7 @@ export function VideoPlayer({
               )}
             >
               <Badge className="border-white/12 bg-black/45 text-white backdrop-blur">
-                {providerName}
+                {title}
               </Badge>
               <Badge className="border-accent/20 bg-accent-soft text-white backdrop-blur">
                 Episode {selectedEpisode}
