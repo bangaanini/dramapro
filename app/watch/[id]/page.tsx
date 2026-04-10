@@ -104,6 +104,8 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
             providerName={drama.providerName}
             episodeCount={drama.episodeCount}
             watchValue={drama.watchValue}
+            initialIsFavorite={Boolean(favorite)}
+            isSignedIn={Boolean(user)}
             initialEpisode={watchHistory?.episodeIndex ?? 1}
             initialPositionSeconds={watchHistory?.lastPositionSeconds ?? 0}
           />

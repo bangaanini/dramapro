@@ -3,7 +3,6 @@
 import {
   type PointerEvent,
   type ReactNode,
-  type TouchEvent,
   useEffect,
   useEffectEvent,
   useRef,
@@ -15,7 +14,8 @@ import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
-  FileText,
+  CheckCircle2,
+  Heart,
   ListVideo,
   LoaderCircle,
   Maximize2,
@@ -26,9 +26,11 @@ import {
   RotateCw,
   Share2,
   Sparkles,
+  TriangleAlert,
   Volume2,
   VolumeX,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -62,8 +64,15 @@ type VideoPlayerProps = {
   providerName: string;
   episodeCount: number;
   watchValue: string;
+  initialIsFavorite: boolean;
+  isSignedIn: boolean;
   initialEpisode?: number;
   initialPositionSeconds?: number;
+};
+
+type PlayerToast = {
+  message: string;
+  tone: "success" | "error" | "info";
 };
 
 export function VideoPlayer({
@@ -72,21 +81,24 @@ export function VideoPlayer({
   providerName,
   episodeCount,
   watchValue,
+  initialIsFavorite,
+  isSignedIn,
   initialEpisode = 1,
   initialPositionSeconds = 0,
 }: VideoPlayerProps) {
+  const router = useRouter();
   const playerStageRef = useRef<HTMLDivElement | null>(null);
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const playerRef = useRef<Player | null>(null);
   const lastLoadedEpisodeRef = useRef<number | null>(null);
   const hideChromeTimeoutRef = useRef<number | null>(null);
   const singleTapTimeoutRef = useRef<number | null>(null);
-  const touchStartYRef = useRef<number | null>(null);
   const lastTapRef = useRef<{
     time: number;
     zone: "left" | "center" | "right";
   } | null>(null);
   const hasAttemptedAutoFullscreenRef = useRef(false);
+  const favoriteRequestRef = useRef(false);
   const initialResumeRef = useRef({
     episodeIndex: initialEpisode,
     positionSeconds: initialPositionSeconds,
@@ -101,13 +113,15 @@ export function VideoPlayer({
   const [stream, setStream] = useState<StreamState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isMuted, setIsMuted] = useState(true);
+  const [isMuted, setIsMuted] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isChromeVisible, setIsChromeVisible] = useState(true);
   const [isEpisodeSheetOpen, setIsEpisodeSheetOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(initialIsFavorite);
+  const [isFavoritePending, setIsFavoritePending] = useState(false);
   const [seekNotice, setSeekNotice] = useState<string | null>(null);
-  const [shareNotice, setShareNotice] = useState<string | null>(null);
+  const [toast, setToast] = useState<PlayerToast | null>(null);
 
   useEffect(() => {
     if (!videoElementRef.current || playerRef.current) {
@@ -119,7 +133,7 @@ export function VideoPlayer({
       controls: false,
       fluid: false,
       loop: false,
-      muted: true,
+      muted: false,
       preload: "auto",
       responsive: true,
       playsinline: true,
@@ -128,7 +142,7 @@ export function VideoPlayer({
       },
     });
 
-    player.muted(true);
+    player.muted(false);
     player.on("play", () => setIsPlaying(true));
     player.on("pause", () => setIsPlaying(false));
     player.on("ended", () => {
@@ -186,19 +200,19 @@ export function VideoPlayer({
   }, []);
 
   useEffect(() => {
-    if (!seekNotice && !shareNotice) {
+    if (!seekNotice && !toast) {
       return;
     }
 
     const timeout = window.setTimeout(() => {
       setSeekNotice(null);
-      setShareNotice(null);
+      setToast(null);
     }, 1600);
 
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [seekNotice, shareNotice]);
+  }, [seekNotice, toast]);
 
   useEffect(() => {
     if (hideChromeTimeoutRef.current) {
@@ -352,7 +366,20 @@ export function VideoPlayer({
         const playAttempt = player.play();
 
         if (playAttempt && typeof playAttempt.catch === "function") {
-          void playAttempt.catch(() => undefined);
+          void playAttempt.catch(async () => {
+            player.muted(true);
+            setIsMuted(true);
+
+            try {
+              await player.play();
+              setToast({
+                message: "Browser menyalakan autoplay dalam mode mute.",
+                tone: "info",
+              });
+            } catch {
+              // Ignore blocked autoplay.
+            }
+          });
         }
 
         void requestBestEffortFullscreen();
@@ -531,7 +558,10 @@ export function VideoPlayer({
     try {
       videoElement?.webkitEnterFullscreen?.();
     } catch {
-      setShareNotice("Browser ini menolak fullscreen otomatis.");
+      setToast({
+        message: "Browser ini menolak fullscreen otomatis.",
+        tone: "info",
+      });
     }
   }
 
@@ -616,42 +646,6 @@ export function VideoPlayer({
     }, 220);
   }
 
-  function handleTouchStart(event: TouchEvent<HTMLDivElement>) {
-    touchStartYRef.current = event.touches[0]?.clientY ?? null;
-  }
-
-  function handleTouchEnd(event: TouchEvent<HTMLDivElement>) {
-    const touchStartY = touchStartYRef.current;
-    const touchEndY = event.changedTouches[0]?.clientY ?? null;
-    touchStartYRef.current = null;
-
-    if (touchStartY === null || touchEndY === null) {
-      return;
-    }
-
-    const deltaY = touchStartY - touchEndY;
-
-    if (Math.abs(deltaY) < 56) {
-      return;
-    }
-
-    setIsChromeVisible(true);
-
-    if (deltaY > 0) {
-      changeEpisode(selectedEpisode + 1);
-      return;
-    }
-
-    changeEpisode(selectedEpisode - 1);
-  }
-
-  function scrollToSynopsis() {
-    document.getElementById("watch-synopsis")?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-  }
-
   async function handleShare() {
     const shareUrl = window.location.href;
 
@@ -666,9 +660,77 @@ export function VideoPlayer({
       }
 
       await navigator.clipboard.writeText(shareUrl);
-      setShareNotice("Link drama berhasil disalin.");
+      setToast({
+        message: "Link drama berhasil disalin.",
+        tone: "success",
+      });
     } catch {
-      setShareNotice("Gagal membagikan link. Coba lagi.");
+      setToast({
+        message: "Gagal membagikan link. Coba lagi.",
+        tone: "error",
+      });
+    }
+  }
+
+  async function handleFavoriteToggle() {
+    if (isFavoritePending || favoriteRequestRef.current) {
+      return;
+    }
+
+    if (!isSignedIn) {
+      setToast({
+        message: "Masuk dulu untuk menyimpan favorit.",
+        tone: "info",
+      });
+      router.push(`/sign-in?next=${encodeURIComponent(`/watch/${internalDramaId}`)}`);
+      return;
+    }
+
+    favoriteRequestRef.current = true;
+    setIsFavoritePending(true);
+
+    try {
+      const response = await fetch("/api/me/favorites", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          dramaId: internalDramaId,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | { isFavorite?: boolean; message?: string; error?: string }
+        | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "Gagal menyimpan favorit.");
+      }
+
+      const nextFavorite = Boolean(payload?.isFavorite);
+      setIsFavorite(nextFavorite);
+      setToast({
+        message:
+          payload?.message ||
+          (nextFavorite
+            ? "Drama disimpan ke favorit."
+            : "Drama dihapus dari favorit."),
+        tone: "success",
+      });
+      router.refresh();
+    } catch (favoriteError) {
+      setToast({
+        message:
+          favoriteError instanceof Error
+            ? favoriteError.message
+            : "Gagal menyimpan favorit.",
+        tone: "error",
+      });
+    } finally {
+      favoriteRequestRef.current = false;
+      setIsFavoritePending(false);
     }
   }
 
@@ -741,8 +803,6 @@ export function VideoPlayer({
         <div className="drama-player-shell overflow-hidden rounded-[2rem] border border-white/10 bg-black shadow-[0_32px_80px_rgba(0,0,0,0.45)]">
           <div
             className="relative aspect-[9/16] bg-black"
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
           >
             <video
               ref={videoElementRef}
@@ -795,9 +855,17 @@ export function VideoPlayer({
               )}
             >
               <PlayerAction
-                label="Info"
-                onClick={scrollToSynopsis}
-                icon={<FileText className="size-4" />}
+                label={isFavorite ? "Favorit" : "Simpan"}
+                onClick={handleFavoriteToggle}
+                disabled={isFavoritePending}
+                active={isFavorite}
+                icon={
+                  isFavoritePending ? (
+                    <LoaderCircle className="size-4 animate-spin" />
+                  ) : (
+                    <Heart className={cn("size-4", isFavorite && "fill-current")} />
+                  )
+                }
               />
               <PlayerAction
                 label="Episode"
@@ -906,7 +974,7 @@ export function VideoPlayer({
 
               <div className="flex items-center justify-between text-[11px] text-white/72">
                 <span>Double tap kiri/kanan untuk seek</span>
-                <span>Swipe untuk ganti episode</span>
+                <span>Episode dipilih dari tombol atau daftar</span>
               </div>
             </div>
 
@@ -928,10 +996,25 @@ export function VideoPlayer({
               </div>
             ) : null}
 
-            {(seekNotice || shareNotice) ? (
+            {(seekNotice || toast) ? (
               <div className="pointer-events-none absolute inset-x-0 top-6 z-40 flex justify-center px-4">
-                <div className="rounded-full border border-white/10 bg-black/55 px-4 py-2 text-sm text-white backdrop-blur">
-                  {seekNotice ?? shareNotice}
+                <div
+                  className={cn(
+                    "flex items-center gap-2 rounded-full border px-4 py-2 text-sm text-white backdrop-blur",
+                    toast?.tone === "success" &&
+                      "border-emerald-300/20 bg-emerald-500/18",
+                    toast?.tone === "error" &&
+                      "border-red-300/20 bg-red-500/18",
+                    (!toast || toast.tone === "info") &&
+                      "border-white/10 bg-black/55",
+                  )}
+                >
+                  {toast?.tone === "success" ? (
+                    <CheckCircle2 className="size-4" />
+                  ) : toast?.tone === "error" ? (
+                    <TriangleAlert className="size-4" />
+                  ) : null}
+                  <span>{seekNotice ?? toast?.message}</span>
                 </div>
               </div>
             ) : null}
@@ -1126,18 +1209,30 @@ function PlayerAction({
   icon,
   label,
   onClick,
+  disabled = false,
+  active = false,
 }: {
   icon: ReactNode;
   label: string;
   onClick: () => void;
+  disabled?: boolean;
+  active?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex w-16 flex-col items-center gap-2 text-center text-xs text-white"
+      disabled={disabled}
+      className="flex w-16 flex-col items-center gap-2 text-center text-xs text-white disabled:opacity-70"
     >
-      <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/12 bg-black/45 backdrop-blur transition hover:bg-black/60">
+      <span
+        className={cn(
+          "inline-flex h-12 w-12 items-center justify-center rounded-full border backdrop-blur transition",
+          active
+            ? "border-accent/35 bg-accent text-white"
+            : "border-white/12 bg-black/45 hover:bg-black/60",
+        )}
+      >
         {icon}
       </span>
       <span className="text-[11px] leading-tight text-white/88">{label}</span>
