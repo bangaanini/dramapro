@@ -87,7 +87,14 @@ textarea {
   touch-action: manipulation;
 }
 
-.drama-shell-fullscreen {
+.drama-stage-fullscreen {
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  background: #000;
+}
+
+.drama-stage-fullscreen .drama-player-shell {
   width: 100vw;
   height: 100vh;
   border-radius: 0;
@@ -95,7 +102,7 @@ textarea {
   box-shadow: none;
 }
 
-.drama-shell-fullscreen .aspect-\[9\/16\] {
+.drama-stage-fullscreen .aspect-\[9\/16\] {
   height: 100vh;
   aspect-ratio: auto;
 }
@@ -108,6 +115,14 @@ textarea {
   font-size: clamp(12px, 2vw, 14px) !important;
   line-height: 1.35 !important;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.75);
+}
+
+.drama-player .vjs-text-track-display {
+  bottom: 5.75rem !important;
+}
+
+.drama-stage-fullscreen .drama-player .vjs-text-track-display {
+  bottom: 6.5rem !important;
 }
 
 .drama-player .vjs-control-bar,

@@ -1,6 +1,13 @@
 "use client";
 
-import { type ReactNode, type TouchEvent, useEffect, useRef, useState } from "react";
+import {
+  type PointerEvent,
+  type ReactNode,
+  type TouchEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import videojs from "video.js";
 import type Player from "video.js/dist/types/player";
 import {
@@ -17,7 +24,6 @@ import {
   RotateCcw,
   RotateCw,
   Share2,
-  Smartphone,
   Sparkles,
   Volume2,
   VolumeX,
@@ -64,12 +70,17 @@ export function VideoPlayer({
   episodeCount,
   watchValue,
 }: VideoPlayerProps) {
+  const playerStageRef = useRef<HTMLDivElement | null>(null);
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
-  const playerShellRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<Player | null>(null);
   const lastLoadedEpisodeRef = useRef<number | null>(null);
   const hideChromeTimeoutRef = useRef<number | null>(null);
+  const singleTapTimeoutRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
+  const lastTapRef = useRef<{
+    time: number;
+    zone: "left" | "center" | "right";
+  } | null>(null);
   const hasAttemptedAutoFullscreenRef = useRef(false);
 
   const [selectedEpisode, setSelectedEpisode] = useState(1);
@@ -83,7 +94,7 @@ export function VideoPlayer({
   const [isChromeVisible, setIsChromeVisible] = useState(true);
   const [isEpisodeSheetOpen, setIsEpisodeSheetOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isRotateHintVisible, setIsRotateHintVisible] = useState(false);
+  const [seekNotice, setSeekNotice] = useState<string | null>(null);
   const [shareNotice, setShareNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -136,7 +147,7 @@ export function VideoPlayer({
   }, [isMuted]);
 
   useEffect(() => {
-    if (!isEpisodeSheetOpen) {
+    if (!isEpisodeSheetOpen && !isFullscreen) {
       return;
     }
 
@@ -146,13 +157,13 @@ export function VideoPlayer({
     return () => {
       document.body.style.overflow = overflow;
     };
-  }, [isEpisodeSheetOpen]);
+  }, [isEpisodeSheetOpen, isFullscreen]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
-      const shell = playerShellRef.current;
+      const stage = playerStageRef.current;
       const fullscreenElement = document.fullscreenElement;
-      setIsFullscreen(Boolean(shell && fullscreenElement === shell));
+      setIsFullscreen(Boolean(stage && fullscreenElement === stage));
     };
 
     document.addEventListener("fullscreenchange", handleFullscreenChange);
@@ -163,46 +174,19 @@ export function VideoPlayer({
   }, []);
 
   useEffect(() => {
-    if (!isFullscreen) {
-      setIsRotateHintVisible(false);
+    if (!seekNotice && !shareNotice) {
       return;
     }
 
-    const updateRotateHint = () => {
-      setIsRotateHintVisible(window.innerHeight > window.innerWidth);
-    };
-
-    updateRotateHint();
-    window.addEventListener("resize", updateRotateHint);
-    window.addEventListener("orientationchange", updateRotateHint);
+    const timeout = window.setTimeout(() => {
+      setSeekNotice(null);
+      setShareNotice(null);
+    }, 1600);
 
     return () => {
-      window.removeEventListener("resize", updateRotateHint);
-      window.removeEventListener("orientationchange", updateRotateHint);
+      window.clearTimeout(timeout);
     };
-  }, [isFullscreen]);
-
-  useEffect(() => {
-    if (!isFullscreen) {
-      return;
-    }
-
-    const { overflow } = document.body.style;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.body.style.overflow = overflow;
-    };
-  }, [isFullscreen]);
-
-  useEffect(() => {
-    if (!shareNotice) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => setShareNotice(null), 2200);
-    return () => window.clearTimeout(timeout);
-  }, [shareNotice]);
+  }, [seekNotice, shareNotice]);
 
   useEffect(() => {
     if (hideChromeTimeoutRef.current) {
@@ -216,7 +200,7 @@ export function VideoPlayer({
 
     hideChromeTimeoutRef.current = window.setTimeout(() => {
       setIsChromeVisible(false);
-    }, 2600);
+    }, 2400);
 
     return () => {
       if (hideChromeTimeoutRef.current) {
@@ -309,10 +293,10 @@ export function VideoPlayer({
 
     player.ready(() => {
       const existingTracks = player.remoteTextTracks();
-      const trackList = existingTracks as unknown as ArrayLike<TextTrack>;
+      const trackArrayLike = existingTracks as unknown as ArrayLike<TextTrack>;
       const tracks = Array.from(
         { length: existingTracks.length },
-        (_, index) => trackList[index],
+        (_, index) => trackArrayLike[index],
       ).filter((track): track is TextTrack => Boolean(track));
 
       for (const track of tracks) {
@@ -332,14 +316,13 @@ export function VideoPlayer({
         );
       }
 
-      applySubtitleSelection(player, selectedSubtitle);
-
       player.one("loadedmetadata", () => {
         if (currentTime > 0) {
           player.currentTime(currentTime);
         }
 
         player.muted(isMuted);
+        applySubtitleSelection(player, selectedSubtitle);
 
         const playAttempt = player.play();
 
@@ -348,7 +331,6 @@ export function VideoPlayer({
         }
 
         void requestBestEffortFullscreen();
-        applySubtitleSelection(player, selectedSubtitle);
       });
     });
   }, [isMuted, selectedQuality, selectedSubtitle, stream]);
@@ -360,15 +342,16 @@ export function VideoPlayer({
       return;
     }
 
-    const trackList = player.remoteTextTracks();
-    const trackArrayLike = trackList as unknown as ArrayLike<TextTrack>;
-    const tracks = Array.from(
-      { length: trackList.length },
-      (_, index) => trackArrayLike[index],
-    ).filter((track): track is TextTrack => Boolean(track));
-
-    applySubtitleSelection(player, selectedSubtitle, tracks);
+    applySubtitleSelection(player, selectedSubtitle);
   }, [selectedSubtitle, stream]);
+
+  useEffect(() => {
+    return () => {
+      if (singleTapTimeoutRef.current) {
+        window.clearTimeout(singleTapTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const qualityOptions = stream?.qualities ?? [];
   const subtitleOptions = stream?.subtitles ?? [];
@@ -414,6 +397,7 @@ export function VideoPlayer({
 
     player.currentTime(resolvedTime);
     setIsChromeVisible(true);
+    setSeekNotice(seconds > 0 ? `+${seconds} detik` : `${seconds} detik`);
   }
 
   async function requestBestEffortFullscreen() {
@@ -427,7 +411,7 @@ export function VideoPlayer({
       return;
     }
 
-    const shell = playerShellRef.current;
+    const stage = playerStageRef.current;
     const videoElement = videoElementRef.current as
       | (HTMLVideoElement & {
           webkitEnterFullscreen?: () => void;
@@ -435,8 +419,8 @@ export function VideoPlayer({
       | null;
 
     try {
-      if (shell?.requestFullscreen) {
-        await shell.requestFullscreen();
+      if (stage?.requestFullscreen) {
+        await stage.requestFullscreen();
         return;
       }
     } catch {
@@ -451,7 +435,7 @@ export function VideoPlayer({
   }
 
   async function toggleFullscreen() {
-    const shell = playerShellRef.current;
+    const stage = playerStageRef.current;
     const videoElement = videoElementRef.current as
       | (HTMLVideoElement & {
           webkitEnterFullscreen?: () => void;
@@ -466,8 +450,8 @@ export function VideoPlayer({
     }
 
     try {
-      if (shell?.requestFullscreen) {
-        await shell.requestFullscreen();
+      if (stage?.requestFullscreen) {
+        await stage.requestFullscreen();
         return;
       }
     } catch {
@@ -494,6 +478,72 @@ export function VideoPlayer({
 
   function handleSurfaceTap() {
     setIsChromeVisible((current) => !current);
+  }
+
+  function resolveTapZone(clientX: number) {
+    const shell = playerStageRef.current;
+
+    if (!shell) {
+      return "center" as const;
+    }
+
+    const rect = shell.getBoundingClientRect();
+    const relativeX = clientX - rect.left;
+
+    if (relativeX < rect.width * 0.34) {
+      return "left" as const;
+    }
+
+    if (relativeX > rect.width * 0.66) {
+      return "right" as const;
+    }
+
+    return "center" as const;
+  }
+
+  function handleSurfacePointerUp(event: PointerEvent<HTMLButtonElement>) {
+    const zone = resolveTapZone(event.clientX);
+    const now = Date.now();
+    const previousTap = lastTapRef.current;
+
+    if (
+      zone !== "center" &&
+      previousTap &&
+      previousTap.zone === zone &&
+      now - previousTap.time < 280
+    ) {
+      if (singleTapTimeoutRef.current) {
+        window.clearTimeout(singleTapTimeoutRef.current);
+        singleTapTimeoutRef.current = null;
+      }
+
+      lastTapRef.current = null;
+      seekBy(zone === "left" ? -10 : 10);
+      return;
+    }
+
+    if (zone === "center") {
+      if (singleTapTimeoutRef.current) {
+        window.clearTimeout(singleTapTimeoutRef.current);
+        singleTapTimeoutRef.current = null;
+      }
+
+      lastTapRef.current = null;
+      handleSurfaceTap();
+      return;
+    }
+
+    lastTapRef.current = { time: now, zone };
+
+    if (singleTapTimeoutRef.current) {
+      window.clearTimeout(singleTapTimeoutRef.current);
+    }
+
+    singleTapTimeoutRef.current = window.setTimeout(() => {
+      handleSurfaceTap();
+      lastTapRef.current = null;
+      singleTapTimeoutRef.current = null;
+    }, 220);
   }
 
   function handleTouchStart(event: TouchEvent<HTMLDivElement>) {
@@ -575,14 +625,14 @@ export function VideoPlayer({
 
   return (
     <div className="space-y-5">
-      <div className="mx-auto w-full max-w-[440px]">
-        <div
-          ref={playerShellRef}
-          className={cn(
-            "overflow-hidden rounded-[2rem] border border-white/10 bg-black shadow-[0_32px_80px_rgba(0,0,0,0.45)]",
-            isFullscreen && "drama-shell-fullscreen",
-          )}
-        >
+      <div
+        ref={playerStageRef}
+        className={cn(
+          "relative mx-auto w-full max-w-[440px]",
+          isFullscreen && "drama-stage-fullscreen",
+        )}
+      >
+        <div className="drama-player-shell overflow-hidden rounded-[2rem] border border-white/10 bg-black shadow-[0_32px_80px_rgba(0,0,0,0.45)]">
           <div
             className="relative aspect-[9/16] bg-black"
             onTouchStart={handleTouchStart}
@@ -596,7 +646,7 @@ export function VideoPlayer({
 
             <button
               type="button"
-              onClick={handleSurfaceTap}
+              onPointerUp={handleSurfacePointerUp}
               className="absolute inset-0 z-10 cursor-pointer"
               aria-label="Toggle player controls"
             />
@@ -645,7 +695,10 @@ export function VideoPlayer({
               />
               <PlayerAction
                 label="Episode"
-                onClick={() => setIsEpisodeSheetOpen(true)}
+                onClick={() => {
+                  setIsChromeVisible(true);
+                  setIsEpisodeSheetOpen(true);
+                }}
                 icon={<ListVideo className="size-4" />}
               />
               <PlayerAction
@@ -694,7 +747,7 @@ export function VideoPlayer({
                 </button>
               </div>
 
-              <div className="flex items-center justify-between gap-3 rounded-[1.4rem] border border-white/10 bg-black/40 px-3 py-3 backdrop-blur">
+              <div className="flex items-center justify-between gap-2 rounded-[1.4rem] border border-white/10 bg-black/40 px-3 py-3 backdrop-blur">
                 <Button
                   variant="secondary"
                   size="sm"
@@ -704,7 +757,6 @@ export function VideoPlayer({
                 >
                   <RotateCcw className="size-4" />
                 </Button>
-
                 <Button
                   variant="secondary"
                   size="sm"
@@ -714,7 +766,6 @@ export function VideoPlayer({
                 >
                   <ChevronLeft className="size-4" />
                 </Button>
-
                 <button
                   type="button"
                   onClick={togglePlayback}
@@ -727,7 +778,6 @@ export function VideoPlayer({
                     <Play className="size-5 fill-current" />
                   )}
                 </button>
-
                 <Button
                   variant="secondary"
                   size="sm"
@@ -737,13 +787,10 @@ export function VideoPlayer({
                 >
                   <RotateCw className="size-4" />
                 </Button>
-
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() =>
-                    changeEpisode(selectedEpisode + 1)
-                  }
+                  onClick={() => changeEpisode(selectedEpisode + 1)}
                   disabled={selectedEpisode === episodeCount || isLoading}
                   className="h-11 min-w-11 rounded-full px-3"
                 >
@@ -752,7 +799,7 @@ export function VideoPlayer({
               </div>
 
               <div className="flex items-center justify-between text-[11px] text-white/72">
-                <span>Tap video untuk kontrol</span>
+                <span>Double tap kiri/kanan untuk seek</span>
                 <span>Swipe untuk ganti episode</span>
               </div>
             </div>
@@ -775,160 +822,154 @@ export function VideoPlayer({
               </div>
             ) : null}
 
-            {isRotateHintVisible ? (
-              <div className="pointer-events-none absolute inset-x-5 top-24 z-40 rounded-3xl border border-white/10 bg-black/55 px-4 py-3 text-sm text-white backdrop-blur">
-                <div className="flex items-center gap-3">
-                  <Smartphone className="size-4 text-accent" />
-                  <span>Putar perangkat ke landscape untuk tampilan fullscreen yang lebih luas.</span>
+            {(seekNotice || shareNotice) ? (
+              <div className="pointer-events-none absolute inset-x-0 top-6 z-40 flex justify-center px-4">
+                <div className="rounded-full border border-white/10 bg-black/55 px-4 py-2 text-sm text-white backdrop-blur">
+                  {seekNotice ?? shareNotice}
                 </div>
               </div>
             ) : null}
           </div>
         </div>
-      </div>
 
-      <div className="mx-auto w-full max-w-[440px] space-y-4">
-        <Card className="glass-panel rounded-[1.8rem] border-white/10">
-          <CardContent className="space-y-5 p-5">
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge className="border-accent/25 bg-accent-soft text-accent">
-                  <Sparkles className="mr-1.5 size-3.5" />
-                  Short drama mode
-                </Badge>
-                <Badge variant="secondary">{episodeCount} episode</Badge>
-              </div>
-              <h2 className="text-2xl font-semibold tracking-tight text-white">
-                {title}
-              </h2>
-              <p className="text-sm text-[var(--muted)]">
-                Episode saat ini: <span className="text-white">EP.{selectedEpisode}</span>
-                {watchValue ? (
-                  <>
-                    {" "}
-                    • Popularity <span className="text-white">{watchValue}</span>
-                  </>
-                ) : null}
-              </p>
-            </div>
-
-            <div className="grid gap-3 rounded-[1.6rem] border border-white/10 bg-black/20 p-4 text-sm sm:grid-cols-2">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
-                  Playback
-                </p>
-                <p className="mt-2 font-medium text-white">
-                  Vertikal, autoplay, lanjut otomatis
-                </p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
-                  Subtitle
-                </p>
-                <p className="mt-2 font-medium text-white">
-                  {subtitleOptions.length > 0
-                    ? `Otomatis ${selectedSubtitle === "off" ? "nonaktif" : selectedSubtitle}`
-                    : "Belum ada subtitle tambahan"}
-                </p>
+        {isEpisodeSheetOpen ? (
+          <div className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm">
+            <button
+              type="button"
+              onClick={() => setIsEpisodeSheetOpen(false)}
+              className="absolute inset-0"
+              aria-label="Close episode picker"
+            />
+            <div className="absolute inset-x-0 bottom-0 rounded-t-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(46,33,43,0.96),rgba(22,16,20,0.98))] p-5 shadow-[0_-24px_60px_rgba(0,0,0,0.4)]">
+              <div className="mx-auto mb-4 h-1.5 w-20 rounded-full bg-white/25" />
+              <div className="mx-auto w-full max-w-[460px] space-y-4">
+                <div className="text-center">
+                  <h3 className="text-2xl font-semibold text-white">Pilih Episode</h3>
+                  <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                    Episode akan diputar otomatis setelah dipilih.
+                  </p>
+                </div>
+                <div className="grid max-h-[55vh] grid-cols-4 gap-2 overflow-y-auto pr-1 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:grid-cols-5">
+                  {renderEpisodeButtons(() => setIsEpisodeSheetOpen(false))}
+                </div>
               </div>
             </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
-                  Kualitas
-                </h3>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setIsChromeVisible(true);
-                    setIsEpisodeSheetOpen(true);
-                  }}
-                  className="rounded-full"
-                >
-                  <ListVideo className="mr-2 size-4" />
-                  Pilih episode
-                </Button>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {qualityOptions.length > 0 ? (
-                  qualityOptions.map((quality) => (
-                    <button
-                      key={`${quality.label}-${quality.url}`}
-                      type="button"
-                      onClick={() => setSelectedQuality(quality.label)}
-                      className={cn(
-                        "rounded-full border px-3 py-2 text-sm font-medium transition",
-                        selectedQuality === quality.label
-                          ? "border-accent/35 bg-accent text-white"
-                          : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:text-white",
-                      )}
-                    >
-                      {quality.label}
-                    </button>
-                  ))
-                ) : (
-                  <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-[var(--muted)]">
-                    Kualitas akan muncul setelah stream siap.
-                  </div>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="glass-panel rounded-[1.8rem] border-white/10">
-          <CardContent className="space-y-4 p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-semibold text-white">Daftar Episode</h3>
-                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                  Pilih episode tanpa pindah halaman.
-                </p>
-              </div>
-              <Badge variant="secondary">EP.{selectedEpisode}</Badge>
-            </div>
-
-            <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
-              {renderEpisodeButtons()}
-            </div>
-          </CardContent>
-        </Card>
-
-        {shareNotice ? (
-          <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-            {shareNotice}
           </div>
         ) : null}
       </div>
 
-      {isEpisodeSheetOpen ? (
-        <div className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm">
-          <button
-            type="button"
-            onClick={() => setIsEpisodeSheetOpen(false)}
-            className="absolute inset-0"
-            aria-label="Close episode picker"
-          />
-          <div className="absolute inset-x-0 bottom-0 rounded-t-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(46,33,43,0.96),rgba(22,16,20,0.98))] p-5 shadow-[0_-24px_60px_rgba(0,0,0,0.4)]">
-            <div className="mx-auto mb-4 h-1.5 w-20 rounded-full bg-white/25" />
-            <div className="mx-auto w-full max-w-[460px] space-y-4">
-              <div className="text-center">
-                <h3 className="text-2xl font-semibold text-white">Pilih Episode</h3>
-                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                  Episode akan diputar otomatis setelah dipilih.
+      {!isFullscreen ? (
+        <div className="mx-auto w-full max-w-[440px] space-y-4">
+          <Card className="glass-panel rounded-[1.8rem] border-white/10">
+            <CardContent className="space-y-5 p-5">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge className="border-accent/25 bg-accent-soft text-accent">
+                    <Sparkles className="mr-1.5 size-3.5" />
+                    Short drama mode
+                  </Badge>
+                  <Badge variant="secondary">{episodeCount} episode</Badge>
+                </div>
+                <h2 className="text-2xl font-semibold tracking-tight text-white">
+                  {title}
+                </h2>
+                <p className="text-sm text-[var(--muted)]">
+                  Episode saat ini: <span className="text-white">EP.{selectedEpisode}</span>
+                  {watchValue ? (
+                    <>
+                      {" "}
+                      • Popularity <span className="text-white">{watchValue}</span>
+                    </>
+                  ) : null}
                 </p>
               </div>
-              <div className="grid max-h-[55vh] grid-cols-4 gap-2 overflow-y-auto pr-1 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:grid-cols-5">
-                {renderEpisodeButtons(() => setIsEpisodeSheetOpen(false))}
+
+              <div className="grid gap-3 rounded-[1.6rem] border border-white/10 bg-black/20 p-4 text-sm sm:grid-cols-2">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
+                    Playback
+                  </p>
+                  <p className="mt-2 font-medium text-white">
+                    Vertikal, autoplay, lanjut otomatis
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
+                    Subtitle
+                  </p>
+                  <p className="mt-2 font-medium text-white">
+                    {subtitleOptions.length > 0
+                      ? `Otomatis ${selectedSubtitle === "off" ? "nonaktif" : selectedSubtitle}`
+                      : "Belum ada subtitle tambahan"}
+                  </p>
+                </div>
               </div>
-            </div>
-          </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
+                    Kualitas
+                  </h3>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setIsChromeVisible(true);
+                      setIsEpisodeSheetOpen(true);
+                    }}
+                    className="rounded-full"
+                  >
+                    <ListVideo className="mr-2 size-4" />
+                    Pilih episode
+                  </Button>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {qualityOptions.length > 0 ? (
+                    qualityOptions.map((quality) => (
+                      <button
+                        key={`${quality.label}-${quality.url}`}
+                        type="button"
+                        onClick={() => setSelectedQuality(quality.label)}
+                        className={cn(
+                          "rounded-full border px-3 py-2 text-sm font-medium transition",
+                          selectedQuality === quality.label
+                            ? "border-accent/35 bg-accent text-white"
+                            : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:text-white",
+                        )}
+                      >
+                        {quality.label}
+                      </button>
+                    ))
+                  ) : (
+                    <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-[var(--muted)]">
+                      Kualitas akan muncul setelah stream siap.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="glass-panel rounded-[1.8rem] border-white/10">
+            <CardContent className="space-y-4 p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Daftar Episode</h3>
+                  <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                    Pilih episode tanpa pindah halaman.
+                  </p>
+                </div>
+                <Badge variant="secondary">EP.{selectedEpisode}</Badge>
+              </div>
+
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
+                {renderEpisodeButtons()}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       ) : null}
-
     </div>
   );
 }
@@ -959,18 +1000,13 @@ function matchesIndonesianSubtitle(subtitle: StreamSubtitle) {
   );
 }
 
-function applySubtitleSelection(
-  player: Player,
-  selectedSubtitle: string,
-  tracksOverride?: TextTrack[],
-) {
+function applySubtitleSelection(player: Player, selectedSubtitle: string) {
   const trackList = player.remoteTextTracks();
   const trackArrayLike = trackList as unknown as ArrayLike<TextTrack>;
-  const tracks =
-    tracksOverride ??
-    Array.from({ length: trackList.length }, (_, index) => trackArrayLike[index]).filter(
-      (track): track is TextTrack => Boolean(track),
-    );
+  const tracks = Array.from(
+    { length: trackList.length },
+    (_, index) => trackArrayLike[index],
+  ).filter((track): track is TextTrack => Boolean(track));
 
   for (const track of tracks) {
     track.mode =
