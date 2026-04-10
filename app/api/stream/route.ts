@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 
+import { buildMediaProxyUrl, shouldProxyMediaUrl } from "@/lib/media-proxy";
 import { prisma } from "@/lib/prisma";
 import {
   getProviderPayloadError,
@@ -89,14 +90,30 @@ export async function GET(request: NextRequest) {
       payload: streamPayload,
     });
 
-    if (!normalized.qualities.length) {
+    const proxiedNormalized = {
+      ...normalized,
+      qualities: normalized.qualities.map((quality) => ({
+        ...quality,
+        url: shouldProxyMediaUrl(quality.url)
+          ? buildMediaProxyUrl(quality.url)
+          : quality.url,
+      })),
+      subtitles: normalized.subtitles.map((subtitle) => ({
+        ...subtitle,
+        url: shouldProxyMediaUrl(subtitle.url)
+          ? buildMediaProxyUrl(subtitle.url)
+          : subtitle.url,
+      })),
+    };
+
+    if (!proxiedNormalized.qualities.length) {
       return Response.json(
         { error: "No playable stream qualities were found." },
         { status: 502 },
       );
     }
 
-    return Response.json(normalized satisfies StreamResponse);
+    return Response.json(proxiedNormalized satisfies StreamResponse);
   } catch (error) {
     if (error instanceof RangeError) {
       return Response.json({ error: error.message }, { status: 400 });
