@@ -2,10 +2,10 @@ import { NextRequest } from "next/server";
 
 import { getAdminFromRequest } from "@/lib/admin-auth";
 import {
+  normalizeSyncSource,
   PROVIDERS,
   UpstreamHttpError,
   isProviderType,
-  isSyncSource,
   SYNC_SOURCES,
 } from "@/lib/provider-adapter";
 import { runProviderSync } from "@/lib/sync-dramas";
@@ -23,48 +23,51 @@ function getSecretFromRequest(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const cronSecret = process.env.CRON_SECRET;
-  const suppliedSecret = getSecretFromRequest(request);
-  const admin = await getAdminFromRequest(request);
-  const hasValidSecret = Boolean(cronSecret && suppliedSecret === cronSecret);
-
-  if (!admin && !hasValidSecret) {
-    return Response.json({ error: "Unauthorized." }, { status: 401 });
-  }
-
   const providerParam = request.nextUrl.searchParams.get("provider");
-  const pageParam = request.nextUrl.searchParams.get("page") ?? "1";
-  const sourceParam = request.nextUrl.searchParams.get("source") ?? "home";
-  const page = Number.parseInt(pageParam, 10);
-
-  if (!providerParam || !isProviderType(providerParam)) {
-    return Response.json(
-      {
-        error: "Invalid provider.",
-        supportedProviders: PROVIDERS,
-      },
-      { status: 400 },
-    );
-  }
-
-  if (!isSyncSource(sourceParam)) {
-    return Response.json(
-      {
-        error: "Invalid source.",
-        supportedSources: SYNC_SOURCES,
-      },
-      { status: 400 },
-    );
-  }
-
-  if (!Number.isInteger(page) || page < 1) {
-    return Response.json(
-      { error: "Query param `page` must be an integer greater than 0." },
-      { status: 400 },
-    );
-  }
 
   try {
+    const cronSecret = process.env.CRON_SECRET;
+    const suppliedSecret = getSecretFromRequest(request);
+    const admin = await getAdminFromRequest(request);
+    const hasValidSecret = Boolean(cronSecret && suppliedSecret === cronSecret);
+
+    if (!admin && !hasValidSecret) {
+      return Response.json({ error: "Unauthorized." }, { status: 401 });
+    }
+
+    const pageParam = request.nextUrl.searchParams.get("page") ?? "1";
+    const sourceParam = normalizeSyncSource(
+      request.nextUrl.searchParams.get("source") ?? "home",
+    );
+    const page = Number.parseInt(pageParam, 10);
+
+    if (!providerParam || !isProviderType(providerParam)) {
+      return Response.json(
+        {
+          error: "Invalid provider.",
+          supportedProviders: PROVIDERS,
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!sourceParam) {
+      return Response.json(
+        {
+          error: "Invalid source.",
+          supportedSources: [...SYNC_SOURCES, "populer"],
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!Number.isInteger(page) || page < 1) {
+      return Response.json(
+        { error: "Query param `page` must be an integer greater than 0." },
+        { status: 400 },
+      );
+    }
+
     const result = await runProviderSync(providerParam, page, sourceParam);
     return Response.json(result);
   } catch (error) {

@@ -97,17 +97,27 @@ export function isSyncSource(value: string): value is SyncSource {
   return SYNC_SOURCES.includes(value as SyncSource);
 }
 
+export function normalizeSyncSource(value: string): SyncSource | null {
+  if (value === "populer") {
+    return "popular";
+  }
+
+  return isSyncSource(value) ? value : null;
+}
+
 export function buildCollectionUrl(
   provider: ProviderType,
   source: SyncSource,
   page: number,
   lang = DEFAULT_LANG,
 ) {
+  const upstreamSource = source === "popular" ? "populer" : source;
+
   switch (provider) {
     case "reelshort":
-      return `${API_BASE_URL}/reelshort/${source}?lang=${encodeURIComponent(lang)}`;
+      return `${API_BASE_URL}/reelshort/${upstreamSource}?lang=${encodeURIComponent(lang)}`;
     default:
-      return `${API_BASE_URL}/${provider}/${source}?page=${page}&lang=${encodeURIComponent(lang)}`;
+      return `${API_BASE_URL}/${provider}/${upstreamSource}?page=${page}&lang=${encodeURIComponent(lang)}`;
   }
 }
 

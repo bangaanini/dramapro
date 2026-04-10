@@ -24,6 +24,23 @@ type SyncResult = {
   errors: Array<{ providerDramaId: string | null; message: string }>;
 };
 
+async function readResponsePayload(response: Response) {
+  const text = await response.text();
+
+  if (!text.trim()) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return {
+      error: `Server mengembalikan response non-JSON (status ${response.status}).`,
+      raw: text.slice(0, 200),
+    };
+  }
+}
+
 const providerOptions = ["all", ...PROVIDERS] as const;
 
 type AdminSyncPanelProps = {
@@ -70,12 +87,26 @@ export function AdminSyncPanel({
           `/api/cron/sync?provider=${encodeURIComponent(currentProvider)}&page=${pageNumber}&source=${encodeURIComponent(source)}`,
         );
 
-        const payload = await response.json();
+        const payload = await readResponsePayload(response);
 
         if (!response.ok) {
           throw new Error(
-            payload?.error ||
+            (typeof payload === "object" &&
+            payload &&
+            "error" in payload &&
+            typeof payload.error === "string"
+              ? payload.error
+              : null) ||
+              (!payload
+                ? `Sync ${currentProvider} gagal: server mengembalikan body kosong dengan status ${response.status}.`
+                : null) ||
               `Sync ${currentProvider} gagal dengan status ${response.status}.`,
+          );
+        }
+
+        if (!payload || typeof payload !== "object") {
+          throw new Error(
+            `Sync ${currentProvider} berhasil dipanggil tetapi response tidak valid.`,
           );
         }
 
@@ -110,8 +141,10 @@ export function AdminSyncPanel({
                 <span className="font-medium text-white"> home</span>,
                 <span className="font-medium text-white"> new</span>, atau
                 <span className="font-medium text-white"> popular</span>.
-                Beberapa provider belum mendukung <span className="font-medium text-white">popular</span>,
-                jadi endpoint itu bisa mengembalikan error upstream.
+                Di upstream, feed ini memang memakai slug
+                <span className="font-medium text-white"> populer</span>, dan
+                adapter akan memetakan otomatis dari source internal
+                <span className="font-medium text-white"> popular</span>.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Badge variant="secondary">{adminName}</Badge>
