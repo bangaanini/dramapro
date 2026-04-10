@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FavoriteDramaButton } from "@/components/favorite-drama-button";
-import { UserSessionNav } from "@/components/user-session-nav";
+import { SiteFooter } from "@/components/site-footer";
+import { SiteHeader } from "@/components/site-header";
 import { VideoPlayer } from "@/components/video-player";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/user-auth";
@@ -73,6 +74,10 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-7xl px-0 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:py-5 lg:px-8">
+      <div className="px-4 sm:px-0">
+        <SiteHeader current="watch" />
+      </div>
+
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3 px-4 sm:mb-6 sm:px-0">
         <div className="flex flex-wrap items-center gap-3">
           <Link href="/" className={buttonVariants({ variant: "ghost", size: "sm" })}>
@@ -88,7 +93,6 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary">{drama.providerName}</Badge>
           <Badge variant="outline">{drama.episodeCount} episodes</Badge>
-          <UserSessionNav />
         </div>
       </div>
 
@@ -270,6 +274,10 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
           ) : null}
         </div>
       </section>
+
+      <div className="px-4 sm:px-0">
+        <SiteFooter />
+      </div>
     </main>
   );
 }

@@ -5,7 +5,9 @@ import { Flame, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
-import { UserLibraryHint, UserSessionNav } from "@/components/user-session-nav";
+import { SiteFooter } from "@/components/site-footer";
+import { SiteHeader } from "@/components/site-header";
+import { UserLibraryHint } from "@/components/user-session-nav";
 import type { Drama, DramaFeed } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { SyncSource } from "@/lib/provider-adapter";
@@ -192,12 +194,7 @@ export default async function HomePage(props: PageProps<"/">) {
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mb-6 flex items-center justify-between gap-4">
-        <Link href="/" className="text-lg font-semibold tracking-tight text-white">
-          DramaPro
-        </Link>
-        <UserSessionNav />
-      </div>
+      <SiteHeader current="home" />
 
       <section className="glass-panel relative overflow-hidden rounded-[2rem] px-6 py-8 sm:px-8 lg:px-10">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,122,69,0.18),transparent_28%)]" />
@@ -288,6 +285,8 @@ export default async function HomePage(props: PageProps<"/">) {
           />
         </>
       )}
+
+      <SiteFooter />
     </main>
   );
 }

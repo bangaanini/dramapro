@@ -5,10 +5,11 @@ import { redirect } from "next/navigation";
 
 import { changePasswordUserAction } from "@/app/auth/actions";
 import { toggleFavoriteDramaAction } from "@/app/drama/actions";
+import { SiteFooter } from "@/components/site-footer";
+import { SiteHeader } from "@/components/site-header";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { UserSessionNav } from "@/components/user-session-nav";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/user-auth";
 import { shouldBypassImageOptimization } from "@/lib/utils";
@@ -49,12 +50,13 @@ export default async function LibraryPage(props: PageProps<"/library">) {
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <SiteHeader current="library" />
+
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <Link href="/" className={buttonVariants({ variant: "ghost", size: "sm" })}>
           <ChevronLeft className="mr-2 size-4" />
           Kembali ke katalog
         </Link>
-        <UserSessionNav />
       </div>
 
       <section className="glass-panel rounded-[2rem] px-6 py-8 sm:px-8">
@@ -295,6 +297,8 @@ export default async function LibraryPage(props: PageProps<"/library">) {
           </CardContent>
         </Card>
       </section>
+
+      <SiteFooter />
     </main>
   );
 }
