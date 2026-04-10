@@ -79,6 +79,23 @@ textarea {
   overflow: hidden;
 }
 
+.drama-player.video-js {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  background: #050505;
+  touch-action: manipulation;
+}
+
+.drama-player .vjs-tech {
+  object-fit: contain;
+}
+
+.drama-player .vjs-control-bar,
+.drama-player .vjs-big-play-button {
+  display: none !important;
+}
+
 .video-js .vjs-control-bar {
   background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.75));
 }
