@@ -5,7 +5,7 @@ type SiteHeaderProps = {
   current?: "home" | "library" | "account" | "watch";
 };
 
-export async function SiteHeader({ current }: SiteHeaderProps) {
+export function SiteHeader({ current }: SiteHeaderProps) {
   void current;
 
   return (

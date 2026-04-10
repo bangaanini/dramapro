@@ -1,8 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { Heart, History, Home, Search, UserRound } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 
@@ -40,7 +41,20 @@ function resolveCurrentKey(pathname: string) {
 
 export function SiteFooter() {
   const pathname = usePathname();
+  const router = useRouter();
   const currentKey = resolveCurrentKey(pathname);
+
+  useEffect(() => {
+    for (const item of NAV_ITEMS) {
+      if (item.href !== pathname) {
+        router.prefetch(item.href);
+      }
+    }
+  }, [pathname, router]);
+
+  function prefetchRoute(href: string) {
+    router.prefetch(href);
+  }
 
   return (
     <>
@@ -56,6 +70,10 @@ export function SiteFooter() {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch
+                onMouseEnter={() => prefetchRoute(item.href)}
+                onTouchStart={() => prefetchRoute(item.href)}
+                onFocus={() => prefetchRoute(item.href)}
                 className={cn(
                   "relative flex min-w-0 flex-1 flex-col items-center justify-center gap-2 text-center transition",
                   item.prominent ? "pb-0" : "pt-1",
