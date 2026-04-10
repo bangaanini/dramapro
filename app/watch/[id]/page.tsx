@@ -19,7 +19,7 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
   const { id } = await props.params;
   const user = await getCurrentUser();
 
-  const [drama, favorite] = await Promise.all([
+  const [drama, favorite, watchHistory] = await Promise.all([
     prisma.drama.findUnique({
       where: { id },
     }),
@@ -32,6 +32,20 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
             },
           },
           select: { id: true },
+        })
+      : Promise.resolve(null),
+    user
+      ? prisma.watchHistory.findUnique({
+          where: {
+            userId_dramaId: {
+              userId: user.id,
+              dramaId: id,
+            },
+          },
+          select: {
+            episodeIndex: true,
+            lastPositionSeconds: true,
+          },
         })
       : Promise.resolve(null),
   ]);
@@ -86,6 +100,8 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
             providerName={drama.providerName}
             episodeCount={drama.episodeCount}
             watchValue={drama.watchValue}
+            initialEpisode={watchHistory?.episodeIndex ?? 1}
+            initialPositionSeconds={watchHistory?.lastPositionSeconds ?? 0}
           />
         </div>
 
@@ -142,6 +158,13 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
                       <span>{drama.isNewBook ? "New release" : "Catalog title"}</span>
                     </div>
                   </div>
+
+                  {watchHistory ? (
+                    <div className="rounded-[1.4rem] border border-accent/20 bg-accent-soft px-4 py-3 text-sm text-white/90">
+                      Lanjut dari EP.{watchHistory.episodeIndex} pada{" "}
+                      {Math.max(0, watchHistory.lastPositionSeconds)} detik.
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </CardContent>

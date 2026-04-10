@@ -4,8 +4,10 @@ import { redirect } from "next/navigation";
 
 import {
   authenticateUser,
+  changeCurrentUserPassword,
   createUserSession,
   deleteCurrentUserSession,
+  getCurrentUser,
   registerUser,
   resolveSafeRedirectPath,
 } from "@/lib/user-auth";
@@ -54,4 +56,36 @@ export async function signUpUserAction(formData: FormData) {
 export async function logoutUserAction() {
   await deleteCurrentUserSession();
   redirect("/");
+}
+
+export async function changePasswordUserAction(formData: FormData) {
+  const currentPassword = String(formData.get("currentPassword") ?? "");
+  const nextPassword = String(formData.get("nextPassword") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
+  const redirectTo = resolveSafeRedirectPath(
+    String(formData.get("redirectTo") ?? "/library"),
+  );
+
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect(`/sign-in?next=${encodeURIComponent(redirectTo)}`);
+  }
+
+  const result = await changeCurrentUserPassword({
+    userId: user.id,
+    currentPassword,
+    nextPassword,
+    confirmPassword,
+  });
+
+  if (!result.ok) {
+    redirect(
+      `${redirectTo}?passwordError=${encodeURIComponent(result.error)}`,
+    );
+  }
+
+  redirect(
+    `${redirectTo}?passwordSuccess=${encodeURIComponent("Password berhasil diperbarui.")}`,
+  );
 }

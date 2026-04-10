@@ -134,6 +134,71 @@ export async function authenticateUser(email: string, password: string) {
   return mapPublicUser(user);
 }
 
+export async function changeCurrentUserPassword(input: {
+  userId: string;
+  currentPassword: string;
+  nextPassword: string;
+  confirmPassword: string;
+}) {
+  const currentPassword = input.currentPassword.trim();
+  const nextPassword = input.nextPassword.trim();
+  const confirmPassword = input.confirmPassword.trim();
+
+  if (!currentPassword || !nextPassword || !confirmPassword) {
+    return {
+      ok: false as const,
+      error: "Semua field password wajib diisi.",
+    };
+  }
+
+  if (nextPassword.length < 8) {
+    return {
+      ok: false as const,
+      error: "Password baru minimal 8 karakter.",
+    };
+  }
+
+  if (nextPassword !== confirmPassword) {
+    return {
+      ok: false as const,
+      error: "Konfirmasi password baru tidak cocok.",
+    };
+  }
+
+  if (currentPassword === nextPassword) {
+    return {
+      ok: false as const,
+      error: "Password baru harus berbeda dari password saat ini.",
+    };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: input.userId },
+    select: {
+      id: true,
+      passwordHash: true,
+    },
+  });
+
+  if (!user || !verifyPassword(currentPassword, user.passwordHash)) {
+    return {
+      ok: false as const,
+      error: "Password saat ini tidak valid.",
+    };
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash: hashPassword(nextPassword),
+    },
+  });
+
+  return {
+    ok: true as const,
+  };
+}
+
 export async function createUserSession(userId: string) {
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);

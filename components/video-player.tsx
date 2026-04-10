@@ -5,6 +5,7 @@ import {
   type ReactNode,
   type TouchEvent,
   useEffect,
+  useEffectEvent,
   useRef,
   useState,
 } from "react";
@@ -61,6 +62,8 @@ type VideoPlayerProps = {
   providerName: string;
   episodeCount: number;
   watchValue: string;
+  initialEpisode?: number;
+  initialPositionSeconds?: number;
 };
 
 export function VideoPlayer({
@@ -69,6 +72,8 @@ export function VideoPlayer({
   providerName,
   episodeCount,
   watchValue,
+  initialEpisode = 1,
+  initialPositionSeconds = 0,
 }: VideoPlayerProps) {
   const playerStageRef = useRef<HTMLDivElement | null>(null);
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
@@ -82,8 +87,15 @@ export function VideoPlayer({
     zone: "left" | "center" | "right";
   } | null>(null);
   const hasAttemptedAutoFullscreenRef = useRef(false);
+  const initialResumeRef = useRef({
+    episodeIndex: initialEpisode,
+    positionSeconds: initialPositionSeconds,
+  });
+  const lastHistorySnapshotRef = useRef<string | null>(null);
 
-  const [selectedEpisode, setSelectedEpisode] = useState(1);
+  const [selectedEpisode, setSelectedEpisode] = useState(
+    Math.min(Math.max(1, initialEpisode), Math.max(episodeCount, 1)),
+  );
   const [selectedQuality, setSelectedQuality] = useState<string | null>(null);
   const [selectedSubtitle, setSelectedSubtitle] = useState<string>("off");
   const [stream, setStream] = useState<StreamState | null>(null);
@@ -279,12 +291,25 @@ export function VideoPlayer({
       return;
     }
 
+    const shouldResumeInitialPosition =
+      lastLoadedEpisodeRef.current !== stream.episodeIndex &&
+      initialResumeRef.current.episodeIndex === stream.episodeIndex &&
+      initialResumeRef.current.positionSeconds > 0;
+
     const currentTime =
       lastLoadedEpisodeRef.current === stream.episodeIndex
         ? player.currentTime() ?? 0
-        : 0;
+        : shouldResumeInitialPosition
+          ? initialResumeRef.current.positionSeconds
+          : 0;
 
     lastLoadedEpisodeRef.current = stream.episodeIndex;
+    if (shouldResumeInitialPosition) {
+      initialResumeRef.current = {
+        episodeIndex: -1,
+        positionSeconds: 0,
+      };
+    }
 
     player.src({
       src: selectedSource.url,
@@ -380,6 +405,51 @@ export function VideoPlayer({
 
     player.pause();
   }
+
+  const persistWatchHistory = useEffectEvent(
+    async (positionSecondsOverride?: number) => {
+      const player = playerRef.current;
+
+      if (!player || !internalDramaId) {
+        return;
+      }
+
+      const resolvedPosition =
+        typeof positionSecondsOverride === "number"
+          ? positionSecondsOverride
+          : Math.max(0, Math.floor(player.currentTime() ?? 0));
+
+      if (resolvedPosition < 3) {
+        return;
+      }
+
+      const snapshot = `${selectedEpisode}:${resolvedPosition}`;
+
+      if (lastHistorySnapshotRef.current === snapshot) {
+        return;
+      }
+
+      lastHistorySnapshotRef.current = snapshot;
+
+      try {
+        await fetch("/api/watch-history", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "same-origin",
+          keepalive: true,
+          body: JSON.stringify({
+            internalDramaId,
+            episodeIndex: selectedEpisode,
+            lastPositionSeconds: resolvedPosition,
+          }),
+        });
+      } catch {
+        // Ignore write failures for anonymous users or transient network issues.
+      }
+    },
+  );
 
   function seekBy(seconds: number) {
     const player = playerRef.current;
@@ -622,6 +692,42 @@ export function VideoPlayer({
       </button>
     ));
   }
+
+  useEffect(() => {
+    const player = playerRef.current;
+
+    if (!player || isLoading || error) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      void persistWatchHistory();
+    }, 15000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [error, internalDramaId, isLoading, selectedEpisode]);
+
+  useEffect(() => {
+    const handlePageHide = () => {
+      void persistWatchHistory();
+    };
+
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("beforeunload", handlePageHide);
+
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("beforeunload", handlePageHide);
+    };
+  }, [selectedEpisode]);
+
+  useEffect(() => {
+    return () => {
+      void persistWatchHistory();
+    };
+  }, [selectedEpisode]);
 
   return (
     <div className="space-y-5">
