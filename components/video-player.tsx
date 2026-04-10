@@ -949,9 +949,7 @@ export function VideoPlayer({
               )}
             >
               <div className="flex items-center justify-between gap-3">
-                <div className="rounded-full border border-white/12 bg-black/40 px-3 py-1.5 text-xs text-white backdrop-blur">
-                  Autoplay aktif
-                </div>
+
                 <button
                   type="button"
                   onClick={() => setIsMuted((current) => !current)}
@@ -1017,10 +1015,7 @@ export function VideoPlayer({
                 </Button>
               </div>
 
-              <div className="flex items-center justify-between text-[11px] text-white/72">
-                <span>Double tap kiri/kanan untuk seek</span>
-                <span>Episode dipilih dari tombol atau daftar</span>
-              </div>
+
             </div>
 
             {isLoading ? (
@@ -1079,9 +1074,7 @@ export function VideoPlayer({
               <div className="mx-auto w-full max-w-[460px] space-y-4">
                 <div className="text-center">
                   <h3 className="text-2xl font-semibold text-white">Pilih Episode</h3>
-                  <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                    Episode akan diputar otomatis setelah dipilih.
-                  </p>
+
                 </div>
                 <div className="grid max-h-[55vh] grid-cols-4 gap-2 overflow-y-auto pr-1 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:grid-cols-5">
                   {renderEpisodeButtons(() => setIsEpisodeSheetOpen(false))}
@@ -1100,7 +1093,7 @@ export function VideoPlayer({
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge className="border-accent/25 bg-accent-soft text-accent">
                     <Sparkles className="mr-1.5 size-3.5" />
-                    Short drama mode
+                    Short drama
                   </Badge>
                   <Badge variant="secondary">{episodeCount} episode</Badge>
                 </div>
@@ -1118,26 +1111,7 @@ export function VideoPlayer({
                 </p>
               </div>
 
-              <div className="grid gap-3 rounded-[1.6rem] border border-white/10 bg-black/20 p-4 text-sm sm:grid-cols-2">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
-                    Playback
-                  </p>
-                  <p className="mt-2 font-medium text-white">
-                    Vertikal, autoplay, lanjut otomatis
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
-                    Subtitle
-                  </p>
-                  <p className="mt-2 font-medium text-white">
-                    {subtitleOptions.length > 0
-                      ? `Otomatis ${selectedSubtitle === "off" ? "nonaktif" : selectedSubtitle}`
-                      : "Belum ada subtitle tambahan"}
-                  </p>
-                </div>
-              </div>
+
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
@@ -1177,7 +1151,7 @@ export function VideoPlayer({
                     ))
                   ) : (
                     <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-[var(--muted)]">
-                      Kualitas akan muncul setelah stream siap.
+                      Kualitas akan segera muncul.
                     </div>
                   )}
                 </div>
@@ -1190,9 +1164,7 @@ export function VideoPlayer({
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-lg font-semibold text-white">Daftar Episode</h3>
-                  <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                    Pilih episode tanpa pindah halaman.
-                  </p>
+
                 </div>
                 <Badge variant="secondary">EP.{selectedEpisode}</Badge>
               </div>
