@@ -770,8 +770,8 @@ function dedupeQualities(qualities: StreamResponse["qualities"]) {
 
 function sortQualities(qualities: StreamResponse["qualities"]) {
   return [...qualities].sort((left, right) => {
-    const leftScore = parseQualityScore(left.label);
-    const rightScore = parseQualityScore(right.label);
+    const leftScore = parseQualityScore(left);
+    const rightScore = parseQualityScore(right);
 
     if (leftScore === rightScore) {
       return 0;
@@ -781,27 +781,34 @@ function sortQualities(qualities: StreamResponse["qualities"]) {
   });
 }
 
-function parseQualityScore(label: string) {
+function parseQualityScore(quality: StreamResponse["qualities"][number]) {
+  const label = quality.label;
+  const normalizedLabel = label.toLowerCase();
   const match = label.match(/(\d{3,4})/);
+  const baseScore = match ? 10_000 + Number.parseInt(match[1], 10) : 0;
+  const hasH264 =
+    normalizedLabel.includes("h264") || normalizedLabel.includes("h.264");
+  const hasH265 =
+    normalizedLabel.includes("h265") || normalizedLabel.includes("h.265");
 
-  if (match) {
-    return Number.parseInt(match[1], 10);
+  if (hasH264) {
+    return baseScore > 0 ? baseScore + 80 : 8_500;
   }
 
-  if (label.toLowerCase().includes("h.265")) {
-    return 9000;
+  if (hasH265) {
+    return baseScore > 0 ? baseScore + 40 : 8_400;
   }
 
-  if (label.toLowerCase().includes("h.264")) {
-    return 8000;
+  if (baseScore > 0) {
+    return baseScore;
   }
 
-  if (label.toLowerCase().includes("auto")) {
-    return 1000;
+  if (normalizedLabel.includes("auto")) {
+    return 8_300;
   }
 
-  if (label.toLowerCase().includes("hls")) {
-    return 900;
+  if (normalizedLabel.includes("hls")) {
+    return 8_200;
   }
 
   return 0;
