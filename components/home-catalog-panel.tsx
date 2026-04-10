@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import { LoaderCircle, Sparkles } from "lucide-react";
 
 import { HomeFeedSection } from "@/components/home-feed-section";
-import { HomeHeroSlider } from "@/components/home-hero-slider";
+import { HomeHeroBanner } from "@/components/home-hero-banner";
 import { Card, CardContent } from "@/components/ui/card";
-import type { HomeFeedEntry, HomeHeroSlide } from "@/lib/catalog-data";
+import type { HomeFeedEntry } from "@/lib/catalog-data";
 import { safeSessionStorage } from "@/lib/safe-session-storage";
 
 type HomeCatalogResponse = {
   totalDramas: number;
-  heroSlides: HomeHeroSlide[];
+  heroBanners: HomeFeedEntry[];
   homeEntries: HomeFeedEntry[];
   homeTotal: number;
   newEntries: HomeFeedEntry[];
@@ -94,8 +94,8 @@ export function HomeCatalogPanel() {
               <div className="space-y-2">
                 <p className="font-medium text-white">Menyiapkan hero slider</p>
                 <p className="max-w-md text-sm text-[var(--muted)]">
-                  Sorotan drama populer dari tiap provider sedang dimuat agar
-                  beranda terasa lebih premium dan ringan.
+                  Banner drama unggulan sedang dimuat agar beranda terasa lebih
+                  ringan dan aman dibuka di semua browser.
                 </p>
               </div>
             </CardContent>
@@ -149,7 +149,7 @@ export function HomeCatalogPanel() {
 
   return (
     <>
-      <HomeHeroSlider slides={data.heroSlides} />
+      <HomeHeroBanner items={data.heroBanners} />
 
       {data.totalDramas === 0 ? (
         <section className="mt-8">
