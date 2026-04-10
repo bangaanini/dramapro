@@ -7,6 +7,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   meloshort: "MeloShort",
   goodshort: "GoodShort",
   dramawave: "DramaWave",
+  dramabox: "DramaBox",
   reelshort: "ReelShort",
   freereels: "FreeReels",
   flickreels: "FlickReels",

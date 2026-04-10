@@ -11,7 +11,8 @@ export function shouldProxyMediaUrl(url: string) {
       parsedUrl.hostname.includes("mydramawave.com") ||
       parsedUrl.hostname.includes("static-v1.mydramawave.com") ||
       parsedUrl.hostname.includes("video-v5.mydramawave.com") ||
-      parsedUrl.hostname.includes("video-v6.mydramawave.com")
+      parsedUrl.hostname.includes("video-v6.mydramawave.com") ||
+      parsedUrl.hostname.includes("dramaboxdb.com")
     );
   } catch {
     return false;

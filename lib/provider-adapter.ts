@@ -8,6 +8,7 @@ export const PROVIDERS = [
   "meloshort",
   "goodshort",
   "dramawave",
+  "dramabox",
   "reelshort",
   "freereels",
   "flickreels",
@@ -114,19 +115,28 @@ export function normalizeSyncSource(value: string): SyncSource | null {
   return isSyncSource(value) ? value : null;
 }
 
+function resolveProviderLang(provider: ProviderType, lang = DEFAULT_LANG) {
+  if (provider === "dramabox" && (!lang || lang === DEFAULT_LANG)) {
+    return "in";
+  }
+
+  return lang;
+}
+
 export function buildCollectionUrl(
   provider: ProviderType,
   source: SyncSource,
   page: number,
   lang = DEFAULT_LANG,
 ) {
+  const resolvedLang = resolveProviderLang(provider, lang);
   const upstreamSource = source === "popular" ? "populer" : source;
 
   switch (provider) {
     case "reelshort":
-      return `${API_BASE_URL}/reelshort/${upstreamSource}?lang=${encodeURIComponent(lang)}`;
+      return `${API_BASE_URL}/reelshort/${upstreamSource}?lang=${encodeURIComponent(resolvedLang)}`;
     default:
-      return `${API_BASE_URL}/${provider}/${upstreamSource}?page=${page}&lang=${encodeURIComponent(lang)}`;
+      return `${API_BASE_URL}/${provider}/${upstreamSource}?page=${page}&lang=${encodeURIComponent(resolvedLang)}`;
   }
 }
 
@@ -135,28 +145,32 @@ export function buildDetailUrl(
   id: string,
   lang = DEFAULT_LANG,
 ) {
+  const resolvedLang = resolveProviderLang(provider, lang);
+
   switch (provider) {
     case "melolo":
       return `${API_BASE_URL}/melolo/detail/${encodeURIComponent(id)}`;
     case "meloshort":
-      return `${API_BASE_URL}/meloshort/detail?dramaId=${encodeURIComponent(id)}&lang=${encodeURIComponent(lang)}`;
+      return `${API_BASE_URL}/meloshort/detail?dramaId=${encodeURIComponent(id)}&lang=${encodeURIComponent(resolvedLang)}`;
     case "goodshort":
-      return `${API_BASE_URL}/goodshort/detail?bookId=${encodeURIComponent(id)}&lang=${encodeURIComponent(lang)}`;
+      return `${API_BASE_URL}/goodshort/detail?bookId=${encodeURIComponent(id)}&lang=${encodeURIComponent(resolvedLang)}`;
     case "dramawave":
-      return `${API_BASE_URL}/dramawave/detail?id=${encodeURIComponent(id)}&lang=${encodeURIComponent(lang)}`;
+      return `${API_BASE_URL}/dramawave/detail?id=${encodeURIComponent(id)}&lang=${encodeURIComponent(resolvedLang)}`;
+    case "dramabox":
+      return `${API_BASE_URL}/dramabox/detail/${encodeURIComponent(id)}?lang=${encodeURIComponent(resolvedLang)}`;
     case "reelshort":
-      return `${API_BASE_URL}/reelshort/detail?bookId=${encodeURIComponent(id)}&lang=${encodeURIComponent(lang)}`;
+      return `${API_BASE_URL}/reelshort/detail?bookId=${encodeURIComponent(id)}&lang=${encodeURIComponent(resolvedLang)}`;
     case "freereels":
-      return `${API_BASE_URL}/freereels/detail?dramaId=${encodeURIComponent(id)}&lang=${encodeURIComponent(lang)}`;
+      return `${API_BASE_URL}/freereels/detail?dramaId=${encodeURIComponent(id)}&lang=${encodeURIComponent(resolvedLang)}`;
     case "flickreels":
-      return `${API_BASE_URL}/flickreels/detail?playlet_id=${encodeURIComponent(id)}&lang=${encodeURIComponent(lang)}`;
+      return `${API_BASE_URL}/flickreels/detail?playlet_id=${encodeURIComponent(id)}&lang=${encodeURIComponent(resolvedLang)}`;
     case "netshort":
-      return `${API_BASE_URL}/netshort/detail?dramaId=${encodeURIComponent(id)}&lang=${encodeURIComponent(lang)}`;
+      return `${API_BASE_URL}/netshort/detail?dramaId=${encodeURIComponent(id)}&lang=${encodeURIComponent(resolvedLang)}`;
   }
 }
 
 export function buildStreamUrl(provider: ProviderType, args: StreamBuildArgs) {
-  const lang = args.lang ?? DEFAULT_LANG;
+  const lang = resolveProviderLang(provider, args.lang ?? DEFAULT_LANG);
 
   switch (provider) {
     case "melolo":
@@ -167,6 +181,8 @@ export function buildStreamUrl(provider: ProviderType, args: StreamBuildArgs) {
       return `${API_BASE_URL}/goodshort/stream?bookId=${encodeURIComponent(requireStringArg(args.id, "id"))}&lang=${encodeURIComponent(lang)}`;
     case "dramawave":
       return `${API_BASE_URL}/dramawave/stream?dramaId=${encodeURIComponent(requireStringArg(args.id, "id"))}&episode=${encodeURIComponent(String(requireNumberArg(args.episodeIndex, "episodeIndex")))}&lang=${encodeURIComponent(lang)}`;
+    case "dramabox":
+      return `${API_BASE_URL}/dramabox/stream?dramaId=${encodeURIComponent(requireStringArg(args.id, "id"))}&episodeIndex=${encodeURIComponent(String(requireNumberArg(args.episodeIndex, "episodeIndex")))}&lang=${encodeURIComponent(lang)}`;
     case "reelshort":
       return `${API_BASE_URL}/reelshort/stream?bookId=${encodeURIComponent(requireStringArg(args.id, "id"))}&chapterId=${encodeURIComponent(requireStringArg(args.chapterId, "chapterId"))}&lang=${encodeURIComponent(lang)}`;
     case "freereels":
@@ -313,6 +329,17 @@ export async function resolveStreamRequest({
         streamArgs: {
           id: providerDramaId,
           episodeIndex,
+          lang,
+        },
+      };
+    }
+    case "dramabox": {
+      await validateEpisodeFromDetail(provider, providerDramaId, episodeIndex, lang);
+
+      return {
+        streamArgs: {
+          id: providerDramaId,
+          episodeIndex: episodeIndex - 1,
           lang,
         },
       };
@@ -505,6 +532,7 @@ function findEpisodeEntry(detailData: JsonRecord, episodeIndex: number) {
     ...(readArray(detailData.video_list) ?? []),
     ...(readArray(detailData.episode_list) ?? []),
     ...(readArray(detailData.episodeList) ?? []),
+    ...(readArray(detailData.chapterList) ?? []),
     ...(readArray(detailData.chapter_list) ?? []),
     ...(readArray(detailData.list) ?? []),
   ]
@@ -512,18 +540,24 @@ function findEpisodeEntry(detailData: JsonRecord, episodeIndex: number) {
     .filter((item): item is JsonRecord => item !== null);
 
   const match = candidates.find((item) => {
-    const directEpisode =
-      readInt(item.episode) ||
-      readInt(item.chapter_num) ||
-      readInt(item.index) ||
-      readInt(item.chapterName);
+    const directEpisodes = [
+      readMaybeInt(item.episode),
+      readMaybeInt(item.chapter_num),
+      readMaybeInt(item.index),
+      readMaybeInt(item.chapterName),
+      incrementMaybeInt(item.chapterIndex),
+    ].filter((value): value is number => typeof value === "number");
 
-    if (directEpisode === episodeIndex) {
+    if (directEpisodes.includes(episodeIndex)) {
       return true;
     }
 
-    const zeroBasedIndex = readInt(item.index);
-    return zeroBasedIndex === episodeIndex - 1;
+    const zeroBasedIndices = [
+      readMaybeInt(item.index),
+      readMaybeInt(item.chapterIndex),
+    ].filter((value): value is number => typeof value === "number");
+
+    return zeroBasedIndices.some((value) => value === episodeIndex - 1);
   });
 
   if (!match) {
@@ -534,7 +568,8 @@ function findEpisodeEntry(detailData: JsonRecord, episodeIndex: number) {
     episodeId:
       readString(match.episode_id) ||
       readString(match.id) ||
-      readString(match.chapter_id),
+      readString(match.chapter_id) ||
+      readString(match.chapterId),
     chapterId:
       readString(match.chapter_id) ||
       readString(match.chapterId) ||
@@ -625,11 +660,13 @@ function normalizeGenericStream(data: JsonRecord | null) {
       url:
         readString(entry.url) ||
         readString(entry.play_url) ||
-        readString(entry.filePath),
+        readString(entry.filePath) ||
+        readString(entry.videoPath),
       mimeType: inferMimeType(
         readString(entry.url) ||
           readString(entry.play_url) ||
-          readString(entry.filePath),
+          readString(entry.filePath) ||
+          readString(entry.videoPath),
       ),
     });
   }
@@ -681,6 +718,7 @@ function normalizeGenericStream(data: JsonRecord | null) {
     ["HLS (H.264)", data?.h264_m3u8],
     ["HLS", data?.m3u8_url],
     ["MP4", data?.video_url],
+    ["MP4", data?.videoUrl],
     ["Auto", data?.play_url],
     ["Auto", data?.url],
   ];
@@ -883,6 +921,24 @@ function readInt(value: unknown) {
   }
 
   return 0;
+}
+
+function readMaybeInt(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.trunc(value);
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function incrementMaybeInt(value: unknown) {
+  const parsed = readMaybeInt(value);
+  return typeof parsed === "number" ? parsed + 1 : null;
 }
 
 function readBoolean(value: unknown) {
