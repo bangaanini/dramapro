@@ -6,18 +6,35 @@ import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { FavoriteDramaButton } from "@/components/favorite-drama-button";
+import { UserSessionNav } from "@/components/user-session-nav";
 import { VideoPlayer } from "@/components/video-player";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/user-auth";
 import { shouldBypassImageOptimization } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 export default async function WatchPage(props: PageProps<"/watch/[id]">) {
   const { id } = await props.params;
+  const user = await getCurrentUser();
 
-  const drama = await prisma.drama.findUnique({
-    where: { id },
-  });
+  const [drama, favorite] = await Promise.all([
+    prisma.drama.findUnique({
+      where: { id },
+    }),
+    user
+      ? prisma.favoriteDrama.findUnique({
+          where: {
+            userId_dramaId: {
+              userId: user.id,
+              dramaId: id,
+            },
+          },
+          select: { id: true },
+        })
+      : Promise.resolve(null),
+  ]);
 
   if (!drama) {
     notFound();
@@ -43,13 +60,21 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
   return (
     <main className="mx-auto min-h-screen w-full max-w-7xl px-0 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:py-5 lg:px-8">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3 px-4 sm:mb-6 sm:px-0">
-        <Link href="/" className={buttonVariants({ variant: "ghost", size: "sm" })}>
-          <ChevronLeft className="mr-2 size-4" />
-          Back to catalog
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <Link href="/" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+            <ChevronLeft className="mr-2 size-4" />
+            Back to catalog
+          </Link>
+          <FavoriteDramaButton
+            dramaId={drama.id}
+            redirectTo={`/watch/${drama.id}`}
+            isFavorite={Boolean(favorite)}
+          />
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary">{drama.providerName}</Badge>
           <Badge variant="outline">{drama.episodeCount} episodes</Badge>
+          <UserSessionNav />
         </div>
       </div>
 
