@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Clapperboard, Compass, Home, LibraryBig } from "lucide-react";
+import { Clapperboard, Compass, Home, LibraryBig, Search } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { UserSessionNav } from "@/components/user-session-nav";
@@ -11,6 +11,7 @@ type SiteHeaderProps = {
 
 const navItems = [
   { href: "/", label: "Home", key: "home", icon: Home },
+  { href: "/#search", label: "Search", key: "search", icon: Search },
   { href: "/library", label: "Library", key: "library", icon: LibraryBig },
 ];
 

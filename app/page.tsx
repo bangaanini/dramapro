@@ -1,17 +1,18 @@
-import Image from "next/image";
 import Link from "next/link";
 import { Flame, Sparkles } from "lucide-react";
 
+import { Prisma } from "@/app/generated/prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
+import { DramaCard } from "@/components/drama-card";
+import { SearchPanel } from "@/components/search-panel";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { UserLibraryHint } from "@/components/user-session-nav";
 import type { Drama, DramaFeed } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { SyncSource } from "@/lib/provider-adapter";
-import { shouldBypassImageOptimization } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -100,47 +101,14 @@ function DramaFeedSection({
         <>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
             {entries.map(({ drama }) => (
-              <Link key={`${source}-${drama.id}`} href={`/watch/${drama.id}`} className="group">
-                <Card className="glass-panel h-full overflow-hidden rounded-[1.6rem] border-white/8 transition duration-300 hover:-translate-y-1 hover:border-accent/35 hover:shadow-[0_24px_60px_rgba(0,0,0,0.42)]">
-                  <div className="relative aspect-[3/4] overflow-hidden bg-white/5">
-                    {drama.thumbUrl ? (
-                      <Image
-                        src={drama.thumbUrl}
-                        alt={drama.title}
-                        fill
-                        className="object-cover transition duration-500 group-hover:scale-[1.05]"
-                        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 16vw"
-                        unoptimized={shouldBypassImageOptimization(drama.thumbUrl)}
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center bg-[linear-gradient(180deg,#2e1c18,#1a1110)] text-sm text-[var(--muted-foreground)]">
-                        No Cover
-                      </div>
-                    )}
-                    <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-                    <div className="absolute left-3 top-3">
-                      <Badge className="border-white/10 bg-black/45 text-white backdrop-blur">
-                        {drama.providerName}
-                      </Badge>
-                    </div>
-                  </div>
-                  <CardContent className="space-y-3 p-4">
-                    <div className="space-y-2">
-                      <h3 className="line-clamp-2 text-sm font-semibold leading-6 text-white">
-                        {drama.title}
-                      </h3>
-                      <p className="text-xs text-[var(--muted-foreground)]">
-                        {drama.episodeCount > 0
-                          ? `${drama.episodeCount} episodes`
-                          : "Episode info unavailable"}
-                      </p>
-                    </div>
-                    <div className={buttonVariants({ variant: "secondary", size: "sm" })}>
-                      Watch now
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
+              <DramaCard
+                key={`${source}-${drama.id}`}
+                href={`/watch/${drama.id}`}
+                title={drama.title}
+                thumbUrl={drama.thumbUrl}
+                providerName={drama.providerName}
+                episodeCount={drama.episodeCount}
+              />
             ))}
           </div>
 
@@ -166,7 +134,17 @@ export default async function HomePage(props: PageProps<"/">) {
   const newLimit = parseLimit(searchParams.new);
   const popularLimit = parseLimit(searchParams.popular);
 
-  const [totalDramas, homeEntries, homeTotal, newEntries, newTotal, popularEntries, popularTotal] =
+  const [
+    totalDramas,
+    homeEntries,
+    homeTotal,
+    newEntries,
+    newTotal,
+    popularEntries,
+    popularTotal,
+    providerCounts,
+    tagRows,
+  ] =
     await Promise.all([
       prisma.drama.count(),
       prisma.dramaFeed.findMany({
@@ -190,7 +168,36 @@ export default async function HomePage(props: PageProps<"/">) {
         take: popularLimit,
       }),
       prisma.dramaFeed.count({ where: { source: "popular" } }),
+      prisma.drama.groupBy({
+        by: ["providerName"],
+        _count: {
+          _all: true,
+        },
+        orderBy: {
+          providerName: "asc",
+        },
+      }),
+      prisma.$queryRaw<Array<{ tag: string; count: number }>>(Prisma.sql`
+        SELECT tag, COUNT(*)::int AS count
+        FROM (
+          SELECT UNNEST(tags) AS tag
+          FROM "Drama"
+        ) AS tags_expanded
+        WHERE tag <> ''
+        GROUP BY tag
+        ORDER BY COUNT(*) DESC, tag ASC
+        LIMIT 16
+      `),
     ]);
+
+  const providerShortcuts = providerCounts.map((provider) => ({
+    value: provider.providerName,
+    count: provider._count._all,
+  }));
+  const tagShortcuts = tagRows.map((tag) => ({
+    value: tag.tag,
+    count: Number(tag.count),
+  }));
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
@@ -234,6 +241,8 @@ export default async function HomePage(props: PageProps<"/">) {
           </div>
         </div>
       </section>
+
+      <SearchPanel providers={providerShortcuts} tags={tagShortcuts} />
 
       {totalDramas === 0 ? (
         <section className="mt-8">

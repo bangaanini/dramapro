@@ -2,6 +2,16 @@ import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
 const UNOPTIMIZED_IMAGE_HOSTS = new Set(["awscover.netshort.com"]);
+const PROVIDER_LABELS: Record<string, string> = {
+  melolo: "Melolo",
+  meloshort: "MeloShort",
+  goodshort: "GoodShort",
+  dramawave: "DramaWave",
+  reelshort: "ReelShort",
+  freereels: "FreeReels",
+  flickreels: "FlickReels",
+  netshort: "NetShort",
+};
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -13,4 +23,8 @@ export function shouldBypassImageOptimization(imageUrl: string) {
   } catch {
     return false;
   }
+}
+
+export function formatProviderName(providerName: string) {
+  return PROVIDER_LABELS[providerName] ?? providerName;
 }
