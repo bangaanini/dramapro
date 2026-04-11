@@ -1,11 +1,11 @@
 import { BadgePercent, CheckCircle2, Wallet } from "lucide-react";
+import Link from "next/link";
 
 import {
   saveAffiliateSettingsAction,
-  updateAffiliateWithdrawalStatusAction,
 } from "@/app/admin/actions";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DEFAULT_AFFILIATE_SETTINGS, formatIdr } from "@/lib/affiliate";
 import { prisma } from "@/lib/prisma";
@@ -20,27 +20,14 @@ export default async function AdminAffiliateSettingsPage(
   const error =
     typeof searchParams.error === "string" ? searchParams.error : null;
 
-  const [settings, pendingWithdrawals, commissionTotals] = await Promise.all([
+  const [settings, pendingWithdrawalsCount, commissionTotals] = await Promise.all([
     prisma.affiliateSettings.findUnique({
       where: { id: "global" },
     }),
-    prisma.affiliateWithdrawal.findMany({
+    prisma.affiliateWithdrawal.count({
       where: {
         status: "pending",
       },
-      include: {
-        affiliateUser: {
-          select: {
-            name: true,
-            email: true,
-            affiliateCode: true,
-          },
-        },
-      },
-      orderBy: {
-        requestedAt: "desc",
-      },
-      take: 20,
     }),
     prisma.affiliateCommission.aggregate({
       _sum: {
@@ -63,13 +50,22 @@ export default async function AdminAffiliateSettingsPage(
         </h1>
         <p className="mt-2 max-w-3xl text-sm leading-7 text-[var(--muted)]">
           Atur tingkatan referral, persentase komisi, masa simpan cookie referral,
-          minimum penarikan, dan review permintaan withdrawal user.
+          minimum penarikan, dan aturan program affiliate tanpa bercampur dengan
+          review request withdraw.
         </p>
 
-        {pendingWithdrawals.length > 0 ? (
-          <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-500/10 px-4 py-2 text-sm text-amber-100">
+        {pendingWithdrawalsCount > 0 ? (
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-500/10 px-4 py-2 text-sm text-amber-100">
             <span className="inline-flex size-2 rounded-full bg-amber-400 shadow-[0_0_14px_rgba(251,191,36,0.85)]" />
-            Ada {pendingWithdrawals.length} request withdrawal baru menunggu review
+              Ada {pendingWithdrawalsCount} request withdrawal baru menunggu review
+            </div>
+            <Link
+              href="/admin/affiliate-withdrawals"
+              className={buttonVariants({ size: "sm", variant: "secondary" })}
+            >
+              Buka request withdraw
+            </Link>
           </div>
         ) : null}
 
@@ -191,102 +187,6 @@ export default async function AdminAffiliateSettingsPage(
 
         <div className="space-y-6">
           <Card className="glass-panel rounded-[2rem] border-white/10">
-            <CardContent className="space-y-5 p-6">
-              <div className="flex items-center gap-3">
-                <div className="flex size-11 items-center justify-center rounded-2xl border border-white/10 bg-white/6 text-white">
-                  <Wallet className="size-5" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-semibold text-white">
-                    Withdrawal pending
-                  </h2>
-                  <p className="text-sm text-[var(--muted)]">
-                    Review permintaan penarikan affiliate terbaru.
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {pendingWithdrawals.length > 0 ? (
-                  pendingWithdrawals.map((item) => (
-                    <div
-                      key={item.id}
-                      className="rounded-[1.4rem] border border-white/10 bg-black/20 p-4"
-                    >
-                      <p className="font-medium text-white">{item.affiliateUser.name}</p>
-                      <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-                        {item.affiliateUser.email}
-                        {item.affiliateUser.affiliateCode
-                          ? ` • ${item.affiliateUser.affiliateCode}`
-                          : ""}
-                      </p>
-                      <p className="mt-3 text-lg font-semibold text-white">
-                        {formatIdr(item.amount)}
-                      </p>
-                      <p className="mt-1 text-xs text-[var(--muted)]">
-                        Diajukan{" "}
-                        {new Intl.DateTimeFormat("id-ID", {
-                          dateStyle: "medium",
-                          timeStyle: "short",
-                        }).format(item.requestedAt)}
-                      </p>
-
-                      <div className="mt-4 rounded-[1.2rem] border border-white/10 bg-white/5 p-3 text-sm">
-                        <p className="font-medium text-white">Detail transfer</p>
-                        <p className="mt-2 text-[var(--muted)]">
-                          {item.payoutAccountHolderName || "-"}
-                        </p>
-                        <p className="mt-1 text-[var(--muted)]">
-                          {item.payoutBankName || "-"} • {item.payoutAccountNumber || "-"}
-                        </p>
-                        <p className="mt-1 text-[var(--muted)]">
-                          WhatsApp {item.payoutWhatsappNumber || "-"}
-                        </p>
-                        <p className="mt-1 text-[var(--muted)]">
-                          {item.payoutEmail || "-"}
-                        </p>
-                        {item.notes ? (
-                          <p className="mt-2 text-xs text-[var(--muted-foreground)]">
-                            Catatan: {item.notes}
-                          </p>
-                        ) : null}
-                      </div>
-
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        <form action={updateAffiliateWithdrawalStatusAction}>
-                          <input type="hidden" name="id" value={item.id} />
-                          <input type="hidden" name="nextStatus" value="approved" />
-                          <Button type="submit" size="sm">
-                            Approve
-                          </Button>
-                        </form>
-                        <form action={updateAffiliateWithdrawalStatusAction}>
-                          <input type="hidden" name="id" value={item.id} />
-                          <input type="hidden" name="nextStatus" value="paid" />
-                          <Button type="submit" size="sm" variant="secondary">
-                            Mark paid
-                          </Button>
-                        </form>
-                        <form action={updateAffiliateWithdrawalStatusAction}>
-                          <input type="hidden" name="id" value={item.id} />
-                          <input type="hidden" name="nextStatus" value="rejected" />
-                          <Button type="submit" size="sm" variant="ghost">
-                            Reject
-                          </Button>
-                        </form>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="rounded-[1.4rem] border border-white/10 bg-black/20 px-4 py-8 text-center text-sm text-[var(--muted)]">
-                    Belum ada withdrawal affiliate yang menunggu review.
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="glass-panel rounded-[2rem] border-white/10">
             <CardContent className="space-y-4 p-6">
               <div className="flex items-center gap-3">
                 <div className="flex size-11 items-center justify-center rounded-2xl border border-white/10 bg-white/6 text-white">
@@ -295,8 +195,33 @@ export default async function AdminAffiliateSettingsPage(
                 <div>
                   <h2 className="text-xl font-semibold text-white">Ringkasan level</h2>
                   <p className="text-sm text-[var(--muted)]">
-                    Komisi aktif yang berlaku di aplikasi.
+                  Komisi aktif yang berlaku di aplikasi.
                   </p>
+                </div>
+              </div>
+
+              <div className="rounded-[1.4rem] border border-white/10 bg-black/20 p-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex size-11 items-center justify-center rounded-2xl border border-white/10 bg-white/6 text-white">
+                    <Wallet className="size-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-medium text-white">Request withdraw dipisah</p>
+                    <p className="mt-1 text-sm text-[var(--muted)]">
+                      Semua permintaan penarikan sekarang ada di menu khusus agar
+                      lebih cepat direview admin.
+                    </p>
+                    <Link
+                      href="/admin/affiliate-withdrawals"
+                      className={buttonVariants({
+                        size: "sm",
+                        variant: "secondary",
+                        className: "mt-4 inline-flex",
+                      })}
+                    >
+                      Buka halaman withdraw
+                    </Link>
+                  </div>
                 </div>
               </div>
 

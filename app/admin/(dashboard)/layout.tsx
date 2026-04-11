@@ -25,10 +25,8 @@ export default async function AdminDashboardLayout({
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
-
-
       <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
-        <div className="min-w-0 lg:sticky lg:top-6 lg:self-start">
+        <div className="sticky top-[calc(env(safe-area-inset-top)+0.75rem)] z-40 min-w-0 self-start lg:top-6">
           <AdminSidebar
             adminName={admin.name}
             adminEmail={admin.email}

@@ -12,6 +12,7 @@ import {
   Settings2,
   ShieldCheck,
   Users,
+  Wallet,
   X,
 } from "lucide-react";
 
@@ -40,8 +41,14 @@ const adminNavItems = [
   {
     href: "/admin/affiliate-settings",
     label: "Affiliate",
-    description: "Atur komisi dan withdrawal",
+    description: "Atur komisi dan level referral",
     icon: BadgePercent,
+  },
+  {
+    href: "/admin/affiliate-withdrawals",
+    label: "Withdraw Affiliate",
+    description: "Review permintaan withdraw",
+    icon: Wallet,
   },
   {
     href: "/admin/payment-gateways",
@@ -61,7 +68,6 @@ type AdminSidebarProps = {
   adminName: string;
   adminEmail: string;
   pendingAffiliateWithdrawals: number;
-  onNavigate?: () => void;
 };
 
 export function AdminSidebar({
@@ -76,27 +82,27 @@ export function AdminSidebar({
     <aside className="space-y-4">
       <div className="sticky top-[calc(env(safe-area-inset-top)+0.75rem)] z-40 md:hidden">
         <div className="glass-panel rounded-[1.8rem] border border-white/10 bg-[rgba(24,16,15,0.9)] p-4 shadow-[0_20px_45px_rgba(0,0,0,0.28)] backdrop-blur-xl">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <Badge className="border-accent/30 bg-accent-soft text-accent">
-              <ShieldCheck className="mr-2 size-3.5" />
-              Admin dashboard
-            </Badge>
-            <p className="mt-3 truncate text-sm font-semibold text-white">
-              {adminName}
-            </p>
-            <p className="truncate text-xs text-[var(--muted)]">{adminEmail}</p>
-          </div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <Badge className="border-accent/30 bg-accent-soft text-accent">
+                <ShieldCheck className="mr-2 size-3.5" />
+                Admin dashboard
+              </Badge>
+              <p className="mt-3 truncate text-sm font-semibold text-white">
+                {adminName}
+              </p>
+              <p className="truncate text-xs text-[var(--muted)]">{adminEmail}</p>
+            </div>
 
-          <button
-            type="button"
-            onClick={() => setIsDrawerOpen(true)}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10"
-            aria-label="Buka navigasi admin"
-          >
-            <Menu className="size-5" />
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={() => setIsDrawerOpen(true)}
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10"
+              aria-label="Buka navigasi admin"
+            >
+              <Menu className="size-5" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -240,7 +246,7 @@ function NavItem({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-semibold leading-5">{label}</p>
-            {href === "/admin/affiliate-settings" &&
+            {href === "/admin/affiliate-withdrawals" &&
             pendingAffiliateWithdrawals > 0 ? (
               <>
                 <span className="inline-flex size-2 rounded-full bg-amber-400 shadow-[0_0_16px_rgba(251,191,36,0.8)]" />

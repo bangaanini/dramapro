@@ -260,11 +260,11 @@ export async function updateAffiliateWithdrawalStatusAction(formData: FormData) 
   const nextStatus = String(formData.get("nextStatus") ?? "").trim();
 
   if (!id) {
-    redirect("/admin/affiliate-settings?error=Withdrawal%20tidak%20ditemukan");
+    redirect("/admin/affiliate-withdrawals?error=Withdrawal%20tidak%20ditemukan");
   }
 
   if (!["approved", "rejected", "paid"].includes(nextStatus)) {
-    redirect("/admin/affiliate-settings?error=Status%20withdrawal%20tidak%20valid");
+    redirect("/admin/affiliate-withdrawals?error=Status%20withdrawal%20tidak%20valid");
   }
 
   await prisma.affiliateWithdrawal.update({
@@ -276,8 +276,9 @@ export async function updateAffiliateWithdrawalStatusAction(formData: FormData) 
   });
 
   revalidatePath("/admin/affiliate-settings");
+  revalidatePath("/admin/affiliate-withdrawals");
   revalidatePath("/affiliate");
-  redirect("/admin/affiliate-settings?saved=1");
+  redirect("/admin/affiliate-withdrawals?saved=1");
 }
 
 export async function savePaymentGatewayConfigAction(formData: FormData) {
