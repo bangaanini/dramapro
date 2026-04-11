@@ -88,34 +88,36 @@ export function HomeFeedTabs({
   const hasMore = visibleCounts[currentTab.key] < currentTab.entries.length;
 
   return (
-    <section className="mt-5 space-y-4 sm:mt-7">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-4 overflow-x-auto border-b border-white/10 pb-2">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              className={cn(
-                "relative shrink-0 pb-2 text-sm font-semibold transition",
-                activeTab === tab.key
-                  ? "text-white"
-                  : "text-white/45 hover:text-white/80",
-              )}
-            >
-              {tab.label}
-              <span
+    <section className="mx-auto mt-0 w-full max-w-7xl space-y-4 px-3 pb-2 sm:px-4 lg:px-6">
+      <div className="sticky top-[3.9rem] z-40 -mx-3 border-b border-white/8 bg-[rgba(12,8,8,0.94)] px-3 pb-2 pt-2 backdrop-blur-xl sm:top-[4.2rem] sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-4 overflow-x-auto">
+            {tabs.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
                 className={cn(
-                  "absolute inset-x-0 -bottom-0.5 h-0.5 rounded-full bg-white transition",
-                  activeTab === tab.key ? "opacity-100" : "opacity-0",
+                  "relative shrink-0 pb-2 text-sm font-semibold transition",
+                  activeTab === tab.key
+                    ? "text-white"
+                    : "text-white/45 hover:text-white/80",
                 )}
-              />
-            </button>
-          ))}
+              >
+                {tab.label}
+                <span
+                  className={cn(
+                    "absolute inset-x-0 -bottom-0.5 h-0.5 rounded-full bg-white transition",
+                    activeTab === tab.key ? "opacity-100" : "opacity-0",
+                  )}
+                />
+              </button>
+            ))}
+          </div>
+          <span className="shrink-0 text-[11px] text-[var(--muted-foreground)]">
+            {currentTab.total} judul
+          </span>
         </div>
-        <span className="shrink-0 text-[11px] text-[var(--muted-foreground)]">
-          {currentTab.total} judul
-        </span>
       </div>
 
       {currentTab.entries.length === 0 ? (

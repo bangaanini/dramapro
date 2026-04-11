@@ -1,7 +1,6 @@
 import { Sparkles } from "lucide-react";
 
 import { HomeFeedTabs } from "@/components/home-feed-tabs";
-import { HomeHeroBanner } from "@/components/home-hero-banner";
 import { Card, CardContent } from "@/components/ui/card";
 import type { HomeFeedEntry } from "@/lib/catalog-data";
 
@@ -19,10 +18,8 @@ type HomeCatalogResponse = {
 export function HomeCatalogPanel({ data }: { data: HomeCatalogResponse }) {
   return (
     <>
-      <HomeHeroBanner items={data.heroBanners} />
-
       {data.totalDramas === 0 ? (
-        <section className="mt-8">
+        <section className="mx-auto mt-5 w-full max-w-7xl px-3 sm:mt-6 sm:px-4 lg:px-6">
           <Card className="glass-panel rounded-[1.75rem]">
             <CardContent className="flex min-h-72 flex-col items-center justify-center gap-3 p-10 text-center">
               <div className="rounded-full border border-white/10 bg-white/5 p-4">

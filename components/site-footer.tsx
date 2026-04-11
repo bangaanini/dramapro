@@ -58,8 +58,8 @@ export function SiteFooter() {
   }
 
   const navMarkup = (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[80] px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-6">
-      <nav className="floating-nav-shell pointer-events-auto mx-auto flex w-full max-w-2xl items-end justify-between rounded-[2rem] px-3 py-3">
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[80]">
+      <nav className="floating-nav-shell pointer-events-auto mx-auto flex w-full max-w-none items-end justify-between rounded-none border-x-0 border-b-0 px-2 pb-[max(0.45rem,env(safe-area-inset-bottom))] pt-2 sm:px-4">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const isActive = currentKey === item.key;
@@ -115,7 +115,7 @@ export function SiteFooter() {
 
   return (
     <>
-      <div className="h-30 sm:h-32" />
+      <div className="h-24 sm:h-26" />
       {typeof document !== "undefined" && document.body
         ? createPortal(navMarkup, document.body)
         : null}
