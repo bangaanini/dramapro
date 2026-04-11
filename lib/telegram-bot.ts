@@ -28,6 +28,8 @@ type TelegramWebhookMessage = {
   };
 };
 
+type TelegramMiniAppTarget = "home" | "search" | "vip" | "profile" | "affiliate";
+
 function getTelegramBotToken() {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
 
@@ -49,7 +51,12 @@ export function getTelegramSupportUrl() {
   return username ? `https://t.me/${username}` : getSiteUrl();
 }
 
-export function getTelegramMiniAppUrl(target: "home" | "search" | "vip" | "profile" | "affiliate") {
+export function getTelegramMiniAppUrl(
+  target: TelegramMiniAppTarget,
+  options?: {
+    referralCode?: string | null;
+  },
+) {
   const rawBaseUrl = process.env.TELEGRAM_MINI_APP_URL?.trim() || getSiteUrl();
   const normalizedBaseUrl =
     rawBaseUrl.startsWith("http://") || rawBaseUrl.startsWith("https://")
@@ -58,6 +65,9 @@ export function getTelegramMiniAppUrl(target: "home" | "search" | "vip" | "profi
   const url = new URL(normalizedBaseUrl);
   url.pathname = "/";
   url.searchParams.set("tg_target", target);
+  if (options?.referralCode) {
+    url.searchParams.set("tg_ref", options.referralCode);
+  }
   return url.toString();
 }
 
@@ -73,15 +83,15 @@ export function buildTelegramStartMessage(firstName?: string) {
   ].join("\n");
 }
 
-export function buildTelegramStartKeyboard() {
+export function buildTelegramStartKeyboard(referralCode?: string | null) {
   return {
     inline_keyboard: [
-      [{ text: "🎬 Buka", web_app: { url: getTelegramMiniAppUrl("home") } }],
-      [{ text: "🔍 Cari Judul", web_app: { url: getTelegramMiniAppUrl("search") } }],
-      [{ text: "💎 Beli VIP", web_app: { url: getTelegramMiniAppUrl("vip") } }],
-      [{ text: "👤 Profile", web_app: { url: getTelegramMiniAppUrl("profile") } }],
+      [{ text: "🎬 Buka", web_app: { url: getTelegramMiniAppUrl("home", { referralCode }) } }],
+      [{ text: "🔍 Cari Judul", web_app: { url: getTelegramMiniAppUrl("search", { referralCode }) } }],
+      [{ text: "💎 Beli VIP", web_app: { url: getTelegramMiniAppUrl("vip", { referralCode }) } }],
+      [{ text: "👤 Profile", web_app: { url: getTelegramMiniAppUrl("profile", { referralCode }) } }],
       [{ text: "💬 Lapor Kendala", url: getTelegramSupportUrl() }],
-      [{ text: "💰 Cari Cuan Referral", web_app: { url: getTelegramMiniAppUrl("affiliate") } }],
+      [{ text: "💰 Cari Cuan Referral", web_app: { url: getTelegramMiniAppUrl("affiliate", { referralCode }) } }],
     ],
   };
 }
@@ -131,5 +141,11 @@ export function extractStartMessage(update: TelegramWebhookMessage) {
   return {
     chatId,
     firstName: update.message?.from?.first_name?.trim() || undefined,
+    referralCode: parseTelegramReferralCode(text),
   };
+}
+
+function parseTelegramReferralCode(text: string) {
+  const match = text.match(/^\/start(?:@\w+)?\s+ref_([A-Z0-9]+)$/i);
+  return match?.[1]?.trim().toUpperCase() ?? null;
 }

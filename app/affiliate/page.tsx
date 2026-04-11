@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { headers } from "next/headers";
-import { ArrowLeft, Coins, Crown, Gem, Landmark, Users } from "lucide-react";
+import { Coins, Crown, Gem, Landmark, Users } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { requestAffiliateWithdrawalAction } from "@/app/affiliate/actions";
@@ -13,6 +13,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   buildAffiliateLink,
+  buildTelegramAffiliateLink,
   calculateAffiliateAvailableBalance,
   ensureUserAffiliateCode,
   formatIdr,
@@ -162,17 +163,17 @@ export default async function AffiliatePage(props: PageProps<"/affiliate">) {
   const proto = headerStore.get("x-forwarded-proto") ?? "http";
   const host =
     headerStore.get("x-forwarded-host") ?? headerStore.get("host") ?? "localhost:3000";
-  const referralLink = buildAffiliateLink(`${proto}://${host}`, affiliateCode);
+  const telegramBotUsername = process.env.TELEGRAM_BOT_USERNAME?.trim();
+  const referralLink =
+    user.authProvider === "telegram" && telegramBotUsername
+      ? buildTelegramAffiliateLink(telegramBotUsername, affiliateCode)
+      : buildAffiliateLink(`${proto}://${host}`, affiliateCode);
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-6 sm:px-6 lg:px-8">
       <SiteHeader current="account" />
 
       <div className="mt-6 flex items-center gap-3">
-        <Link href="/profile" className={buttonVariants({ variant: "ghost", size: "sm" })}>
-          <ArrowLeft className="mr-2 size-4" />
-          Kembali ke profil
-        </Link>
         <Badge className="border-accent/30 bg-accent-soft text-accent">
           Program Affiliate
         </Badge>
@@ -282,6 +283,7 @@ function DashboardTab({
 }) {
   return (
     <div className="space-y-5">
+            <AffiliateLinkCard link={referralLink} />
       <div className="grid gap-4 lg:grid-cols-3">
         <StatBox
           icon={Gem}
@@ -368,7 +370,7 @@ function DashboardTab({
         </CardContent>
       </Card>
 
-      <AffiliateLinkCard link={referralLink} />
+
     </div>
   );
 }

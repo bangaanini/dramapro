@@ -159,6 +159,14 @@ export function buildAffiliateLink(baseUrl: string, affiliateCode: string) {
   return `${baseUrl.replace(/\/+$/, "")}/?ref=${encodeURIComponent(affiliateCode)}`;
 }
 
+export function buildTelegramAffiliateLink(
+  botUsername: string,
+  affiliateCode: string,
+) {
+  const normalizedUsername = botUsername.trim().replace(/^@/, "");
+  return `https://t.me/${normalizedUsername}?start=${encodeURIComponent(`ref_${affiliateCode}`)}`;
+}
+
 export function formatIdr(value: number) {
   return new Intl.NumberFormat("id-ID", {
     style: "currency",

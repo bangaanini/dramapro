@@ -72,9 +72,6 @@ export default async function HomePage(props: PageProps<"/">) {
             <h1 className="mt-3 text-2xl font-semibold tracking-tight text-white">
               Menyiapkan halaman tujuanmu
             </h1>
-            <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
-              Session Telegram sedang disinkronkan agar kamu langsung masuk ke menu yang dipilih tanpa login manual.
-            </p>
             <div className="mt-6 flex items-center justify-center gap-2">
               <span className="size-2 rounded-full bg-accent/90 animate-pulse" />
               <span className="size-2 rounded-full bg-accent/60 animate-pulse [animation-delay:120ms]" />

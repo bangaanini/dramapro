@@ -30,6 +30,7 @@ declare global {
 }
 
 const TELEGRAM_SESSION_CACHE_KEY = "dramapro.telegram.session.v1";
+const TELEGRAM_REF_CAPTURE_PREFIX = "dramapro.telegram.ref.";
 
 const TARGET_ROUTES = {
   home: "/",
@@ -50,6 +51,7 @@ export function TelegramMiniAppBridge() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const target = searchParams.get("tg_target");
+  const referralCode = searchParams.get("tg_ref")?.trim().toUpperCase() ?? null;
 
   useLayoutEffect(() => {
     const webApp = window.Telegram?.WebApp;
@@ -96,6 +98,22 @@ export function TelegramMiniAppBridge() {
 
     async function syncTelegramSession() {
       try {
+        if (referralCode) {
+          const refCacheKey = `${TELEGRAM_REF_CAPTURE_PREFIX}${referralCode}`;
+          const hasCapturedReferral = safeSessionStorage.getItem(refCacheKey) === "1";
+
+          if (!hasCapturedReferral) {
+            await fetch(
+              `/api/affiliate/capture?ref=${encodeURIComponent(referralCode)}&mode=json`,
+              {
+                credentials: "same-origin",
+                cache: "no-store",
+              },
+            ).catch(() => undefined);
+            safeSessionStorage.setItem(refCacheKey, "1");
+          }
+        }
+
         const response = await fetch("/api/auth/telegram/session", {
           method: "POST",
           headers: {
@@ -125,7 +143,7 @@ export function TelegramMiniAppBridge() {
     return () => {
       cancelled = true;
     };
-  }, [pathname, router, target]);
+  }, [pathname, referralCode, router, target]);
 
   useEffect(() => {
     const webApp = window.Telegram?.WebApp;

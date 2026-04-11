@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
   await sendTelegramMessage({
     chat_id: startPayload.chatId,
     text: buildTelegramStartMessage(startPayload.firstName),
-    reply_markup: buildTelegramStartKeyboard(),
+    reply_markup: buildTelegramStartKeyboard(startPayload.referralCode),
   });
 
   return NextResponse.json({ ok: true });
