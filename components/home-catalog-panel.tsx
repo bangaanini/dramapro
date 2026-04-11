@@ -6,7 +6,6 @@ import type { HomeFeedEntry } from "@/lib/catalog-data";
 
 type HomeCatalogResponse = {
   totalDramas: number;
-  heroBanners: HomeFeedEntry[];
   homeEntries: HomeFeedEntry[];
   homeTotal: number;
   newEntries: HomeFeedEntry[];

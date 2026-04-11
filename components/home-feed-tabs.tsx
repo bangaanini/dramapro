@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LoaderCircle } from "lucide-react";
 
 import { DramaCard } from "@/components/drama-card";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,9 +22,23 @@ type FeedTabConfig = {
   key: FeedTabKey;
   label: string;
   badgeLabel: string | null;
+  emptyCopy: string;
+};
+
+type FeedResponse = {
   entries: HomeFeedEntry[];
   total: number;
-  emptyCopy: string;
+  nextOffset: number;
+  hasMore: boolean;
+};
+
+type FeedState = {
+  entries: HomeFeedEntry[];
+  total: number;
+  nextOffset: number;
+  hasMore: boolean;
+  isLoading: boolean;
+  error: string | null;
 };
 
 type HomeFeedTabsProps = {
@@ -37,6 +52,39 @@ type HomeFeedTabsProps = {
 
 const FEED_PAGE_SIZE = 18;
 
+function createInitialFeedState(
+  entries: HomeFeedEntry[],
+  total: number,
+): FeedState {
+  return {
+    entries,
+    total,
+    nextOffset: entries.length,
+    hasMore: entries.length < total,
+    isLoading: false,
+    error: null,
+  };
+}
+
+function mergeFeedEntries(
+  currentEntries: HomeFeedEntry[],
+  nextEntries: HomeFeedEntry[],
+) {
+  const seenIds = new Set(currentEntries.map((entry) => entry.id));
+  const mergedEntries = [...currentEntries];
+
+  for (const entry of nextEntries) {
+    if (seenIds.has(entry.id)) {
+      continue;
+    }
+
+    seenIds.add(entry.id);
+    mergedEntries.push(entry);
+  }
+
+  return mergedEntries;
+}
+
 export function HomeFeedTabs({
   homeEntries,
   homeTotal,
@@ -46,51 +94,154 @@ export function HomeFeedTabs({
   popularTotal,
 }: HomeFeedTabsProps) {
   const [activeTab, setActiveTab] = useState<FeedTabKey>("new");
-  const [visibleCounts, setVisibleCounts] = useState<Record<FeedTabKey, number>>({
-    home: FEED_PAGE_SIZE,
-    new: FEED_PAGE_SIZE,
-    popular: FEED_PAGE_SIZE,
+  const [feeds, setFeeds] = useState<Record<FeedTabKey, FeedState>>({
+    home: createInitialFeedState(homeEntries, homeTotal),
+    new: createInitialFeedState(newEntries, newTotal),
+    popular: createInitialFeedState(popularEntries, popularTotal),
   });
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const feedsRef = useRef(feeds);
 
-  const tabs: FeedTabConfig[] = [
-    {
-      key: "new",
-      label: "Terbaru",
-      badgeLabel: "NEW",
-      entries: newEntries,
-      total: newTotal,
-      emptyCopy: "Belum ada drama terbaru. Jalankan sync feed new dari panel admin.",
-    },
-    {
-      key: "popular",
-      label: "Populer",
-      badgeLabel: "HOT",
-      entries: popularEntries,
-      total: popularTotal,
-      emptyCopy:
-        "Belum ada drama populer. Jalankan sync feed populer dari panel admin.",
-    },
-    {
-      key: "home",
-      label: "Untukmu",
-      badgeLabel: null,
-      entries: homeEntries,
-      total: homeTotal,
-      emptyCopy:
-        "Belum ada rekomendasi. Jalankan sync feed home dari panel admin.",
-    },
-  ];
+  useEffect(() => {
+    feedsRef.current = feeds;
+  }, [feeds]);
+
+  const tabs: FeedTabConfig[] = useMemo(
+    () => [
+      {
+        key: "new",
+        label: "Terbaru",
+        badgeLabel: "NEW",
+        emptyCopy: "Belum ada drama terbaru. Jalankan sync feed new dari panel admin.",
+      },
+      {
+        key: "popular",
+        label: "Populer",
+        badgeLabel: "HOT",
+        emptyCopy:
+          "Belum ada drama populer. Jalankan sync feed populer dari panel admin.",
+      },
+      {
+        key: "home",
+        label: "Untukmu",
+        badgeLabel: null,
+        emptyCopy:
+          "Belum ada rekomendasi. Jalankan sync feed home dari panel admin.",
+      },
+    ],
+    [],
+  );
 
   const currentTab =
     tabs.find((tab) => tab.key === activeTab) ??
     tabs[0];
-  const visibleEntries = currentTab.entries.slice(0, visibleCounts[currentTab.key]);
-  const hasMore = visibleCounts[currentTab.key] < currentTab.entries.length;
+  const currentFeed = feeds[currentTab.key];
+
+  const loadMore = useCallback(async (tabKey: FeedTabKey) => {
+    const currentFeedState = feedsRef.current[tabKey];
+
+    if (
+      currentFeedState.isLoading ||
+      !currentFeedState.hasMore
+    ) {
+      return;
+    }
+
+    setFeeds((current) => ({
+      ...current,
+      [tabKey]: {
+        ...current[tabKey],
+        isLoading: true,
+        error: null,
+      },
+    }));
+
+    try {
+      const response = await fetch(
+        `/api/catalog/feed?source=${encodeURIComponent(tabKey)}&offset=${currentFeedState.nextOffset}&limit=${FEED_PAGE_SIZE}`,
+        {
+          credentials: "same-origin",
+        },
+      );
+
+      const payload = (await response.json()) as FeedResponse | { error?: string };
+
+      if (!response.ok) {
+        throw new Error(
+          "error" in payload && payload.error
+            ? payload.error
+            : "Gagal memuat katalog berikutnya.",
+        );
+      }
+
+      const nextPage = payload as FeedResponse;
+
+      setFeeds((current) => {
+        const activeFeed = current[tabKey];
+        const mergedEntries = mergeFeedEntries(activeFeed.entries, nextPage.entries);
+
+        return {
+          ...current,
+          [tabKey]: {
+            entries: mergedEntries,
+            total: nextPage.total,
+            nextOffset: nextPage.nextOffset,
+            hasMore: nextPage.hasMore,
+            isLoading: false,
+            error: null,
+          },
+        };
+      });
+    } catch (loadError) {
+      setFeeds((current) => ({
+        ...current,
+        [tabKey]: {
+          ...current[tabKey],
+          isLoading: false,
+          error:
+            loadError instanceof Error
+              ? loadError.message
+              : "Gagal memuat katalog berikutnya.",
+        },
+      }));
+    }
+  }, []);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+
+    if (!sentinel || !currentFeed.hasMore || currentFeed.isLoading) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const firstEntry = entries[0];
+
+        if (!firstEntry?.isIntersecting) {
+          return;
+        }
+
+        void loadMore(currentTab.key);
+      },
+      {
+        rootMargin: "900px 0px 900px 0px",
+        threshold: 0.01,
+      },
+    );
+
+    observer.observe(sentinel);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [currentFeed.hasMore, currentFeed.isLoading, currentTab.key, loadMore]);
 
   return (
     <section className="mx-auto mt-0 w-full max-w-7xl space-y-4 px-3 pb-2 sm:px-4 lg:px-6">
-      <div className="sticky top-[3.9rem] z-40 -mx-3 border-b border-white/8 bg-[rgba(12,8,8,0.94)] px-3 pb-2 pt-2 backdrop-blur-xl sm:top-[4.2rem] sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6">
-        <div className="flex items-center justify-between gap-3">
+      <div className="sticky top-[3.9rem] z-40 -mx-3 border-b border-white/7 bg-[linear-gradient(180deg,rgba(15,10,10,0.98),rgba(15,10,10,0.9)_72%,rgba(15,10,10,0.78))] px-3 pb-2 pt-2 backdrop-blur-2xl shadow-[0_10px_24px_rgba(0,0,0,0.18)] sm:top-[4.2rem] sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-b from-transparent to-[rgba(15,10,10,0.42)]" />
+        <div className="relative flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-4 overflow-x-auto">
             {tabs.map((tab) => (
               <button
@@ -107,7 +258,7 @@ export function HomeFeedTabs({
                 {tab.label}
                 <span
                   className={cn(
-                    "absolute inset-x-0 -bottom-0.5 h-0.5 rounded-full bg-white transition",
+                    "absolute inset-x-0 -bottom-0.5 h-0.5 rounded-full bg-white shadow-[0_0_14px_rgba(255,255,255,0.45)] transition",
                     activeTab === tab.key ? "opacity-100" : "opacity-0",
                   )}
                 />
@@ -115,12 +266,12 @@ export function HomeFeedTabs({
             ))}
           </div>
           <span className="shrink-0 text-[11px] text-[var(--muted-foreground)]">
-            {currentTab.total} judul
+            {currentFeed.total} judul
           </span>
         </div>
       </div>
 
-      {currentTab.entries.length === 0 ? (
+      {currentFeed.entries.length === 0 ? (
         <Card className="glass-panel rounded-[1.4rem] border-white/10">
           <CardContent className="flex min-h-36 items-center justify-center px-4 py-8 text-center text-sm text-[var(--muted-foreground)]">
             {currentTab.emptyCopy}
@@ -129,7 +280,7 @@ export function HomeFeedTabs({
       ) : (
         <>
           <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 sm:gap-3 lg:grid-cols-5 xl:grid-cols-6">
-            {visibleEntries.map((entry) => (
+            {currentFeed.entries.map((entry) => (
               <DramaCard
                 key={`${currentTab.key}-${entry.id}`}
                 href={entry.href}
@@ -144,19 +295,37 @@ export function HomeFeedTabs({
             ))}
           </div>
 
-          {hasMore ? (
+          <div ref={sentinelRef} className="h-1 w-full" aria-hidden="true" />
+
+          {currentFeed.isLoading ? (
+            <div className="flex items-center justify-center gap-2 py-2 text-sm text-[var(--muted-foreground)]">
+              <LoaderCircle className="size-4 animate-spin text-accent" />
+              Memuat judul berikutnya...
+            </div>
+          ) : null}
+
+          {currentFeed.error ? (
+            <div className="flex flex-col items-center gap-3 py-2">
+              <p className="text-center text-sm text-red-200">{currentFeed.error}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  void loadMore(currentTab.key);
+                }}
+                className="rounded-full border border-white/10 bg-white/6 px-4 py-2 text-sm text-white transition hover:bg-white/10"
+              >
+                Coba lagi
+              </button>
+            </div>
+          ) : null}
+
+          {currentFeed.hasMore && !currentFeed.isLoading ? (
             <div className="flex justify-center pt-1">
               <button
                 type="button"
-                onClick={() =>
-                  setVisibleCounts((current) => ({
-                    ...current,
-                    [currentTab.key]: Math.min(
-                      current[currentTab.key] + FEED_PAGE_SIZE,
-                      currentTab.entries.length,
-                    ),
-                  }))
-                }
+                onClick={() => {
+                  void loadMore(currentTab.key);
+                }}
                 className="rounded-full border border-white/10 bg-white/6 px-4 py-2 text-sm text-white transition hover:bg-white/10"
               >
                 Muat lagi
