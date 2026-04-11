@@ -97,7 +97,10 @@ export async function createVipPaymentSession(input: {
     },
   });
 
-  redirect(`/vip/checkout/${referenceId}?next=${encodeURIComponent(safeNext)}`);
+  return {
+    referenceId,
+    next: safeNext,
+  };
 }
 
 export async function syncVipPaymentStatus(referenceId: string, userId: string) {

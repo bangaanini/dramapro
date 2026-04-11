@@ -13,8 +13,10 @@ export async function createVipCheckoutAction(formData: FormData) {
     redirect(`/vip?error=${encodeURIComponent("Pilih paket VIP terlebih dahulu.")}`);
   }
 
+  let session: Awaited<ReturnType<typeof createVipPaymentSession>>;
+
   try {
-    await createVipPaymentSession({
+    session = await createVipPaymentSession({
       planId,
       channelCode,
       next,
@@ -28,4 +30,8 @@ export async function createVipCheckoutAction(formData: FormData) {
       `/vip/checkout?plan=${encodeURIComponent(planId)}&next=${encodeURIComponent(next)}&error=${encodeURIComponent(message)}`,
     );
   }
+
+  redirect(
+    `/vip/checkout/${session.referenceId}?next=${encodeURIComponent(session.next)}`,
+  );
 }
