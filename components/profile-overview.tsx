@@ -71,6 +71,12 @@ const profileMenuItems = [
     description: "Bagikan link referral dan pantau komisi.",
     icon: Megaphone,
   },
+  {
+    href: "/profile/payout-settings",
+    label: "Detail Withdraw",
+    description: "Atur rekening default untuk pencairan komisi.",
+    icon: Download,
+  },
 ] as const;
 
 const secondaryMenuItems = [

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   BadgePercent,
   Crown,
+  CreditCard,
   LayoutGrid,
   Settings2,
   ShieldCheck,
@@ -43,7 +44,7 @@ const adminNavItems = [
     href: "/admin/payment-gateways",
     label: "Payment Gateway",
     description: "Atur checkout dan credential",
-    icon: Crown,
+    icon: CreditCard,
   },
   {
     href: "/admin/sync",
@@ -56,11 +57,13 @@ const adminNavItems = [
 type AdminSidebarProps = {
   adminName: string;
   adminEmail: string;
+  pendingAffiliateWithdrawals: number;
 };
 
 export function AdminSidebar({
   adminName,
   adminEmail,
+  pendingAffiliateWithdrawals,
 }: AdminSidebarProps) {
   const pathname = usePathname();
 
@@ -107,7 +110,18 @@ export function AdminSidebar({
                     <Icon className="size-4" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold">{item.label}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold">{item.label}</p>
+                      {item.href === "/admin/affiliate-settings" &&
+                      pendingAffiliateWithdrawals > 0 ? (
+                        <>
+                          <span className="inline-flex size-2 rounded-full bg-amber-400 shadow-[0_0_16px_rgba(251,191,36,0.8)]" />
+                          <Badge className="border-amber-400/20 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-100">
+                            {pendingAffiliateWithdrawals} baru
+                          </Badge>
+                        </>
+                      ) : null}
+                    </div>
                     <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
                       {item.description}
                     </p>

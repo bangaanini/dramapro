@@ -66,6 +66,13 @@ export default async function AdminAffiliateSettingsPage(
           minimum penarikan, dan review permintaan withdrawal user.
         </p>
 
+        {pendingWithdrawals.length > 0 ? (
+          <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-500/10 px-4 py-2 text-sm text-amber-100">
+            <span className="inline-flex size-2 rounded-full bg-amber-400 shadow-[0_0_14px_rgba(251,191,36,0.85)]" />
+            Ada {pendingWithdrawals.length} request withdrawal baru menunggu review
+          </div>
+        ) : null}
+
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
           <StatCard
             label="Status program"
@@ -223,6 +230,27 @@ export default async function AdminAffiliateSettingsPage(
                           timeStyle: "short",
                         }).format(item.requestedAt)}
                       </p>
+
+                      <div className="mt-4 rounded-[1.2rem] border border-white/10 bg-white/5 p-3 text-sm">
+                        <p className="font-medium text-white">Detail transfer</p>
+                        <p className="mt-2 text-[var(--muted)]">
+                          {item.payoutAccountHolderName || "-"}
+                        </p>
+                        <p className="mt-1 text-[var(--muted)]">
+                          {item.payoutBankName || "-"} • {item.payoutAccountNumber || "-"}
+                        </p>
+                        <p className="mt-1 text-[var(--muted)]">
+                          WhatsApp {item.payoutWhatsappNumber || "-"}
+                        </p>
+                        <p className="mt-1 text-[var(--muted)]">
+                          {item.payoutEmail || "-"}
+                        </p>
+                        {item.notes ? (
+                          <p className="mt-2 text-xs text-[var(--muted-foreground)]">
+                            Catatan: {item.notes}
+                          </p>
+                        ) : null}
+                      </div>
 
                       <div className="mt-4 flex gap-2">
                         <form action={updateAffiliateWithdrawalStatusAction}>

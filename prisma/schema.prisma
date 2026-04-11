@@ -126,6 +126,7 @@ model User {
   affiliateCommissions       AffiliateCommission[] @relation("AffiliateOwner")
   referredAffiliateSales     AffiliateCommission[] @relation("AffiliateReferred")
   affiliateWithdrawals       AffiliateWithdrawal[]
+  affiliatePayoutProfile     AffiliatePayoutProfile?
   createdAt                  DateTime              @default(now())
   updatedAt                  DateTime              @updatedAt
 
@@ -297,6 +298,11 @@ model AffiliateWithdrawal {
   amount          Int
   status          AffiliateWithdrawalStatus @default(pending)
   notes           String                    @default("")
+  payoutAccountHolderName String            @default("")
+  payoutBankName          String            @default("")
+  payoutAccountNumber     String            @default("")
+  payoutWhatsappNumber    String            @default("")
+  payoutEmail             String            @default("")
   requestedAt     DateTime                  @default(now())
   reviewedAt      DateTime?
   affiliateUser   User                      @relation(fields: [affiliateUserId], references: [id], onDelete: Cascade)
@@ -304,4 +310,18 @@ model AffiliateWithdrawal {
   updatedAt       DateTime                  @updatedAt
 
   @@index([affiliateUserId, status, createdAt])
+}
+
+model AffiliatePayoutProfile {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @db.Uuid @unique
+  accountHolderName String
+  bankName          String
+  accountNumber     String
+  whatsappNumber    String
+  payoutEmail       String
+  notes             String   @default("")
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }

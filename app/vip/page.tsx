@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 
 import { createVipCheckoutAction } from "@/app/vip/actions";
+import { FormSubmitButton } from "@/components/form-submit-button";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { Badge } from "@/components/ui/badge";
@@ -174,10 +175,12 @@ export default async function VipPage(props: PageProps<"/vip">) {
                     <form action={createVipCheckoutAction}>
                       <input type="hidden" name="planId" value={plan.id} />
                       <input type="hidden" name="next" value={next} />
-                      <button
+                      <FormSubmitButton
                         type="submit"
+                        size="lg"
+                        pendingLabel="Menyiapkan QRIS..."
+                        idleLabel={userHasVip ? "Perpanjang VIP" : "Beli VIP sekarang"}
                         className={cn(
-                          buttonVariants({ size: "lg" }),
                           "h-12 w-full rounded-2xl",
                           isFeatured &&
                             "bg-[linear-gradient(180deg,#ffd05a,#f4ae16)] text-[#392100] hover:brightness-105",
@@ -185,7 +188,7 @@ export default async function VipPage(props: PageProps<"/vip">) {
                       >
                         <Crown className="mr-2 size-4" />
                         {userHasVip ? "Perpanjang VIP" : "Beli VIP sekarang"}
-                      </button>
+                      </FormSubmitButton>
                     </form>
                   ) : (
                     <Link

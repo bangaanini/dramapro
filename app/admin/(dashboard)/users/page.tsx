@@ -15,7 +15,7 @@ function formatDate(date: Date) {
 }
 
 export default async function AdminUsersPage() {
-  const [users, totalUsers, activeSessions] = await Promise.all([
+  const [users, totalUsers, activeSessions, activeReferralGroups] = await Promise.all([
     prisma.user.findMany({
       orderBy: { createdAt: "desc" },
       take: 100,
@@ -25,6 +25,7 @@ export default async function AdminUsersPage() {
             favorites: true,
             watchHistory: true,
             sessions: true,
+            referrals: true,
           },
         },
       },
@@ -37,8 +38,29 @@ export default async function AdminUsersPage() {
         },
       },
     }),
+    prisma.user.groupBy({
+      by: ["referredById"],
+      where: {
+        referredById: {
+          not: null,
+        },
+        vipPayments: {
+          some: {
+            status: "paid",
+          },
+        },
+      },
+      _count: {
+        _all: true,
+      },
+    }),
   ]);
   const premiumUsers = users.filter((user) => isVipActive(user.vipExpiresAt)).length;
+  const activeReferralMap = new Map(
+    activeReferralGroups
+      .filter((item) => item.referredById)
+      .map((item) => [item.referredById as string, item._count._all]),
+  );
 
   return (
     <div className="space-y-6">
@@ -76,6 +98,7 @@ export default async function AdminUsersPage() {
                   <th className="px-5 py-4 font-medium">Status</th>
                   <th className="px-5 py-4 font-medium">Favorit</th>
                   <th className="px-5 py-4 font-medium">Riwayat</th>
+                  <th className="px-5 py-4 font-medium">Referral aktif</th>
                   <th className="px-5 py-4 font-medium">Sesi</th>
                   <th className="px-5 py-4 font-medium">Terdaftar</th>
                 </tr>
@@ -84,6 +107,7 @@ export default async function AdminUsersPage() {
                 {users.length > 0 ? (
                   users.map((user) => {
                     const hasActiveVip = isVipActive(user.vipExpiresAt);
+                    const activeReferralCount = activeReferralMap.get(user.id) ?? 0;
 
                     return (
                       <tr key={user.id} className="border-b border-white/6 last:border-b-0">
@@ -115,6 +139,12 @@ export default async function AdminUsersPage() {
                         </td>
                         <td className="px-5 py-4 text-white">{user._count.favorites}</td>
                         <td className="px-5 py-4 text-white">{user._count.watchHistory}</td>
+                        <td className="px-5 py-4">
+                          <p className="text-white">{activeReferralCount}</p>
+                          <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                            {user._count.referrals} total referral
+                          </p>
+                        </td>
                         <td className="px-5 py-4 text-white">{user._count.sessions}</td>
                         <td className="px-5 py-4 text-[var(--muted)]">
                           {formatDate(user.createdAt)}
@@ -125,7 +155,7 @@ export default async function AdminUsersPage() {
                 ) : (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="px-5 py-10 text-center text-[var(--muted)]"
                     >
                       Belum ada user terdaftar.

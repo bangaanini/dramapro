@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { headers } from "next/headers";
-import { ArrowLeft, Coins, Crown, Gem, Users } from "lucide-react";
+import { ArrowLeft, Coins, Crown, Gem, Landmark, Users } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { requestAffiliateWithdrawalAction } from "@/app/affiliate/actions";
 import { AffiliateLinkCard } from "@/components/affiliate-link-card";
+import { FormSubmitButton } from "@/components/form-submit-button";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   buildAffiliateLink,
@@ -47,11 +48,20 @@ export default async function AffiliatePage(props: PageProps<"/affiliate">) {
   const success = searchParams.success === "1";
   const error =
     typeof searchParams.error === "string" ? searchParams.error : null;
+  const payoutSuccess =
+    typeof searchParams.payoutSuccess === "string"
+      ? searchParams.payoutSuccess
+      : null;
 
-  const [affiliateCode, settings, totalReferrals, activeReferrals, commissionTotals, withdrawalTotals, recentWithdrawals, recentCommissions] =
+  const [affiliateCode, settings, payoutProfile, totalReferrals, activeReferrals, commissionTotals, withdrawalTotals, recentWithdrawals, recentCommissions] =
     await Promise.all([
       ensureUserAffiliateCode(user.id, user.name),
       getAffiliateSettings(),
+      prisma.affiliatePayoutProfile.findUnique({
+        where: {
+          userId: user.id,
+        },
+      }),
       prisma.user.count({
         where: {
           referredById: user.id,
@@ -195,6 +205,12 @@ export default async function AffiliatePage(props: PageProps<"/affiliate">) {
           </div>
         ) : null}
 
+        {payoutSuccess ? (
+          <div className="mt-5 rounded-[1.4rem] border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+            {payoutSuccess}
+          </div>
+        ) : null}
+
         {error ? (
           <div className="mt-5 rounded-[1.4rem] border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
             {error}
@@ -207,6 +223,7 @@ export default async function AffiliatePage(props: PageProps<"/affiliate">) {
               activeReferrals={activeReferrals}
               availableBalance={availableBalance}
               minimumWithdrawalAmount={settings.minimumWithdrawalAmount}
+              payoutProfile={payoutProfile}
               referralLink={referralLink}
               tier={tier}
               totalReferrals={totalReferrals}
@@ -243,6 +260,7 @@ function DashboardTab({
   totalReferrals,
   availableBalance,
   minimumWithdrawalAmount,
+  payoutProfile,
   referralLink,
 }: {
   tier: ReturnType<typeof getAffiliateTier>;
@@ -250,6 +268,13 @@ function DashboardTab({
   totalReferrals: number;
   availableBalance: number;
   minimumWithdrawalAmount: number;
+  payoutProfile: {
+    accountHolderName: string;
+    bankName: string;
+    accountNumber: string;
+    whatsappNumber: string;
+    payoutEmail: string;
+  } | null;
   referralLink: string;
 }) {
   return (
@@ -278,18 +303,67 @@ function DashboardTab({
                 Minimum penarikan {formatIdr(minimumWithdrawalAmount)}
               </p>
             </div>
-            <form action={requestAffiliateWithdrawalAction}>
-              <Button
-                type="submit"
-                variant="secondary"
-                disabled={availableBalance < minimumWithdrawalAmount}
+            {payoutProfile ? (
+              <form action={requestAffiliateWithdrawalAction}>
+                <FormSubmitButton
+                  type="submit"
+                  variant="secondary"
+                  disabled={availableBalance < minimumWithdrawalAmount}
+                  idleLabel="Tarik Komisi"
+                  pendingLabel="Mengajukan..."
+                />
+              </form>
+            ) : (
+              <Link
+                href="/profile/payout-settings?next=/affiliate?tab=dashboard"
+                className={buttonVariants({ variant: "secondary", size: "default" })}
               >
-                Tarik Komisi
-              </Button>
-            </form>
+                Lengkapi data payout
+              </Link>
+            )}
           </CardContent>
         </Card>
       </div>
+
+      <Card className="rounded-[1.7rem] border-white/10 bg-white/5">
+        <CardContent className="space-y-4 p-5">
+          <div className="flex items-center gap-3">
+            <div className="flex size-11 items-center justify-center rounded-2xl border border-white/10 bg-white/6 text-white">
+              <Landmark className="size-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-white">Payout default</h2>
+              <p className="text-sm text-[var(--muted)]">
+                Data rekening ini otomatis dipakai saat request withdraw dibuat.
+              </p>
+            </div>
+          </div>
+
+          {payoutProfile ? (
+            <div className="rounded-[1.4rem] border border-white/10 bg-black/20 p-4 text-sm">
+              <p className="font-semibold text-white">{payoutProfile.accountHolderName}</p>
+              <p className="mt-2 text-[var(--muted)]">
+                {payoutProfile.bankName} • {payoutProfile.accountNumber}
+              </p>
+              <p className="mt-1 text-[var(--muted)]">
+                WhatsApp {payoutProfile.whatsappNumber}
+              </p>
+              <p className="mt-1 text-[var(--muted)]">{payoutProfile.payoutEmail}</p>
+            </div>
+          ) : (
+            <div className="rounded-[1.4rem] border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100">
+              Kamu belum menyimpan detail payout default. Lengkapi dulu agar penarikan komisi bisa diajukan tanpa isi form setiap kali.
+            </div>
+          )}
+
+          <Link
+            href="/profile/payout-settings?next=/affiliate?tab=dashboard"
+            className={buttonVariants({ variant: "secondary", size: "sm" })}
+          >
+            {payoutProfile ? "Edit data payout" : "Isi data payout"}
+          </Link>
+        </CardContent>
+      </Card>
 
       <AffiliateLinkCard link={referralLink} />
     </div>
@@ -310,6 +384,9 @@ function HistoryTab({
     status: string;
     requestedAt: Date;
     reviewedAt: Date | null;
+    payoutBankName: string;
+    payoutAccountNumber: string;
+    payoutAccountHolderName: string;
   }>;
   recentCommissions: Array<{
     id: string;
@@ -349,7 +426,15 @@ function HistoryTab({
                   recentWithdrawals.map((item, index) => (
                     <tr key={item.id} className="border-b border-white/6 last:border-b-0">
                       <td className="px-3 py-4 text-white">{index + 1}</td>
-                      <td className="px-3 py-4 text-white">{formatIdr(item.amount)}</td>
+                      <td className="px-3 py-4">
+                        <p className="text-white">{formatIdr(item.amount)}</p>
+                        <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                          {item.payoutBankName || "-"} • {item.payoutAccountNumber || "-"}
+                        </p>
+                        <p className="text-xs text-[var(--muted-foreground)]">
+                          {item.payoutAccountHolderName || "-"}
+                        </p>
+                      </td>
                       <td className="px-3 py-4">
                         <Badge variant={item.status === "rejected" ? "outline" : "default"}>
                           {item.status}
