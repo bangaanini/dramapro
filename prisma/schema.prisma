@@ -33,6 +33,19 @@ enum VipPaymentStatus {
   cancelled
 }
 
+enum AffiliateCommissionStatus {
+  approved
+  paid
+  cancelled
+}
+
+enum AffiliateWithdrawalStatus {
+  pending
+  approved
+  rejected
+  paid
+}
+
 model Drama {
   id              String       @id @default(uuid()) @db.Uuid
   providerDramaId String
@@ -88,18 +101,27 @@ model AdminSession {
 }
 
 model User {
-  id           String         @id @default(uuid()) @db.Uuid
-  email        String         @unique
-  name         String
-  passwordHash String
-  vipStartedAt DateTime?
-  vipExpiresAt DateTime?
-  sessions     UserSession[]
-  favorites    FavoriteDrama[]
-  watchHistory WatchHistory[]
-  vipPayments  VipPayment[]
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  id                         String                @id @default(uuid()) @db.Uuid
+  email                      String                @unique
+  name                       String
+  passwordHash               String
+  vipStartedAt               DateTime?
+  vipExpiresAt               DateTime?
+  affiliateCode              String?               @unique
+  referredById               String?               @db.Uuid
+  referredBy                 User?                 @relation("AffiliateReferrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals                  User[]                @relation("AffiliateReferrals")
+  sessions                   UserSession[]
+  favorites                  FavoriteDrama[]
+  watchHistory               WatchHistory[]
+  vipPayments                VipPayment[]
+  affiliateCommissions       AffiliateCommission[] @relation("AffiliateOwner")
+  referredAffiliateSales     AffiliateCommission[] @relation("AffiliateReferred")
+  affiliateWithdrawals       AffiliateWithdrawal[]
+  createdAt                  DateTime              @default(now())
+  updatedAt                  DateTime              @updatedAt
+
+  @@index([referredById, createdAt])
 }
 
 model UserSession {
@@ -189,9 +211,65 @@ model VipPayment {
   statusPayload         Json?
   user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   plan                  VipPricePlan     @relation(fields: [vipPricePlanId], references: [id], onDelete: Restrict)
+  affiliateCommission   AffiliateCommission?
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
 
   @@index([userId, status, createdAt])
   @@index([vipPricePlanId, createdAt])
+}
+
+model AffiliateSettings {
+  id                         String   @id @default("global")
+  isEnabled                  Boolean  @default(true)
+  cookieTtlDays              Int      @default(30)
+  minimumWithdrawalAmount    Int      @default(10000)
+  bronzeMinActiveReferrals   Int      @default(0)
+  bronzeCommissionRate       Int      @default(10)
+  silverMinActiveReferrals   Int      @default(5)
+  silverCommissionRate       Int      @default(15)
+  goldMinActiveReferrals     Int      @default(20)
+  goldCommissionRate         Int      @default(20)
+  platinumMinActiveReferrals Int      @default(50)
+  platinumCommissionRate     Int      @default(25)
+  commissionNotes            String   @default("")
+  withdrawalNotes            String   @default("")
+  otherTerms                 String   @default("")
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+}
+
+model AffiliateCommission {
+  id             String                    @id @default(uuid()) @db.Uuid
+  affiliateUserId String                   @db.Uuid
+  referredUserId  String                   @db.Uuid
+  vipPaymentId    String                   @unique @db.Uuid
+  baseAmount      Int
+  commissionRate  Int
+  amount          Int
+  status          AffiliateCommissionStatus @default(approved)
+  description     String                   @default("")
+  affiliateUser   User                     @relation("AffiliateOwner", fields: [affiliateUserId], references: [id], onDelete: Cascade)
+  referredUser    User                     @relation("AffiliateReferred", fields: [referredUserId], references: [id], onDelete: Cascade)
+  vipPayment      VipPayment               @relation(fields: [vipPaymentId], references: [id], onDelete: Cascade)
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  @@index([affiliateUserId, status, createdAt])
+  @@index([referredUserId, createdAt])
+}
+
+model AffiliateWithdrawal {
+  id              String                    @id @default(uuid()) @db.Uuid
+  affiliateUserId String                    @db.Uuid
+  amount          Int
+  status          AffiliateWithdrawalStatus @default(pending)
+  notes           String                    @default("")
+  requestedAt     DateTime                  @default(now())
+  reviewedAt      DateTime?
+  affiliateUser   User                      @relation(fields: [affiliateUserId], references: [id], onDelete: Cascade)
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  @@index([affiliateUserId, status, createdAt])
 }

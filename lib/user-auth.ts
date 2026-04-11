@@ -3,6 +3,7 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypt
 import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
 
+import { ensureUserAffiliateCode, readAffiliateCookieCode } from "@/lib/affiliate";
 import { prisma } from "@/lib/prisma";
 
 export const USER_SESSION_COOKIE = "dramapro_user_session";
@@ -100,11 +101,20 @@ export async function registerUser(input: {
     };
   }
 
+  const referralCode = await readAffiliateCookieCode();
+  const referralUser = referralCode
+    ? await prisma.user.findUnique({
+        where: { affiliateCode: referralCode },
+        select: { id: true },
+      })
+    : null;
+
   const user = await prisma.user.create({
     data: {
       email,
       name,
       passwordHash: hashPassword(password),
+      referredById: referralUser?.id ?? null,
     },
     select: {
       id: true,
@@ -115,6 +125,8 @@ export async function registerUser(input: {
       vipStartedAt: true,
     },
   });
+
+  await ensureUserAffiliateCode(user.id, user.name);
 
   return {
     ok: true as const,

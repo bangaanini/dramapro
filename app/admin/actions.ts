@@ -146,3 +146,130 @@ export async function toggleVipPricePlanAction(formData: FormData) {
   revalidatePath("/admin/vip-pricing");
   redirect("/admin/vip-pricing?saved=1");
 }
+
+export async function saveAffiliateSettingsAction(formData: FormData) {
+  await requireAdminSession();
+
+  const isEnabled = String(formData.get("isEnabled") ?? "") === "on";
+  const cookieTtlDays = Math.max(parsePositiveInt(formData.get("cookieTtlDays"), 30), 1);
+  const minimumWithdrawalAmount = Math.max(
+    parsePositiveInt(formData.get("minimumWithdrawalAmount"), 10000),
+    1000,
+  );
+
+  await prisma.affiliateSettings.upsert({
+    where: { id: "global" },
+    update: {
+      isEnabled,
+      cookieTtlDays,
+      minimumWithdrawalAmount,
+      bronzeMinActiveReferrals: parsePositiveInt(
+        formData.get("bronzeMinActiveReferrals"),
+        0,
+      ),
+      bronzeCommissionRate: Math.min(
+        parsePositiveInt(formData.get("bronzeCommissionRate"), 10),
+        100,
+      ),
+      silverMinActiveReferrals: parsePositiveInt(
+        formData.get("silverMinActiveReferrals"),
+        5,
+      ),
+      silverCommissionRate: Math.min(
+        parsePositiveInt(formData.get("silverCommissionRate"), 15),
+        100,
+      ),
+      goldMinActiveReferrals: parsePositiveInt(
+        formData.get("goldMinActiveReferrals"),
+        20,
+      ),
+      goldCommissionRate: Math.min(
+        parsePositiveInt(formData.get("goldCommissionRate"), 20),
+        100,
+      ),
+      platinumMinActiveReferrals: parsePositiveInt(
+        formData.get("platinumMinActiveReferrals"),
+        50,
+      ),
+      platinumCommissionRate: Math.min(
+        parsePositiveInt(formData.get("platinumCommissionRate"), 25),
+        100,
+      ),
+      commissionNotes: String(formData.get("commissionNotes") ?? "").trim(),
+      withdrawalNotes: String(formData.get("withdrawalNotes") ?? "").trim(),
+      otherTerms: String(formData.get("otherTerms") ?? "").trim(),
+    },
+    create: {
+      id: "global",
+      isEnabled,
+      cookieTtlDays,
+      minimumWithdrawalAmount,
+      bronzeMinActiveReferrals: parsePositiveInt(
+        formData.get("bronzeMinActiveReferrals"),
+        0,
+      ),
+      bronzeCommissionRate: Math.min(
+        parsePositiveInt(formData.get("bronzeCommissionRate"), 10),
+        100,
+      ),
+      silverMinActiveReferrals: parsePositiveInt(
+        formData.get("silverMinActiveReferrals"),
+        5,
+      ),
+      silverCommissionRate: Math.min(
+        parsePositiveInt(formData.get("silverCommissionRate"), 15),
+        100,
+      ),
+      goldMinActiveReferrals: parsePositiveInt(
+        formData.get("goldMinActiveReferrals"),
+        20,
+      ),
+      goldCommissionRate: Math.min(
+        parsePositiveInt(formData.get("goldCommissionRate"), 20),
+        100,
+      ),
+      platinumMinActiveReferrals: parsePositiveInt(
+        formData.get("platinumMinActiveReferrals"),
+        50,
+      ),
+      platinumCommissionRate: Math.min(
+        parsePositiveInt(formData.get("platinumCommissionRate"), 25),
+        100,
+      ),
+      commissionNotes: String(formData.get("commissionNotes") ?? "").trim(),
+      withdrawalNotes: String(formData.get("withdrawalNotes") ?? "").trim(),
+      otherTerms: String(formData.get("otherTerms") ?? "").trim(),
+    },
+  });
+
+  revalidatePath("/admin/affiliate-settings");
+  revalidatePath("/affiliate");
+  redirect("/admin/affiliate-settings?saved=1");
+}
+
+export async function updateAffiliateWithdrawalStatusAction(formData: FormData) {
+  await requireAdminSession();
+
+  const id = String(formData.get("id") ?? "").trim();
+  const nextStatus = String(formData.get("nextStatus") ?? "").trim();
+
+  if (!id) {
+    redirect("/admin/affiliate-settings?error=Withdrawal%20tidak%20ditemukan");
+  }
+
+  if (!["approved", "rejected", "paid"].includes(nextStatus)) {
+    redirect("/admin/affiliate-settings?error=Status%20withdrawal%20tidak%20valid");
+  }
+
+  await prisma.affiliateWithdrawal.update({
+    where: { id },
+    data: {
+      status: nextStatus as "approved" | "rejected" | "paid",
+      reviewedAt: new Date(),
+    },
+  });
+
+  revalidatePath("/admin/affiliate-settings");
+  revalidatePath("/affiliate");
+  redirect("/admin/affiliate-settings?saved=1");
+}

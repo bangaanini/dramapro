@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { DEFAULT_AFFILIATE_SETTINGS, getAffiliateTier } from "@/lib/affiliate";
 import { prisma } from "@/lib/prisma";
 import {
   checkPaymenkuTransactionStatus,
@@ -23,6 +24,71 @@ async function getBaseUrl() {
     headerStore.get("x-forwarded-host") ?? headerStore.get("host") ?? "localhost:3000";
 
   return `${proto}://${host}`;
+}
+
+async function createAffiliateCommissionForPaidPayment(
+  tx: Pick<typeof prisma, "affiliateCommission" | "affiliateSettings" | "user">,
+  payment: {
+    id: string;
+    userId: string;
+    amount: number;
+    referenceId: string;
+    user: {
+      referredById: string | null;
+    };
+  },
+) {
+  if (!payment.user.referredById) {
+    return;
+  }
+
+  const existingCommission = await tx.affiliateCommission.findUnique({
+    where: { vipPaymentId: payment.id },
+    select: { id: true },
+  });
+
+  if (existingCommission) {
+    return;
+  }
+
+  const settings =
+    (await tx.affiliateSettings.findUnique({
+      where: { id: "global" },
+    })) ?? DEFAULT_AFFILIATE_SETTINGS;
+
+  if (!settings.isEnabled) {
+    return;
+  }
+
+  const activeReferrals = await tx.user.count({
+    where: {
+      referredById: payment.user.referredById,
+      vipPayments: {
+        some: {
+          status: "paid",
+        },
+      },
+    },
+  });
+
+  const tier = getAffiliateTier(activeReferrals, settings);
+  const commissionAmount = Math.floor(payment.amount * (tier.rate / 100));
+
+  if (commissionAmount <= 0) {
+    return;
+  }
+
+  await tx.affiliateCommission.create({
+    data: {
+      affiliateUserId: payment.user.referredById,
+      referredUserId: payment.userId,
+      vipPaymentId: payment.id,
+      baseAmount: payment.amount,
+      commissionRate: tier.rate,
+      amount: commissionAmount,
+      description: `Komisi dari transaksi VIP ${payment.referenceId}`,
+    },
+  });
 }
 
 export async function requireSignedInVipUser(next: string) {
@@ -112,6 +178,7 @@ export async function syncVipPaymentStatus(referenceId: string, userId: string) 
         select: {
           id: true,
           vipExpiresAt: true,
+          referredById: true,
         },
       },
     },
@@ -141,6 +208,7 @@ export async function syncVipPaymentStatus(referenceId: string, userId: string) 
           select: {
             id: true,
             vipExpiresAt: true,
+            referredById: true,
           },
         },
         plan: true,
@@ -191,6 +259,8 @@ export async function syncVipPaymentStatus(referenceId: string, userId: string) 
           activatedAt: now,
         },
       });
+
+      await createAffiliateCommissionForPaidPayment(tx, latestPayment);
     }
 
     return tx.vipPayment.findUnique({

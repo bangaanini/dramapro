@@ -9,6 +9,7 @@ import {
   Download,
   Gem,
   History,
+  Megaphone,
   KeyRound,
   LogOut,
   LoaderCircle,
@@ -63,6 +64,12 @@ const profileMenuItems = [
     label: "Ganti Password",
     description: "Perbarui password akun dengan aman.",
     icon: KeyRound,
+  },
+  {
+    href: "/affiliate",
+    label: "Program Affiliate",
+    description: "Bagikan link referral dan pantau komisi.",
+    icon: Megaphone,
   },
 ] as const;
 

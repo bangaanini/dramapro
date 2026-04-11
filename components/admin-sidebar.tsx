@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  BadgePercent,
   Crown,
   LayoutGrid,
   Settings2,
@@ -31,6 +32,12 @@ const adminNavItems = [
     label: "Harga VIP",
     description: "Siapkan paket pembayaran",
     icon: Crown,
+  },
+  {
+    href: "/admin/affiliate-settings",
+    label: "Affiliate",
+    description: "Atur komisi dan withdrawal",
+    icon: BadgePercent,
   },
   {
     href: "/admin/sync",
