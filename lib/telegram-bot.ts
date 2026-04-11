@@ -71,6 +71,32 @@ export function getTelegramMiniAppUrl(
   return url.toString();
 }
 
+export function buildTelegramMiniAppStartAppLink(startParam: string) {
+  const username = process.env.TELEGRAM_BOT_USERNAME?.trim().replace(/^@/, "");
+
+  if (!username) {
+    throw new Error("TELEGRAM_BOT_USERNAME belum diatur.");
+  }
+
+  return `https://t.me/${username}?startapp=${encodeURIComponent(startParam)}`;
+}
+
+export function buildDramaShareStartParam(input: {
+  dramaId: string;
+  referralCode?: string | null;
+}) {
+  const dramaId = input.dramaId.trim();
+  const referralCode = input.referralCode?.trim().toUpperCase();
+
+  if (!dramaId) {
+    throw new Error("Drama ID wajib diisi untuk startapp Telegram.");
+  }
+
+  return referralCode
+    ? `drama_${dramaId}__ref_${referralCode}`
+    : `drama_${dramaId}`;
+}
+
 export function buildTelegramStartMessage(firstName?: string) {
   const safeName = firstName?.trim() || "Sobat Drama";
 

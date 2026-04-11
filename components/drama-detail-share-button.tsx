@@ -9,6 +9,7 @@ import "@/lib/telegram-web-app";
 type DramaDetailShareButtonProps = {
   title: string;
   shareUrl: string;
+  telegramShareUrl?: string | null;
 };
 
 function buildTelegramShareUrl(title: string, shareUrl: string) {
@@ -19,6 +20,7 @@ function buildTelegramShareUrl(title: string, shareUrl: string) {
 export function DramaDetailShareButton({
   title,
   shareUrl,
+  telegramShareUrl,
 }: DramaDetailShareButtonProps) {
   const [state, setState] = useState<"idle" | "sharing" | "copied">("idle");
 
@@ -30,11 +32,12 @@ export function DramaDetailShareButton({
     setState("sharing");
 
     try {
-      const telegramShareUrl = buildTelegramShareUrl(title, shareUrl);
+      const resolvedShareUrl = telegramShareUrl || shareUrl;
+      const shareIntentUrl = buildTelegramShareUrl(title, resolvedShareUrl);
       const webApp = window.Telegram?.WebApp;
 
       if (webApp?.openTelegramLink) {
-        webApp.openTelegramLink(telegramShareUrl);
+        webApp.openTelegramLink(shareIntentUrl);
         setState("idle");
         return;
       }

@@ -1,6 +1,8 @@
-import { Users } from "lucide-react";
+import { Trash2, Users } from "lucide-react";
 
+import { deleteUserAction } from "@/app/admin/actions";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
 import { getUserSecondaryLabel } from "@/lib/user-identity";
@@ -21,6 +23,14 @@ export default async function AdminUsersPage() {
       orderBy: { createdAt: "desc" },
       take: 100,
       include: {
+        referredBy: {
+          select: {
+            name: true,
+            email: true,
+            authProvider: true,
+            telegramUsername: true,
+          },
+        },
         _count: {
           select: {
             favorites: true,
@@ -95,12 +105,14 @@ export default async function AdminUsersPage() {
               <thead className="border-b border-white/10 bg-white/4 text-[var(--muted)]">
                 <tr>
                   <th className="px-5 py-4 font-medium">User</th>
+                  <th className="px-5 py-4 font-medium">Referred by</th>
                   <th className="px-5 py-4 font-medium">Status</th>
                   <th className="px-5 py-4 font-medium">Favorit</th>
                   <th className="px-5 py-4 font-medium">Riwayat</th>
                   <th className="px-5 py-4 font-medium">Referral aktif</th>
                   <th className="px-5 py-4 font-medium">Sesi</th>
                   <th className="px-5 py-4 font-medium">Terdaftar</th>
+                  <th className="px-5 py-4 font-medium">Aksi</th>
                 </tr>
               </thead>
               <tbody>
@@ -118,6 +130,18 @@ export default async function AdminUsersPage() {
                               {getUserSecondaryLabel(user)}
                             </p>
                           </div>
+                        </td>
+                        <td className="px-5 py-4">
+                          {user.referredBy ? (
+                            <div>
+                              <p className="font-medium text-white">{user.referredBy.name}</p>
+                              <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                                {getUserSecondaryLabel(user.referredBy)}
+                              </p>
+                            </div>
+                          ) : (
+                            <span className="text-[var(--muted-foreground)]">-</span>
+                          )}
                         </td>
                         <td className="px-5 py-4">
                           <div className="space-y-2">
@@ -152,13 +176,27 @@ export default async function AdminUsersPage() {
                         <td className="px-5 py-4 text-[var(--muted)]">
                           {formatDate(user.createdAt)}
                         </td>
+                        <td className="px-5 py-4">
+                          <form action={deleteUserAction}>
+                            <input type="hidden" name="userId" value={user.id} />
+                            <Button
+                              type="submit"
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-200 hover:bg-red-500/10 hover:text-red-100"
+                            >
+                              <Trash2 className="mr-2 size-4" />
+                              Hapus
+                            </Button>
+                          </form>
+                        </td>
                       </tr>
                     );
                   })
                 ) : (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={9}
                       className="px-5 py-10 text-center text-[var(--muted)]"
                     >
                       Belum ada user terdaftar.

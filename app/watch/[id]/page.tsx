@@ -25,6 +25,10 @@ import {
   absoluteUrl,
   toSeoDescription,
 } from "@/lib/site";
+import {
+  buildDramaShareStartParam,
+  buildTelegramMiniAppStartAppLink,
+} from "@/lib/telegram-bot";
 import { getCurrentUser } from "@/lib/user-auth";
 import {
   normalizeDisplayImageUrl,
@@ -166,6 +170,15 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
 
   const playHref = `/watch/${drama.id}/play?episode=${preferredInitialEpisode}`;
   const shareUrl = absoluteUrl(`/watch/${drama.id}`);
+  const telegramShareUrl =
+    user?.authProvider === "telegram"
+      ? buildTelegramMiniAppStartAppLink(
+          buildDramaShareStartParam({
+            dramaId: drama.id,
+            referralCode: user.affiliateCode ?? null,
+          }),
+        )
+      : null;
   const structuredData = {
     "@context": "https://schema.org",
     "@graph": [
@@ -254,7 +267,11 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
                       "h-12 rounded-full px-6",
                     )}
                   />
-                  <DramaDetailShareButton title={drama.title} shareUrl={shareUrl} />
+                  <DramaDetailShareButton
+                    title={drama.title}
+                    shareUrl={shareUrl}
+                    telegramShareUrl={telegramShareUrl}
+                  />
                   <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-4 py-2 text-sm text-white/75 backdrop-blur">
                     <Clapperboard className="size-4 text-accent" />
                     {drama.episodeCount} episode

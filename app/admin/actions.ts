@@ -411,3 +411,26 @@ export async function setActivePaymentGatewayAction(formData: FormData) {
   revalidatePath("/vip");
   redirect("/admin/payment-gateways?saved=1");
 }
+
+export async function deleteUserAction(formData: FormData) {
+  await requireAdminSession();
+
+  const userId = String(formData.get("userId") ?? "").trim();
+
+  if (!userId) {
+    redirect("/admin/users?error=User%20tidak%20ditemukan");
+  }
+
+  await prisma.user.delete({
+    where: {
+      id: userId,
+    },
+  });
+
+  revalidatePath("/admin/users");
+  revalidatePath("/affiliate");
+  revalidatePath("/favorites");
+  revalidatePath("/history");
+  revalidatePath("/profile");
+  redirect("/admin/users?saved=1");
+}

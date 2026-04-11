@@ -23,12 +23,39 @@ function isTelegramTarget(value: string | null): value is TelegramTarget {
   return Boolean(value && value in TARGET_ROUTES);
 }
 
+function parseTelegramStartParam(value: string | null) {
+  if (!value) {
+    return {
+      dramaId: null,
+      referralCode: null,
+    };
+  }
+
+  const match = value.match(/^drama_([a-z0-9-]+)(?:__ref_([A-Z0-9]+))?$/i);
+
+  if (!match) {
+    return {
+      dramaId: null,
+      referralCode: null,
+    };
+  }
+
+  return {
+    dramaId: match[1] ?? null,
+    referralCode: match[2]?.toUpperCase() ?? null,
+  };
+}
+
 export function TelegramMiniAppBridge() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const target = searchParams.get("tg_target");
-  const referralCode = searchParams.get("tg_ref")?.trim().toUpperCase() ?? null;
+  const startParam = searchParams.get("tgWebAppStartParam");
+  const parsedStartParam = parseTelegramStartParam(startParam);
+  const referralCode =
+    searchParams.get("tg_ref")?.trim().toUpperCase() ??
+    parsedStartParam.referralCode;
 
   useLayoutEffect(() => {
     const webApp = window.Telegram?.WebApp;
@@ -52,11 +79,20 @@ export function TelegramMiniAppBridge() {
       safeSessionStorage.getJSON<{ initData: string }>(TELEGRAM_SESSION_CACHE_KEY);
 
     const redirectToTarget = () => {
-      if (pathname !== "/" || !isTelegramTarget(target)) {
+      if (pathname !== "/") {
         return;
       }
 
       window.history.replaceState(window.history.state, "", "/");
+
+      if (parsedStartParam.dramaId) {
+        router.push(`/watch/${parsedStartParam.dramaId}`, { scroll: false });
+        return;
+      }
+
+      if (!isTelegramTarget(target)) {
+        return;
+      }
 
       if (target === "home") {
         router.replace("/");
@@ -120,7 +156,7 @@ export function TelegramMiniAppBridge() {
     return () => {
       cancelled = true;
     };
-  }, [pathname, referralCode, router, target]);
+  }, [parsedStartParam.dramaId, pathname, referralCode, router, target]);
 
   useEffect(() => {
     const webApp = window.Telegram?.WebApp;

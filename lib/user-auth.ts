@@ -46,6 +46,7 @@ export type PublicUser = {
   id: string;
   email: string | null;
   name: string;
+  affiliateCode: string | null;
   authProvider: "local" | "telegram";
   telegramId: string | null;
   telegramUsername: string | null;
@@ -62,6 +63,7 @@ function mapPublicUser(user: {
   id: string;
   email: string | null;
   name: string;
+  affiliateCode: string | null;
   authProvider: "local" | "telegram";
   telegramId: string | null;
   telegramUsername: string | null;
@@ -77,6 +79,7 @@ function mapPublicUser(user: {
     id: user.id,
     email: user.email,
     name: user.name,
+    affiliateCode: user.affiliateCode,
     authProvider: user.authProvider,
     telegramId: user.telegramId,
     telegramUsername: user.telegramUsername,
@@ -152,6 +155,7 @@ export async function registerUser(input: {
       id: true,
       email: true,
       name: true,
+      affiliateCode: true,
       authProvider: true,
       telegramId: true,
       telegramUsername: true,
@@ -323,6 +327,7 @@ async function validateSessionToken(token: string) {
           id: true,
           email: true,
           name: true,
+          affiliateCode: true,
           authProvider: true,
           telegramId: true,
           telegramUsername: true,
