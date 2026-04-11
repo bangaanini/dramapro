@@ -7,15 +7,14 @@ import {
   Flame,
   Layers3,
   Lock,
-  PlayCircle,
   Sparkles,
 } from "lucide-react";
 import { notFound } from "next/navigation";
 
+import { PlayDramaButton } from "@/components/play-drama-button";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
@@ -244,18 +243,17 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                  <Link
+                  <PlayDramaButton
                     href={playHref}
+                    label={
+                      watchHistory && !watchHistoryIsLocked
+                        ? `Lanjutkan EP.${preferredInitialEpisode}`
+                        : "Mulai Nonton"
+                    }
                     className={cn(
-                      buttonVariants({ size: "lg" }),
                       "h-12 rounded-full px-6",
                     )}
-                  >
-                    <PlayCircle className="mr-2 size-4.5" />
-                    {watchHistory && !watchHistoryIsLocked
-                      ? `Lanjutkan EP.${preferredInitialEpisode}`
-                      : "Mulai Nonton"}
-                  </Link>
+                  />
                   <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-4 py-2 text-sm text-white/75 backdrop-blur">
                     <Clapperboard className="size-4 text-accent" />
                     {drama.episodeCount} episode
@@ -278,16 +276,11 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
                   <Layers3 className="size-4 text-accent" />
                   <span>{drama.watchValue || "Fresh sync"}</span>
                 </div>
-                <div className="flex items-center gap-3 text-white">
-                  <Flame className="size-4 text-accent" />
-                  <span>{drama.isNewBook ? "New release" : "Catalog title"}</span>
-                </div>
               </div>
 
               {vipLockFromEpisode ? (
                 <div className="rounded-[1.4rem] border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                  Episode VIP terkunci mulai EP.{vipLockFromEpisode}. Episode
-                  terbuka saat ini hanya sampai EP.{Math.max(vipLockFromEpisode - 1, 0)}.
+                  Upgrade ke VIP untk membuka semua episode.
                 </div>
               ) : null}
 
@@ -301,7 +294,7 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
                     </>
                   ) : (
                     <>
-                      Progress terakhir tersimpan di EP.{preferredInitialEpisode} pada{" "}
+                      Lanjutkan menonton di EP.{preferredInitialEpisode} pada{" "}
                       {Math.max(0, watchHistory.lastPositionSeconds)} detik.
                     </>
                   )}

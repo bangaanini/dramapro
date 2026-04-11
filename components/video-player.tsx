@@ -3,6 +3,7 @@
 import {
   type PointerEvent,
   type ReactNode,
+  type TouchEvent,
   useEffect,
   useEffectEvent,
   useId,
@@ -103,6 +104,9 @@ export function VideoPlayer({
   const surfaceGestureRef = useRef<{
     startX: number;
     startY: number;
+    lastX: number;
+    lastY: number;
+    handled: boolean;
   } | null>(null);
   const lastLoadedEpisodeRef = useRef<number | null>(null);
   const hideChromeTimeoutRef = useRef<number | null>(null);
@@ -707,6 +711,45 @@ export function VideoPlayer({
     }
   }
 
+  async function minimizePlayer() {
+    setIsChromeVisible(true);
+
+    const player = playerRef.current;
+
+    if (player && internalDramaId) {
+      const resolvedPosition = Math.max(
+        0,
+        Math.floor(player.currentTime() ?? currentTimeSeconds),
+      );
+
+      if (resolvedPosition >= 3) {
+        void fetch("/api/watch-history", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "same-origin",
+          keepalive: true,
+          body: JSON.stringify({
+            internalDramaId,
+            episodeIndex: selectedEpisode,
+            lastPositionSeconds: resolvedPosition,
+          }),
+        }).catch(() => undefined);
+      }
+    }
+
+    if (document.fullscreenElement && document.exitFullscreen) {
+      try {
+        await document.exitFullscreen();
+      } catch {
+        // Ignore fullscreen exit errors and continue back to detail.
+      }
+    }
+
+    router.push(`/watch/${internalDramaId}`, { scroll: false });
+  }
+
   function changeEpisode(nextEpisode: number) {
     const resolvedEpisode = Math.min(
       Math.max(1, nextEpisode),
@@ -731,7 +774,7 @@ export function VideoPlayer({
   }
 
   function handleVerticalSwipe(deltaY: number) {
-    const threshold = 80;
+    const threshold = 48;
 
     if (Math.abs(deltaY) < threshold) {
       return false;
@@ -774,6 +817,18 @@ export function VideoPlayer({
     return true;
   }
 
+  function clearPendingTapTimeout() {
+    if (singleTapTimeoutRef.current) {
+      window.clearTimeout(singleTapTimeoutRef.current);
+      singleTapTimeoutRef.current = null;
+    }
+  }
+
+  function clearPendingTapState() {
+    clearPendingTapTimeout();
+    lastTapRef.current = null;
+  }
+
   function resolveTapZone(clientX: number) {
     const shell = playerStageRef.current;
 
@@ -795,29 +850,8 @@ export function VideoPlayer({
     return "center" as const;
   }
 
-  function handleSurfacePointerUp(event: PointerEvent<HTMLButtonElement>) {
-    const gesture = surfaceGestureRef.current;
-
-    if (gesture) {
-      const deltaX = event.clientX - gesture.startX;
-      const deltaY = event.clientY - gesture.startY;
-      surfaceGestureRef.current = null;
-
-      if (
-        Math.abs(deltaY) > Math.abs(deltaX) * 1.25 &&
-        handleVerticalSwipe(deltaY)
-      ) {
-        if (singleTapTimeoutRef.current) {
-          window.clearTimeout(singleTapTimeoutRef.current);
-          singleTapTimeoutRef.current = null;
-        }
-
-        lastTapRef.current = null;
-        return;
-      }
-    }
-
-    const zone = resolveTapZone(event.clientX);
+  function handleTapFromSurface(clientX: number) {
+    const zone = resolveTapZone(clientX);
     const now = Date.now();
     const previousTap = lastTapRef.current;
 
@@ -838,11 +872,7 @@ export function VideoPlayer({
     }
 
     if (zone === "center") {
-      if (singleTapTimeoutRef.current) {
-        window.clearTimeout(singleTapTimeoutRef.current);
-        singleTapTimeoutRef.current = null;
-      }
-
+      clearPendingTapTimeout();
       lastTapRef.current = null;
       handleSurfaceTap();
       return;
@@ -850,9 +880,7 @@ export function VideoPlayer({
 
     lastTapRef.current = { time: now, zone };
 
-    if (singleTapTimeoutRef.current) {
-      window.clearTimeout(singleTapTimeoutRef.current);
-    }
+    clearPendingTapTimeout();
 
     singleTapTimeoutRef.current = window.setTimeout(() => {
       handleSurfaceTap();
@@ -861,11 +889,136 @@ export function VideoPlayer({
     }, 220);
   }
 
-  function handleSurfacePointerDown(event: PointerEvent<HTMLButtonElement>) {
+  function beginSurfaceGesture(clientX: number, clientY: number) {
     surfaceGestureRef.current = {
-      startX: event.clientX,
-      startY: event.clientY,
+      startX: clientX,
+      startY: clientY,
+      lastX: clientX,
+      lastY: clientY,
+      handled: false,
     };
+  }
+
+  function updateSurfaceGesture(clientX: number, clientY: number) {
+    const gesture = surfaceGestureRef.current;
+
+    if (!gesture) {
+      return false;
+    }
+
+    gesture.lastX = clientX;
+    gesture.lastY = clientY;
+
+    if (gesture.handled) {
+      return true;
+    }
+
+    const deltaX = clientX - gesture.startX;
+    const deltaY = clientY - gesture.startY;
+
+    if (Math.abs(deltaY) > Math.max(48, Math.abs(deltaX) * 1.08)) {
+      if (handleVerticalSwipe(deltaY)) {
+        gesture.handled = true;
+        clearPendingTapState();
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  function finishSurfaceGesture(clientX: number, clientY: number) {
+    const gesture = surfaceGestureRef.current;
+    surfaceGestureRef.current = null;
+
+    if (!gesture) {
+      handleTapFromSurface(clientX);
+      return;
+    }
+
+    const resolvedX = Number.isFinite(clientX) ? clientX : gesture.lastX;
+    const resolvedY = Number.isFinite(clientY) ? clientY : gesture.lastY;
+
+    if (gesture.handled) {
+      return;
+    }
+
+    const deltaX = resolvedX - gesture.startX;
+    const deltaY = resolvedY - gesture.startY;
+
+    if (
+      Math.abs(deltaY) > Math.max(48, Math.abs(deltaX) * 1.08) &&
+      handleVerticalSwipe(deltaY)
+    ) {
+      clearPendingTapState();
+      return;
+    }
+
+    if (Math.abs(deltaX) > 16 || Math.abs(deltaY) > 16) {
+      return;
+    }
+
+    handleTapFromSurface(resolvedX);
+  }
+
+  function handleSurfacePointerDown(event: PointerEvent<HTMLButtonElement>) {
+    if (event.pointerType === "touch") {
+      return;
+    }
+
+    beginSurfaceGesture(event.clientX, event.clientY);
+  }
+
+  function handleSurfacePointerMove(event: PointerEvent<HTMLButtonElement>) {
+    if (event.pointerType === "touch") {
+      return;
+    }
+
+    updateSurfaceGesture(event.clientX, event.clientY);
+  }
+
+  function handleSurfacePointerUp(event: PointerEvent<HTMLButtonElement>) {
+    if (event.pointerType === "touch") {
+      return;
+    }
+
+    finishSurfaceGesture(event.clientX, event.clientY);
+  }
+
+  function handleSurfaceTouchStart(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.changedTouches[0];
+
+    if (!touch) {
+      return;
+    }
+
+    beginSurfaceGesture(touch.clientX, touch.clientY);
+  }
+
+  function handleSurfaceTouchMove(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.changedTouches[0];
+
+    if (!touch) {
+      return;
+    }
+
+    if (updateSurfaceGesture(touch.clientX, touch.clientY)) {
+      event.preventDefault();
+    }
+  }
+
+  function handleSurfaceTouchEnd(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.changedTouches[0];
+
+    if (!touch) {
+      return;
+    }
+
+    finishSurfaceGesture(touch.clientX, touch.clientY);
+  }
+
+  function handleSurfaceTouchCancel() {
+    surfaceGestureRef.current = null;
   }
 
   function handleSurfacePointerCancel() {
@@ -1120,9 +1273,14 @@ export function VideoPlayer({
             <button
               type="button"
               onPointerDown={handleSurfacePointerDown}
+              onPointerMove={handleSurfacePointerMove}
               onPointerUp={handleSurfacePointerUp}
               onPointerCancel={handleSurfacePointerCancel}
-              className="absolute inset-0 z-10 cursor-pointer"
+              onTouchStart={handleSurfaceTouchStart}
+              onTouchMove={handleSurfaceTouchMove}
+              onTouchEnd={handleSurfaceTouchEnd}
+              onTouchCancel={handleSurfaceTouchCancel}
+              className="absolute inset-0 z-10 cursor-pointer touch-none"
               aria-label="Toggle player controls"
             />
 
@@ -1185,12 +1343,17 @@ export function VideoPlayer({
                 icon={<ListVideo className="size-4" />}
               />
               <PlayerAction
-                label={isFullscreen ? "Keluar" : "Fullscreen"}
+                label={immersive ? "Perkecil" : isFullscreen ? "Keluar" : "Fullscreen"}
                 onClick={() => {
+                  if (immersive) {
+                    void minimizePlayer();
+                    return;
+                  }
+
                   void toggleFullscreen();
                 }}
                 icon={
-                  isFullscreen ? (
+                  immersive || isFullscreen ? (
                     <Minimize2 className="size-4" />
                   ) : (
                     <Maximize2 className="size-4" />
