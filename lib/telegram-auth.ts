@@ -94,7 +94,10 @@ export function verifyTelegramInitData(
   };
 }
 
-export async function createTelegramUserSessionFromInitData(initData: string) {
+export async function createTelegramUserSessionFromInitData(
+  initData: string,
+  referralCodeOverride?: string | null,
+) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
 
   if (!botToken) {
@@ -110,39 +113,19 @@ export async function createTelegramUserSessionFromInitData(initData: string) {
   });
 
   const referralCode = await readAffiliateCookieCode();
+  const resolvedReferralCode =
+    referralCodeOverride?.trim().toUpperCase() || referralCode;
   const referralUser =
-    referralCode
+    resolvedReferralCode
       ? await prisma.user.findUnique({
-          where: { affiliateCode: referralCode },
+          where: { affiliateCode: resolvedReferralCode },
           select: { id: true },
         })
       : null;
 
-  const user = await prisma.user.upsert({
+  const existingUser = await prisma.user.findUnique({
     where: {
       telegramId,
-    },
-    update: {
-      authProvider: "telegram",
-      name: displayName,
-      telegramUsername: verified.user.username?.trim() || null,
-      telegramPhotoUrl: verified.user.photo_url?.trim() || null,
-      telegramFirstName: verified.user.first_name?.trim() || null,
-      telegramLastName: verified.user.last_name?.trim() || null,
-      telegramLanguageCode: verified.user.language_code?.trim() || null,
-    },
-    create: {
-      authProvider: "telegram",
-      name: displayName,
-      email: null,
-      passwordHash: null,
-      telegramId,
-      telegramUsername: verified.user.username?.trim() || null,
-      telegramPhotoUrl: verified.user.photo_url?.trim() || null,
-      telegramFirstName: verified.user.first_name?.trim() || null,
-      telegramLastName: verified.user.last_name?.trim() || null,
-      telegramLanguageCode: verified.user.language_code?.trim() || null,
-      referredById: referralUser?.id ?? null,
     },
     select: {
       id: true,
@@ -158,8 +141,77 @@ export async function createTelegramUserSessionFromInitData(initData: string) {
       createdAt: true,
       vipExpiresAt: true,
       vipStartedAt: true,
+      referredById: true,
     },
   });
+
+  const referralOwnerId =
+    referralUser && referralUser.id !== existingUser?.id
+      ? referralUser.id
+      : null;
+
+  const user = existingUser
+    ? await prisma.user.update({
+        where: {
+          id: existingUser.id,
+        },
+        data: {
+          authProvider: "telegram",
+          name: displayName,
+          telegramUsername: verified.user.username?.trim() || null,
+          telegramPhotoUrl: verified.user.photo_url?.trim() || null,
+          telegramFirstName: verified.user.first_name?.trim() || null,
+          telegramLastName: verified.user.last_name?.trim() || null,
+          telegramLanguageCode: verified.user.language_code?.trim() || null,
+          referredById:
+            existingUser.referredById ?? referralOwnerId ?? undefined,
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          authProvider: true,
+          telegramId: true,
+          telegramUsername: true,
+          telegramPhotoUrl: true,
+          telegramFirstName: true,
+          telegramLastName: true,
+          telegramLanguageCode: true,
+          createdAt: true,
+          vipExpiresAt: true,
+          vipStartedAt: true,
+        },
+      })
+    : await prisma.user.create({
+        data: {
+          authProvider: "telegram",
+          name: displayName,
+          email: null,
+          passwordHash: null,
+          telegramId,
+          telegramUsername: verified.user.username?.trim() || null,
+          telegramPhotoUrl: verified.user.photo_url?.trim() || null,
+          telegramFirstName: verified.user.first_name?.trim() || null,
+          telegramLastName: verified.user.last_name?.trim() || null,
+          telegramLanguageCode: verified.user.language_code?.trim() || null,
+          referredById: referralOwnerId,
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          authProvider: true,
+          telegramId: true,
+          telegramUsername: true,
+          telegramPhotoUrl: true,
+          telegramFirstName: true,
+          telegramLastName: true,
+          telegramLanguageCode: true,
+          createdAt: true,
+          vipExpiresAt: true,
+          vipStartedAt: true,
+        },
+      });
 
   await ensureUserAffiliateCode(user.id, user.name);
   await createUserSession(user.id);

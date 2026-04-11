@@ -66,7 +66,7 @@ export function TelegramMiniAppBridge() {
       router.push(TARGET_ROUTES[target], { scroll: false });
     };
 
-    if (cached?.initData === initData) {
+    if (cached?.initData === initData && !referralCode) {
       redirectToTarget();
       return;
     }
@@ -97,7 +97,7 @@ export function TelegramMiniAppBridge() {
             "Content-Type": "application/json",
           },
           credentials: "same-origin",
-          body: JSON.stringify({ initData }),
+          body: JSON.stringify({ initData, referralCode }),
         });
 
         if (!response.ok) {
