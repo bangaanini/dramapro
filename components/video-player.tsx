@@ -71,6 +71,7 @@ type VideoPlayerProps = {
   title: string;
   episodeCount: number;
   watchValue: string;
+  immersive?: boolean;
   vipLockFromEpisode: number | null;
   initialIsFavorite: boolean;
   isSignedIn: boolean;
@@ -88,6 +89,7 @@ export function VideoPlayer({
   title,
   episodeCount,
   watchValue,
+  immersive = false,
   vipLockFromEpisode,
   initialIsFavorite,
   isSignedIn,
@@ -922,7 +924,7 @@ export function VideoPlayer({
   function goToVipUpgrade() {
     router.push(
       `/vip?next=${encodeURIComponent(
-        `/watch/${internalDramaId}?episode=${selectedEpisode}`,
+        `/watch/${internalDramaId}/play?episode=${selectedEpisode}`,
       )}`,
     );
   }
@@ -937,7 +939,11 @@ export function VideoPlayer({
         message: "Masuk dulu untuk menyimpan favorit.",
         tone: "info",
       });
-      router.push(`/sign-in?next=${encodeURIComponent(`/watch/${internalDramaId}`)}`);
+      router.push(
+        `/sign-in?next=${encodeURIComponent(
+          `/watch/${internalDramaId}/play?episode=${selectedEpisode}`,
+        )}`,
+      );
       return;
     }
 
@@ -1082,17 +1088,28 @@ export function VideoPlayer({
   const progressMax = resolvedDurationSeconds > 0 ? resolvedDurationSeconds : 0;
 
   return (
-    <div className="space-y-5">
+    <div className={cn("space-y-5", immersive && "space-y-0")}>
       <div
         ref={playerStageRef}
         className={cn(
-          "relative mx-auto w-full max-w-[440px]",
+          "relative mx-auto w-full",
+          immersive ? "max-w-none" : "max-w-[440px]",
           isFullscreen && "drama-stage-fullscreen",
         )}
       >
-        <div className="drama-player-shell overflow-hidden rounded-[2rem] border border-white/10 bg-black shadow-[0_32px_80px_rgba(0,0,0,0.45)]">
+        <div
+          className={cn(
+            "drama-player-shell overflow-hidden bg-black",
+            immersive
+              ? "min-h-screen rounded-none border-0 shadow-none"
+              : "rounded-[2rem] border border-white/10 shadow-[0_32px_80px_rgba(0,0,0,0.45)]",
+          )}
+        >
           <div
-            className="relative aspect-[9/16] bg-black"
+            className={cn(
+              "relative bg-black",
+              immersive ? "h-screen min-h-screen" : "aspect-[9/16]",
+            )}
           >
             <video
               ref={videoElementRef}
@@ -1414,7 +1431,7 @@ export function VideoPlayer({
         ) : null}
       </div>
 
-      {!isFullscreen ? (
+      {!immersive && !isFullscreen ? (
         <div className="mx-auto w-full max-w-[440px] space-y-4">
           <Card className="glass-panel rounded-[1.8rem] border-white/10">
             <CardContent className="space-y-5 p-5">

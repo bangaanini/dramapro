@@ -26,7 +26,7 @@ export function DramaCard({
   thumbUrl,
   providerName,
   episodeCount,
-  ctaLabel = "Watch now",
+  ctaLabel = "Lihat detail",
   extraMeta,
 }: DramaCardProps) {
   const displayThumbUrl = normalizeDisplayImageUrl(thumbUrl);

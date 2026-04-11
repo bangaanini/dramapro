@@ -1,0 +1,141 @@
+import type { Metadata } from "next";
+import { cache } from "react";
+import { notFound } from "next/navigation";
+
+import { VideoPlayer } from "@/components/video-player";
+import { prisma } from "@/lib/prisma";
+import { SITE_NAME, toSeoDescription } from "@/lib/site";
+import { getCurrentUser } from "@/lib/user-auth";
+import {
+  clampEpisodeForVipAccess,
+  getVipLockStartEpisode,
+  isVipActive,
+} from "@/lib/vip";
+
+export const dynamic = "force-dynamic";
+
+const getDramaById = cache(async (id: string) =>
+  prisma.drama.findUnique({
+    where: { id },
+  }),
+);
+
+function parseEpisodeSearchParam(value: string | string[] | undefined) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+export async function generateMetadata(
+  props: PageProps<"/watch/[id]/play">,
+): Promise<Metadata> {
+  const { id } = await props.params;
+  const drama = await getDramaById(id);
+
+  if (!drama) {
+    return {
+      title: "Player tidak ditemukan",
+      robots: {
+        index: false,
+        follow: false,
+      },
+    };
+  }
+
+  return {
+    title: `${drama.title} - Player`,
+    description: toSeoDescription(
+      drama.description,
+      `${drama.title} player fullscreen di ${SITE_NAME}.`,
+    ),
+    alternates: {
+      canonical: `/watch/${drama.id}`,
+    },
+    robots: {
+      index: false,
+      follow: false,
+    },
+  };
+}
+
+export default async function WatchPlayerPage(
+  props: PageProps<"/watch/[id]/play">,
+) {
+  const { id } = await props.params;
+  const searchParams = await props.searchParams;
+  const user = await getCurrentUser();
+
+  const [drama, favorite, watchHistory, vipSettings] = await Promise.all([
+    getDramaById(id),
+    user
+      ? prisma.favoriteDrama.findUnique({
+          where: {
+            userId_dramaId: {
+              userId: user.id,
+              dramaId: id,
+            },
+          },
+          select: { id: true },
+        })
+      : Promise.resolve(null),
+    user
+      ? prisma.watchHistory.findUnique({
+          where: {
+            userId_dramaId: {
+              userId: user.id,
+              dramaId: id,
+            },
+          },
+          select: {
+            episodeIndex: true,
+            lastPositionSeconds: true,
+          },
+        })
+      : Promise.resolve(null),
+    prisma.vipSettings.findUnique({
+      where: { id: "global" },
+      select: {
+        isEnabled: true,
+        lockFromEpisode: true,
+      },
+    }),
+  ]);
+
+  if (!drama) {
+    notFound();
+  }
+
+  const vipLockFromEpisode = isVipActive(user?.vipExpiresAt)
+    ? null
+    : getVipLockStartEpisode(vipSettings);
+  const requestedEpisode = parseEpisodeSearchParam(searchParams.episode);
+  const preferredInitialEpisode = clampEpisodeForVipAccess(
+    requestedEpisode ?? watchHistory?.episodeIndex ?? 1,
+    drama.episodeCount,
+    vipLockFromEpisode,
+  );
+  const initialPositionSeconds =
+    requestedEpisode && requestedEpisode !== watchHistory?.episodeIndex
+      ? 0
+      : watchHistory?.lastPositionSeconds ?? 0;
+
+  return (
+    <main className="min-h-screen bg-black">
+      <VideoPlayer
+        internalDramaId={drama.id}
+        title={drama.title}
+        episodeCount={drama.episodeCount}
+        watchValue={drama.watchValue}
+        immersive
+        vipLockFromEpisode={vipLockFromEpisode}
+        initialIsFavorite={Boolean(favorite)}
+        isSignedIn={Boolean(user)}
+        initialEpisode={preferredInitialEpisode}
+        initialPositionSeconds={initialPositionSeconds}
+      />
+    </main>
+  );
+}
