@@ -108,21 +108,21 @@ const getCachedHomepageCatalogData = unstable_cache(
       prisma.dramaFeed.findMany({
         where: { source: "home" },
         include: { drama: true },
-        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }, { id: "asc" }],
         take: INITIAL_HOME_SECTION_ITEMS,
       }),
       prisma.dramaFeed.count({ where: { source: "home" } }),
       prisma.dramaFeed.findMany({
         where: { source: "new" },
         include: { drama: true },
-        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }, { id: "asc" }],
         take: INITIAL_HOME_SECTION_ITEMS,
       }),
       prisma.dramaFeed.count({ where: { source: "new" } }),
       prisma.dramaFeed.findMany({
         where: { source: "popular" },
         include: { drama: true },
-        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }, { id: "asc" }],
         take: INITIAL_HOME_SECTION_ITEMS,
       }),
       prisma.dramaFeed.count({ where: { source: "popular" } }),
@@ -163,7 +163,7 @@ export async function getHomepageFeedPage(
     prisma.dramaFeed.findMany({
       where: { source },
       include: { drama: true },
-      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }, { id: "asc" }],
       skip: resolvedOffset,
       take: resolvedLimit,
     }),

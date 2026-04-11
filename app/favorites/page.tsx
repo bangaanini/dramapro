@@ -17,30 +17,32 @@ export default async function FavoritesPage() {
   }
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <main className="mx-auto min-h-screen w-full max-w-none px-0 py-0">
       <SiteHeader current="account" />
 
-      <section className="soft-panel rounded-[2rem] px-6 py-8 sm:px-8">
-        <div className="space-y-3">
-          <Badge className="border-accent/30 bg-accent-soft text-accent">
-            <Heart className="mr-2 size-3.5" />
-            Daftar favorit
-          </Badge>
-          <div>
-            <h1 className="text-4xl font-semibold tracking-tight text-white">
-              Favoritmu
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-7 text-[var(--muted)] sm:text-base">
-              Semua drama yang kamu tandai tersimpan di sini dan siap dibuka lagi
-              kapan saja.
-            </p>
+      <div className="mx-auto w-full max-w-7xl px-3 pb-2 sm:px-4 lg:px-6">
+        <section className="mt-4 soft-panel rounded-[2rem] px-5 py-6 sm:px-8 sm:py-8">
+          <div className="space-y-3">
+            <Badge className="border-accent/30 bg-accent-soft text-accent">
+              <Heart className="mr-2 size-3.5" />
+              Daftar favorit
+            </Badge>
+            <div>
+              <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                Favoritmu
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-7 text-[var(--muted)] sm:text-base">
+                Semua drama yang kamu tandai tersimpan di sini dan siap dibuka lagi
+                kapan saja.
+              </p>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section className="mt-8">
-        <FavoritesGrid userId={user.id} />
-      </section>
+        <section className="mt-6">
+          <FavoritesGrid userId={user.id} />
+        </section>
+      </div>
 
       <SiteFooter />
     </main>

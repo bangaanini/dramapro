@@ -17,30 +17,32 @@ export default async function HistoryPage() {
   }
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <main className="mx-auto min-h-screen w-full max-w-none px-0 py-0">
       <SiteHeader current="account" />
 
-      <section className="soft-panel rounded-[2rem] px-6 py-8 sm:px-8">
-        <div className="space-y-3">
-          <Badge className="border-accent/30 bg-accent-soft text-accent">
-            <History className="mr-2 size-3.5" />
-            Riwayat tontonan
-          </Badge>
-          <div>
-            <h1 className="text-4xl font-semibold tracking-tight text-white">
-              Riwayat
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-7 text-[var(--muted)] sm:text-base">
-              Drama yang terakhir kamu tonton akan muncul di sini bersama episode
-              dan progres terakhir.
-            </p>
+      <div className="mx-auto w-full max-w-7xl px-3 pb-2 sm:px-4 lg:px-6">
+        <section className="mt-4 soft-panel rounded-[2rem] px-5 py-6 sm:px-8 sm:py-8">
+          <div className="space-y-3">
+            <Badge className="border-accent/30 bg-accent-soft text-accent">
+              <History className="mr-2 size-3.5" />
+              Riwayat tontonan
+            </Badge>
+            <div>
+              <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                Riwayat
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-7 text-[var(--muted)] sm:text-base">
+                Drama yang terakhir kamu tonton akan muncul di sini bersama episode
+                dan progres terakhir.
+              </p>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section className="mt-8">
-        <HistoryList userId={user.id} />
-      </section>
+        <section className="mt-6">
+          <HistoryList userId={user.id} />
+        </section>
+      </div>
 
       <SiteFooter />
     </main>

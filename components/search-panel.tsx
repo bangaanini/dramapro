@@ -155,7 +155,7 @@ export function SearchPanel({ providers, tags }: SearchPanelProps) {
   }
 
   return (
-    <section id="search" className="mt-10 scroll-mt-28">
+    <section id="search" className="mt-4 scroll-mt-24 sm:mt-5">
       <Card className="glass-panel overflow-hidden rounded-[2rem] border-white/10">
         <CardContent className="space-y-6 p-6 sm:p-7">
           <div className="flex flex-wrap items-start justify-between gap-4">

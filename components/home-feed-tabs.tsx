@@ -5,6 +5,7 @@ import { LoaderCircle } from "lucide-react";
 
 import { DramaCard } from "@/components/drama-card";
 import { Card, CardContent } from "@/components/ui/card";
+import { safeSessionStorage } from "@/lib/safe-session-storage";
 import { cn } from "@/lib/utils";
 
 type HomeFeedEntry = {
@@ -51,6 +52,14 @@ type HomeFeedTabsProps = {
 };
 
 const FEED_PAGE_SIZE = 18;
+const HOME_FEED_CACHE_KEY = "dramapro.home-feed-tabs.v3";
+const HOME_FEED_CACHE_TTL_MS = 1000 * 60 * 10;
+
+type CachedHomeFeedTabsState = {
+  activeTab: FeedTabKey;
+  feeds: Record<FeedTabKey, FeedState>;
+  savedAt: number;
+};
 
 function createInitialFeedState(
   entries: HomeFeedEntry[],
@@ -101,10 +110,48 @@ export function HomeFeedTabs({
   });
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const feedsRef = useRef(feeds);
+  const lastRequestedOffsetRef = useRef<Record<FeedTabKey, number | null>>({
+    home: null,
+    new: null,
+    popular: null,
+  });
 
   useEffect(() => {
     feedsRef.current = feeds;
   }, [feeds]);
+
+  useEffect(() => {
+    const cachedState =
+      safeSessionStorage.getJSON<CachedHomeFeedTabsState>(HOME_FEED_CACHE_KEY);
+
+    if (!cachedState) {
+      return;
+    }
+
+    if (Date.now() - cachedState.savedAt > HOME_FEED_CACHE_TTL_MS) {
+      safeSessionStorage.removeItem(HOME_FEED_CACHE_KEY);
+      return;
+    }
+
+    setActiveTab(cachedState.activeTab);
+    setFeeds({
+      home: { ...cachedState.feeds.home, isLoading: false },
+      new: { ...cachedState.feeds.new, isLoading: false },
+      popular: { ...cachedState.feeds.popular, isLoading: false },
+    });
+  }, []);
+
+  useEffect(() => {
+    safeSessionStorage.setJSON(HOME_FEED_CACHE_KEY, {
+      activeTab,
+      feeds: {
+        home: { ...feeds.home, isLoading: false },
+        new: { ...feeds.new, isLoading: false },
+        popular: { ...feeds.popular, isLoading: false },
+      },
+      savedAt: Date.now(),
+    } satisfies CachedHomeFeedTabsState);
+  }, [activeTab, feeds]);
 
   const tabs: FeedTabConfig[] = useMemo(
     () => [
@@ -139,6 +186,7 @@ export function HomeFeedTabs({
 
   const loadMore = useCallback(async (tabKey: FeedTabKey) => {
     const currentFeedState = feedsRef.current[tabKey];
+    const requestOffset = currentFeedState.nextOffset;
 
     if (
       currentFeedState.isLoading ||
@@ -146,6 +194,12 @@ export function HomeFeedTabs({
     ) {
       return;
     }
+
+    if (lastRequestedOffsetRef.current[tabKey] === requestOffset) {
+      return;
+    }
+
+    lastRequestedOffsetRef.current[tabKey] = requestOffset;
 
     setFeeds((current) => ({
       ...current,
@@ -158,7 +212,7 @@ export function HomeFeedTabs({
 
     try {
       const response = await fetch(
-        `/api/catalog/feed?source=${encodeURIComponent(tabKey)}&offset=${currentFeedState.nextOffset}&limit=${FEED_PAGE_SIZE}`,
+        `/api/catalog/feed?source=${encodeURIComponent(tabKey)}&offset=${requestOffset}&limit=${FEED_PAGE_SIZE}`,
         {
           credentials: "same-origin",
         },
@@ -193,6 +247,7 @@ export function HomeFeedTabs({
         };
       });
     } catch (loadError) {
+      lastRequestedOffsetRef.current[tabKey] = null;
       setFeeds((current) => ({
         ...current,
         [tabKey]: {
@@ -225,8 +280,8 @@ export function HomeFeedTabs({
         void loadMore(currentTab.key);
       },
       {
-        rootMargin: "900px 0px 900px 0px",
-        threshold: 0.01,
+        rootMargin: "220px 0px 320px 0px",
+        threshold: 0.15,
       },
     );
 

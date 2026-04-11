@@ -105,7 +105,7 @@ export function SearchPanelContainer({
 
   if (isLoading) {
     return (
-      <section className="mt-10">
+      <section className="mt-4 sm:mt-5">
         <Card className="glass-panel overflow-hidden rounded-[2rem] border-white/10">
           <CardContent className="flex min-h-56 flex-col items-center justify-center gap-4 p-6 text-center sm:p-7">
             <div className="rounded-full border border-white/10 bg-white/5 p-3">
