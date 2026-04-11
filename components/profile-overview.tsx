@@ -190,12 +190,12 @@ export function ProfileOverview({ user }: ProfileOverviewProps) {
                 pengalaman menonton tanpa batas.
               </p>
             </div>
-            <button
-              type="button"
+            <Link
+              href="/vip?next=/profile"
               className="mt-4 inline-flex w-full items-center justify-center rounded-2xl bg-[linear-gradient(180deg,#ffc62d,#f2a501)] px-4 py-3 text-sm font-semibold text-[#2d1800] shadow-[0_18px_40px_rgba(255,198,45,0.22)] transition hover:brightness-105"
             >
               Aktifkan VIP
-            </button>
+            </Link>
           </div>
         </div>
       </section>

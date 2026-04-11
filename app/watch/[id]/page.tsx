@@ -16,6 +16,10 @@ import {
   normalizeDisplayImageUrl,
   shouldBypassImageOptimization,
 } from "@/lib/utils";
+import {
+  clampEpisodeForVipAccess,
+  getVipLockStartEpisode,
+} from "@/lib/vip";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +27,7 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
   const { id } = await props.params;
   const user = await getCurrentUser();
 
-  const [drama, favorite, watchHistory] = await Promise.all([
+  const [drama, favorite, watchHistory, vipSettings] = await Promise.all([
     prisma.drama.findUnique({
       where: { id },
     }),
@@ -52,6 +56,13 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
           },
         })
       : Promise.resolve(null),
+    prisma.vipSettings.findUnique({
+      where: { id: "global" },
+      select: {
+        isEnabled: true,
+        lockFromEpisode: true,
+      },
+    }),
   ]);
 
   if (!drama) {
@@ -59,6 +70,17 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
   }
 
   const dramaThumbUrl = normalizeDisplayImageUrl(drama.thumbUrl);
+  const vipLockFromEpisode = getVipLockStartEpisode(vipSettings);
+  const preferredInitialEpisode = clampEpisodeForVipAccess(
+    watchHistory?.episodeIndex ?? 1,
+    drama.episodeCount,
+    vipLockFromEpisode,
+  );
+  const watchHistoryIsLocked = Boolean(
+    watchHistory &&
+      vipLockFromEpisode &&
+      watchHistory.episodeIndex >= vipLockFromEpisode,
+  );
 
   const relatedFilters =
     drama.tags.length > 0
@@ -87,9 +109,10 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
             title={drama.title}
             episodeCount={drama.episodeCount}
             watchValue={drama.watchValue}
+            vipLockFromEpisode={vipLockFromEpisode}
             initialIsFavorite={Boolean(favorite)}
             isSignedIn={Boolean(user)}
-            initialEpisode={watchHistory?.episodeIndex ?? 1}
+            initialEpisode={preferredInitialEpisode}
             initialPositionSeconds={watchHistory?.lastPositionSeconds ?? 0}
           />
         </div>
@@ -148,10 +171,28 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
                     </div>
                   </div>
 
+                  {vipLockFromEpisode ? (
+                    <div className="rounded-[1.4rem] border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                      Episode VIP terkunci mulai EP.{vipLockFromEpisode}. Episode
+                      yang terbuka saat ini hanya sampai EP.
+                      {Math.max(vipLockFromEpisode - 1, 0)}.
+                    </div>
+                  ) : null}
+
                   {watchHistory ? (
                     <div className="rounded-[1.4rem] border border-accent/20 bg-accent-soft px-4 py-3 text-sm text-white/90">
-                      Lanjut dari EP.{watchHistory.episodeIndex} pada{" "}
-                      {Math.max(0, watchHistory.lastPositionSeconds)} detik.
+                      {watchHistoryIsLocked ? (
+                        <>
+                          Riwayat terakhir ada di EP.{watchHistory.episodeIndex}, tetapi
+                          episode itu sekarang terkunci. Pemutaran dibatasi ke EP.
+                          {preferredInitialEpisode}.
+                        </>
+                      ) : (
+                        <>
+                          Lanjut dari EP.{preferredInitialEpisode} pada{" "}
+                          {Math.max(0, watchHistory.lastPositionSeconds)} detik.
+                        </>
+                      )}
                     </div>
                   ) : null}
                 </div>
@@ -159,25 +200,7 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
             </CardContent>
           </Card>
 
-          <Card
-            id="watch-synopsis"
-            className="glass-panel rounded-[2rem] border-white/10"
-          >
-            <CardContent className="space-y-4 p-6">
-              <div>
-                <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-foreground)]">
-                  Synopsis
-                </p>
-                <h2 className="mt-2 text-2xl font-semibold text-white">
-                  Cerita singkat
-                </h2>
-              </div>
-              <p className="text-sm leading-8 text-[var(--muted)] sm:text-base">
-                {drama.description ||
-                  "Metadata lokal belum punya deskripsi panjang untuk judul ini."}
-              </p>
-            </CardContent>
-          </Card>
+
 
           {drama.tags.length > 0 ? (
             <Card className="glass-panel rounded-[2rem] border-white/10">

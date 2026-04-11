@@ -15,7 +15,9 @@ import {
   ChevronsLeft,
   ChevronsRight,
   CheckCircle2,
+  Crown,
   Heart,
+  Lock,
   ListVideo,
   LoaderCircle,
   Maximize2,
@@ -36,6 +38,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import {
+  clampEpisodeForVipAccess,
+  getLastUnlockedEpisode,
+  isEpisodeVipLocked,
+} from "@/lib/vip";
 
 type StreamQuality = {
   label: string;
@@ -63,6 +70,7 @@ type VideoPlayerProps = {
   title: string;
   episodeCount: number;
   watchValue: string;
+  vipLockFromEpisode: number | null;
   initialIsFavorite: boolean;
   isSignedIn: boolean;
   initialEpisode?: number;
@@ -79,6 +87,7 @@ export function VideoPlayer({
   title,
   episodeCount,
   watchValue,
+  vipLockFromEpisode,
   initialIsFavorite,
   isSignedIn,
   initialEpisode = 1,
@@ -105,7 +114,11 @@ export function VideoPlayer({
   const lastHistorySnapshotRef = useRef<string | null>(null);
 
   const [selectedEpisode, setSelectedEpisode] = useState(
-    Math.min(Math.max(1, initialEpisode), Math.max(episodeCount, 1)),
+    clampEpisodeForVipAccess(
+      initialEpisode,
+      Math.max(episodeCount, 1),
+      vipLockFromEpisode,
+    ),
   );
   const [selectedQuality, setSelectedQuality] = useState<string | null>(null);
   const [selectedSubtitle, setSelectedSubtitle] = useState<string>("off");
@@ -121,6 +134,20 @@ export function VideoPlayer({
   const [isFavoritePending, setIsFavoritePending] = useState(false);
   const [seekNotice, setSeekNotice] = useState<string | null>(null);
   const [toast, setToast] = useState<PlayerToast | null>(null);
+  const lastUnlockedEpisode = getLastUnlockedEpisode(
+    episodeCount,
+    vipLockFromEpisode,
+  );
+  const hasUnlockedEpisodes = lastUnlockedEpisode >= 1;
+  const selectedEpisodeIsLocked = isEpisodeVipLocked(
+    selectedEpisode,
+    vipLockFromEpisode,
+  );
+  const vipLockMessage = vipLockFromEpisode
+    ? hasUnlockedEpisodes
+      ? `Episode VIP terkunci mulai EP.${vipLockFromEpisode}.`
+      : `Semua episode sedang terkunci mulai EP.${vipLockFromEpisode}.`
+    : null;
 
   useEffect(() => {
     if (!videoElementRef.current || playerRef.current) {
@@ -147,8 +174,8 @@ export function VideoPlayer({
     player.on("ended", () => {
       setIsPlaying(false);
       setSelectedEpisode((currentEpisode) =>
-        currentEpisode < episodeCount
-          ? Math.min(episodeCount, currentEpisode + 1)
+        currentEpisode < lastUnlockedEpisode
+          ? Math.min(lastUnlockedEpisode, currentEpisode + 1)
           : currentEpisode,
       );
     });
@@ -162,7 +189,7 @@ export function VideoPlayer({
       player.dispose();
       playerRef.current = null;
     };
-  }, [episodeCount]);
+  }, [episodeCount, lastUnlockedEpisode]);
 
   useEffect(() => {
     attemptedSourceUrlsRef.current.clear();
@@ -246,6 +273,14 @@ export function VideoPlayer({
     const controller = new AbortController();
 
     async function loadStream() {
+      if (!hasUnlockedEpisodes || selectedEpisodeIsLocked) {
+        setStream(null);
+        setSelectedQuality(null);
+        setError(null);
+        setIsLoading(false);
+        return;
+      }
+
       setIsLoading(true);
       setError(null);
 
@@ -294,7 +329,12 @@ export function VideoPlayer({
     void loadStream();
 
     return () => controller.abort();
-  }, [internalDramaId, selectedEpisode]);
+  }, [
+    hasUnlockedEpisodes,
+    internalDramaId,
+    selectedEpisode,
+    selectedEpisodeIsLocked,
+  ]);
 
   useEffect(() => {
     const player = playerRef.current;
@@ -448,16 +488,33 @@ export function VideoPlayer({
     };
   }, []);
 
+  useEffect(() => {
+    setSelectedEpisode((currentEpisode) =>
+      clampEpisodeForVipAccess(currentEpisode, episodeCount, vipLockFromEpisode),
+    );
+  }, [episodeCount, vipLockFromEpisode]);
+
   const qualityOptions = stream?.qualities ?? [];
   const episodeNumbers = Array.from(
     { length: Math.max(episodeCount, 0) },
     (_, index) => index + 1,
   );
+  const nextEpisodeLocked = isEpisodeVipLocked(
+    selectedEpisode + 1,
+    vipLockFromEpisode,
+  );
 
   function togglePlayback() {
     const player = playerRef.current;
 
-    if (!player) {
+    if (!player || selectedEpisodeIsLocked || !hasUnlockedEpisodes) {
+      if (selectedEpisodeIsLocked || !hasUnlockedEpisodes) {
+        setToast({
+          message:
+            vipLockMessage ?? "Episode ini terkunci dan belum bisa diputar.",
+          tone: "info",
+        });
+      }
       return;
     }
 
@@ -608,14 +665,22 @@ export function VideoPlayer({
   }
 
   function changeEpisode(nextEpisode: number) {
-    setSelectedEpisode((currentEpisode) => {
-      const resolvedEpisode = Math.min(
-        Math.max(1, nextEpisode),
-        Math.max(episodeCount, 1),
-      );
+    const resolvedEpisode = Math.min(
+      Math.max(1, nextEpisode),
+      Math.max(episodeCount, 1),
+    );
 
-      return resolvedEpisode === currentEpisode ? currentEpisode : resolvedEpisode;
-    });
+    if (isEpisodeVipLocked(resolvedEpisode, vipLockFromEpisode)) {
+      setToast({
+        message: `EP.${resolvedEpisode} terkunci. VIP aktif mulai EP.${vipLockFromEpisode}.`,
+        tone: "info",
+      });
+      return;
+    }
+
+    setSelectedEpisode((currentEpisode) =>
+      resolvedEpisode === currentEpisode ? currentEpisode : resolvedEpisode,
+    );
   }
 
   function handleSurfaceTap() {
@@ -714,6 +779,14 @@ export function VideoPlayer({
     }
   }
 
+  function goToVipUpgrade() {
+    router.push(
+      `/vip?next=${encodeURIComponent(
+        `/watch/${internalDramaId}?episode=${selectedEpisode}`,
+      )}`,
+    );
+  }
+
   async function handleFavoriteToggle() {
     if (isFavoritePending || favoriteRequestRef.current) {
       return;
@@ -777,24 +850,53 @@ export function VideoPlayer({
   }
 
   function renderEpisodeButtons(onPickEpisode?: () => void) {
-    return episodeNumbers.map((episode) => (
-      <button
-        key={episode}
-        type="button"
-        onClick={() => {
-          setSelectedEpisode(episode);
-          onPickEpisode?.();
-        }}
-        className={cn(
-          "rounded-2xl border px-3 py-3 text-sm font-semibold transition",
-          selectedEpisode === episode
-            ? "border-accent/40 bg-accent text-white shadow-[0_14px_30px_rgba(255,122,69,0.28)]"
-            : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:bg-white/8 hover:text-white",
-        )}
-      >
-        EP.{episode}
-      </button>
-    ));
+    return episodeNumbers.map((episode) => {
+      const isLocked = isEpisodeVipLocked(episode, vipLockFromEpisode);
+      const isActive = selectedEpisode === episode && !isLocked;
+
+      return (
+        <button
+          key={episode}
+          type="button"
+          onClick={() => {
+            if (isLocked) {
+              setToast({
+                message: `EP.${episode} terkunci. Buka akses VIP untuk melanjutkan.`,
+                tone: "info",
+              });
+              return;
+            }
+
+            setSelectedEpisode(episode);
+            onPickEpisode?.();
+          }}
+          aria-label={
+            isLocked ? `Episode ${episode} terkunci` : `Pilih episode ${episode}`
+          }
+          className={cn(
+            "relative overflow-hidden rounded-[1.45rem] border px-3 py-4 text-sm font-semibold transition",
+            isActive &&
+              "border-accent/40 bg-accent text-white shadow-[0_14px_30px_rgba(255,122,69,0.28)]",
+            !isActive &&
+              !isLocked &&
+              "border-white/8 bg-white/[0.03] text-white/62 hover:border-white/20 hover:bg-white/8 hover:text-white",
+            isLocked &&
+              "border-amber-500/35 bg-amber-500/9 text-amber-300 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.06)] hover:border-amber-400/45 hover:bg-amber-500/12",
+          )}
+        >
+          {isLocked ? (
+            <span className="absolute right-1.5 top-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-black shadow-[0_8px_18px_rgba(245,158,11,0.35)]">
+              <Lock className="size-2.75" strokeWidth={2.8} />
+            </span>
+          ) : (
+            <span className="absolute bottom-1.5 right-1.5 h-2.5 w-2.5 rounded-full bg-emerald-500/90 shadow-[0_0_0_2px_rgba(6,10,10,0.65)]" />
+          )}
+          <span className="block text-base tracking-tight">
+            {episode.toString().padStart(2, "0")}
+          </span>
+        </button>
+      );
+    });
   }
 
   useEffect(() => {
@@ -966,7 +1068,7 @@ export function VideoPlayer({
                   variant="secondary"
                   size="sm"
                   onClick={() => changeEpisode(selectedEpisode - 1)}
-                  disabled={selectedEpisode === 1 || isLoading}
+                  disabled={selectedEpisode === 1 || isLoading || !hasUnlockedEpisodes}
                   className="h-11 min-w-11 rounded-full px-3"
                   aria-label="Episode sebelumnya"
                   title="Episode sebelumnya"
@@ -977,7 +1079,7 @@ export function VideoPlayer({
                   variant="secondary"
                   size="sm"
                   onClick={() => seekBy(-10)}
-                  disabled={isLoading}
+                  disabled={isLoading || selectedEpisodeIsLocked || !hasUnlockedEpisodes}
                   className="h-11 min-w-11 rounded-full px-3"
                   aria-label="Mundur 10 detik"
                   title="Mundur 10 detik"
@@ -987,7 +1089,13 @@ export function VideoPlayer({
                 <button
                   type="button"
                   onClick={togglePlayback}
-                  className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-[0_16px_40px_rgba(255,122,69,0.35)] transition hover:bg-[var(--accent-strong)]"
+                  disabled={selectedEpisodeIsLocked || !hasUnlockedEpisodes}
+                  className={cn(
+                    "inline-flex h-14 w-14 items-center justify-center rounded-full text-white transition",
+                    selectedEpisodeIsLocked || !hasUnlockedEpisodes
+                      ? "cursor-not-allowed bg-white/12 text-white/60 shadow-none"
+                      : "bg-accent shadow-[0_16px_40px_rgba(255,122,69,0.35)] hover:bg-[var(--accent-strong)]",
+                  )}
                   aria-label={isPlaying ? "Pause video" : "Play video"}
                 >
                   {isPlaying ? (
@@ -1000,7 +1108,7 @@ export function VideoPlayer({
                   variant="secondary"
                   size="sm"
                   onClick={() => seekBy(10)}
-                  disabled={isLoading}
+                  disabled={isLoading || selectedEpisodeIsLocked || !hasUnlockedEpisodes}
                   className="h-11 min-w-11 rounded-full px-3"
                   aria-label="Maju 10 detik"
                   title="Maju 10 detik"
@@ -1011,7 +1119,12 @@ export function VideoPlayer({
                   variant="secondary"
                   size="sm"
                   onClick={() => changeEpisode(selectedEpisode + 1)}
-                  disabled={selectedEpisode === episodeCount || isLoading}
+                  disabled={
+                    selectedEpisode === episodeCount ||
+                    isLoading ||
+                    !hasUnlockedEpisodes ||
+                    nextEpisodeLocked
+                  }
                   className="h-11 min-w-11 rounded-full px-3"
                   aria-label="Episode berikutnya"
                   title="Episode berikutnya"
@@ -1037,6 +1150,32 @@ export function VideoPlayer({
                 <div className="flex items-start gap-3">
                   <AlertCircle className="mt-0.5 size-4 shrink-0" />
                   <span>{error}</span>
+                </div>
+              </div>
+            ) : null}
+
+            {!error && (selectedEpisodeIsLocked || !hasUnlockedEpisodes) ? (
+              <div className="absolute inset-x-6 bottom-24 z-40 rounded-3xl border border-amber-400/20 bg-[linear-gradient(180deg,rgba(120,74,7,0.24),rgba(68,39,6,0.16))] px-4 py-4 text-sm text-amber-100 backdrop-blur">
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500 text-black">
+                    <Lock className="size-3.5" />
+                  </span>
+                  <div className="space-y-1">
+                    <p className="font-semibold text-white">Episode terkunci</p>
+                    <p className="leading-6 text-amber-100/92">
+                      {hasUnlockedEpisodes
+                        ? `EP.${selectedEpisode} masuk zona VIP. Akses premium mulai dibatasi dari EP.${vipLockFromEpisode}.`
+                        : vipLockMessage}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={goToVipUpgrade}
+                      className="mt-2 inline-flex items-center rounded-full bg-[linear-gradient(180deg,#ffd05a,#f4ae16)] px-4 py-2 text-xs font-semibold text-[#392100] shadow-[0_14px_30px_rgba(255,177,21,0.24)] transition hover:brightness-105"
+                    >
+                      <Crown className="mr-2 size-3.5" />
+                      Buka VIP
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -1079,7 +1218,11 @@ export function VideoPlayer({
               <div className="mx-auto w-full max-w-[460px] space-y-4">
                 <div className="text-center">
                   <h3 className="text-2xl font-semibold text-white">Pilih Episode</h3>
-
+                  {vipLockFromEpisode ? (
+                    <p className="mt-2 text-sm text-amber-200/85">
+                      Lock VIP aktif mulai EP.{vipLockFromEpisode}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="grid max-h-[55vh] grid-cols-4 gap-2 overflow-y-auto pr-1 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:grid-cols-5">
                   {renderEpisodeButtons(() => setIsEpisodeSheetOpen(false))}
@@ -1101,6 +1244,12 @@ export function VideoPlayer({
                     Short drama
                   </Badge>
                   <Badge variant="secondary">{episodeCount} episode</Badge>
+                  {vipLockFromEpisode ? (
+                    <Badge className="border-amber-400/20 bg-amber-500/10 text-amber-200">
+                      <Lock className="mr-1.5 size-3.5" />
+                      VIP mulai EP.{vipLockFromEpisode}
+                    </Badge>
+                  ) : null}
                 </div>
                 <h2 className="text-2xl font-semibold tracking-tight text-white">
                   {title}
@@ -1138,7 +1287,7 @@ export function VideoPlayer({
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {qualityOptions.length > 0 ? (
+                  {!selectedEpisodeIsLocked && qualityOptions.length > 0 ? (
                     qualityOptions.map((quality) => (
                       <button
                         key={`${quality.label}-${quality.url}`}
@@ -1156,10 +1305,32 @@ export function VideoPlayer({
                     ))
                   ) : (
                     <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-[var(--muted)]">
-                      Kualitas akan segera muncul.
+                      {selectedEpisodeIsLocked || !hasUnlockedEpisodes
+                        ? "Kualitas premium akan terbuka setelah akses VIP dibuka."
+                        : "Kualitas akan segera muncul."}
                     </div>
                   )}
                 </div>
+
+                {vipLockFromEpisode ? (
+                  <div className="rounded-[1.4rem] border border-amber-400/18 bg-amber-500/8 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-white">
+                          Butuh akses episode premium?
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-amber-100/72">
+                          Upgrade ke VIP untuk membuka episode yang terkunci mulai
+                          EP.{vipLockFromEpisode}.
+                        </p>
+                      </div>
+                      <Button onClick={goToVipUpgrade} className="rounded-full">
+                        <Crown className="mr-2 size-4" />
+                        Buka VIP
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </CardContent>
           </Card>

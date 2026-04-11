@@ -11,6 +11,7 @@ import {
   normalizeStreamPayload,
   resolveStreamRequest,
 } from "@/lib/provider-adapter";
+import { getVipLockStartEpisode, isEpisodeVipLocked } from "@/lib/vip";
 
 export const runtime = "nodejs";
 
@@ -36,15 +37,24 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const drama = await prisma.drama.findUnique({
-    where: { id: internalDramaId },
-    select: {
-      id: true,
-      providerName: true,
-      providerDramaId: true,
-      episodeCount: true,
-    },
-  });
+  const [drama, vipSettings] = await Promise.all([
+    prisma.drama.findUnique({
+      where: { id: internalDramaId },
+      select: {
+        id: true,
+        providerName: true,
+        providerDramaId: true,
+        episodeCount: true,
+      },
+    }),
+    prisma.vipSettings.findUnique({
+      where: { id: "global" },
+      select: {
+        isEnabled: true,
+        lockFromEpisode: true,
+      },
+    }),
+  ]);
 
   if (!drama) {
     return Response.json({ error: "Drama not found." }, { status: 404 });
@@ -54,6 +64,17 @@ export async function GET(request: NextRequest) {
     return Response.json(
       { error: "Requested episode is out of range." },
       { status: 400 },
+    );
+  }
+
+  const vipLockFromEpisode = getVipLockStartEpisode(vipSettings);
+
+  if (isEpisodeVipLocked(episodeIndex, vipLockFromEpisode)) {
+    return Response.json(
+      {
+        error: `Episode VIP terkunci mulai EP.${vipLockFromEpisode}.`,
+      },
+      { status: 403 },
     );
   }
 
