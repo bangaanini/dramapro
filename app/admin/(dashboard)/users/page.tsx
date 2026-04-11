@@ -90,61 +90,8 @@ export default async function AdminUsersPage() {
 
       <Card className="glass-panel rounded-[2rem] border-white/10">
         <CardContent className="p-0">
-          <div className="space-y-3 p-4 md:hidden">
-            {users.length > 0 ? (
-              users.map((user) => {
-                const hasActiveVip = isVipActive(user.vipExpiresAt);
-                const activeReferralCount = activeReferralMap.get(user.id) ?? 0;
-
-                return (
-                  <div
-                    key={user.id}
-                    className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-semibold text-white">{user.name}</p>
-                        <p className="mt-1 truncate text-xs text-[var(--muted-foreground)]">
-                          {user.email}
-                        </p>
-                      </div>
-                      <Badge
-                        className={
-                          hasActiveVip
-                            ? "border-amber-400/20 bg-amber-500/12 text-amber-100"
-                            : "border-white/12 bg-white/6 text-white"
-                        }
-                      >
-                        {hasActiveVip ? "Premium" : "Free"}
-                      </Badge>
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                      <MiniStat label="Favorit" value={String(user._count.favorites)} />
-                      <MiniStat label="Riwayat" value={String(user._count.watchHistory)} />
-                      <MiniStat label="Referral aktif" value={String(activeReferralCount)} />
-                      <MiniStat label="Sesi" value={String(user._count.sessions)} />
-                    </div>
-
-                    <div className="mt-4 space-y-1 text-xs text-[var(--muted)]">
-                      <p>Terdaftar {formatDate(user.createdAt)}</p>
-                      <p>Total referral {user._count.referrals}</p>
-                      {hasActiveVip && user.vipExpiresAt ? (
-                        <p>VIP aktif sampai {formatDate(user.vipExpiresAt)}</p>
-                      ) : null}
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="px-5 py-10 text-center text-[var(--muted)]">
-                Belum ada user terdaftar.
-              </div>
-            )}
-          </div>
-
-          <div className="hidden overflow-x-auto md:block">
-            <table className="min-w-full text-left text-sm">
+          <div className="overflow-x-auto">
+            <table className="min-w-[780px] text-left text-sm">
               <thead className="border-b border-white/10 bg-white/4 text-[var(--muted)]">
                 <tr>
                   <th className="px-5 py-4 font-medium">User</th>
@@ -220,17 +167,6 @@ export default async function AdminUsersPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
-  );
-}
-
-function MiniStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-[1.1rem] border border-white/10 bg-white/5 px-3 py-3">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--muted-foreground)]">
-        {label}
-      </p>
-      <p className="mt-1 text-base font-semibold text-white">{value}</p>
     </div>
   );
 }

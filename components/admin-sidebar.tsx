@@ -71,9 +71,11 @@ export function AdminSidebar({
 }: AdminSidebarProps) {
   const pathname = usePathname();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
   return (
     <aside className="space-y-4">
-      <div className="glass-panel rounded-[1.8rem] border border-white/10 p-4 md:hidden">
+      <div className="sticky top-[calc(env(safe-area-inset-top)+0.75rem)] z-40 md:hidden">
+        <div className="glass-panel rounded-[1.8rem] border border-white/10 bg-[rgba(24,16,15,0.9)] p-4 shadow-[0_20px_45px_rgba(0,0,0,0.28)] backdrop-blur-xl">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <Badge className="border-accent/30 bg-accent-soft text-accent">
@@ -94,6 +96,7 @@ export function AdminSidebar({
           >
             <Menu className="size-5" />
           </button>
+        </div>
         </div>
       </div>
 
@@ -175,19 +178,20 @@ export function AdminSidebar({
                 const Icon = item.icon;
 
                 return (
-                  <NavItem
-                    key={item.href}
-                    href={item.href}
-                    label={item.label}
-                    description={item.description}
-                    isActive={isActive}
-                    icon={Icon}
-                    pendingAffiliateWithdrawals={pendingAffiliateWithdrawals}
-                  />
-                );
-              })}
-            </nav>
-          </div>
+                <NavItem
+                  key={item.href}
+                  href={item.href}
+                  label={item.label}
+                  description={item.description}
+                  isActive={isActive}
+                  icon={Icon}
+                  pendingAffiliateWithdrawals={pendingAffiliateWithdrawals}
+                  onNavigate={() => setIsDrawerOpen(false)}
+                />
+              );
+            })}
+          </nav>
+        </div>
         </div>
       ) : null}
     </aside>

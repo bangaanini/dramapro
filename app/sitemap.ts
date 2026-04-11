@@ -3,17 +3,9 @@ import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/prisma";
 import { absoluteUrl } from "@/lib/site";
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const dramas = await prisma.drama.findMany({
-    select: {
-      id: true,
-      updatedAt: true,
-    },
-    orderBy: {
-      updatedAt: "desc",
-    },
-  });
+export const dynamic = "force-dynamic";
 
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: MetadataRoute.Sitemap = [
     {
       url: absoluteUrl("/"),
@@ -41,12 +33,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   ];
 
-  const dramaRoutes: MetadataRoute.Sitemap = dramas.map((drama) => ({
-    url: absoluteUrl(`/watch/${drama.id}`),
-    lastModified: drama.updatedAt,
-    changeFrequency: "daily",
-    priority: 0.7,
-  }));
+  try {
+    const dramas = await prisma.drama.findMany({
+      select: {
+        id: true,
+        updatedAt: true,
+      },
+      orderBy: {
+        updatedAt: "desc",
+      },
+    });
 
-  return [...staticRoutes, ...dramaRoutes];
+    const dramaRoutes: MetadataRoute.Sitemap = dramas.map((drama) => ({
+      url: absoluteUrl(`/watch/${drama.id}`),
+      lastModified: drama.updatedAt,
+      changeFrequency: "daily",
+      priority: 0.7,
+    }));
+
+    return [...staticRoutes, ...dramaRoutes];
+  } catch {
+    return staticRoutes;
+  }
 }
