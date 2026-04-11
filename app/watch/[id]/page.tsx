@@ -19,6 +19,7 @@ import {
 import {
   clampEpisodeForVipAccess,
   getVipLockStartEpisode,
+  isVipActive,
 } from "@/lib/vip";
 
 export const dynamic = "force-dynamic";
@@ -70,7 +71,9 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
   }
 
   const dramaThumbUrl = normalizeDisplayImageUrl(drama.thumbUrl);
-  const vipLockFromEpisode = getVipLockStartEpisode(vipSettings);
+  const vipLockFromEpisode = isVipActive(user?.vipExpiresAt)
+    ? null
+    : getVipLockStartEpisode(vipSettings);
   const preferredInitialEpisode = clampEpisodeForVipAccess(
     watchHistory?.episodeIndex ?? 1,
     drama.episodeCount,

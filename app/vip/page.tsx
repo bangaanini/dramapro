@@ -5,7 +5,6 @@ import {
   Gem,
   Lock,
   ShieldCheck,
-  Sparkles,
 } from "lucide-react";
 
 import { SiteFooter } from "@/components/site-footer";
@@ -16,7 +15,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, resolveSafeRedirectPath } from "@/lib/user-auth";
 import { cn } from "@/lib/utils";
-import { getVipLockStartEpisode } from "@/lib/vip";
+import { getVipLockStartEpisode, isVipActive } from "@/lib/vip";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +41,7 @@ export default async function VipPage(props: PageProps<"/vip">) {
   ]);
 
   const vipLockFromEpisode = getVipLockStartEpisode(vipSettings);
+  const userHasVip = isVipActive(user?.vipExpiresAt);
   const featuredPlan =
     plans.length > 0
       ? [...plans].sort((left, right) => {
@@ -74,30 +74,28 @@ export default async function VipPage(props: PageProps<"/vip">) {
             </span>
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-sm leading-7 text-white/68 sm:text-base">
-            Buka episode premium, nikmati akses prioritas, dan siapkan akunmu
-            untuk checkout VIP saat payment gateway diaktifkan.
+            Buka episode premium, nikmati akses ke semua drama.
           </p>
 
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-            {vipLockFromEpisode ? (
-              <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-black/30 px-4 py-2 text-sm text-amber-100">
-                <Lock className="size-4 text-amber-300" />
-                Konten premium saat ini mulai terkunci dari EP.{vipLockFromEpisode}
-              </div>
-            ) : (
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+            {userHasVip ? (
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-100">
                 <ShieldCheck className="size-4 text-emerald-300" />
-                Semua episode masih terbuka saat ini
+                VIP aktif sampai{" "}
+                {user?.vipExpiresAt
+                  ? new Intl.DateTimeFormat("id-ID", {
+                      dateStyle: "medium",
+                    }).format(user.vipExpiresAt)
+                  : "-"}
               </div>
-            )}
-
-            {user ? (
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78">
-                <Sparkles className="size-4 text-accent" />
-                Masuk sebagai {user.name}
+            ) : vipLockFromEpisode ? (
+              <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-500/10 px-4 py-2 text-sm text-amber-100">
+                <Lock className="size-4 text-amber-300" />
+                Episode premium terkunci mulai EP.{vipLockFromEpisode}
               </div>
             ) : null}
           </div>
+
         </div>
       </section>
 
@@ -164,24 +162,18 @@ export default async function VipPage(props: PageProps<"/vip">) {
                   </div>
 
                   {user ? (
-                    <div className="space-y-3">
-                      <button
-                        type="button"
-                        disabled
-                        className={cn(
-                          "inline-flex h-12 w-full items-center justify-center rounded-2xl px-5 text-sm font-semibold",
-                          isFeatured
-                            ? "bg-[linear-gradient(180deg,#ffd05a,#f4ae16)] text-[#392100]"
-                            : "bg-white/10 text-white/88",
-                        )}
-                      >
-                        Checkout segera hadir
-                      </button>
-                      <p className="text-center text-xs text-white/45">
-                        Paket tersimpan sebagai master pricing dan siap dipakai saat
-                        payment gateway diaktifkan.
-                      </p>
-                    </div>
+                    <Link
+                      href={`/vip/checkout?plan=${encodeURIComponent(plan.id)}&next=${encodeURIComponent(next)}`}
+                      className={cn(
+                        buttonVariants({ size: "lg" }),
+                        "h-12 w-full rounded-2xl",
+                        isFeatured &&
+                          "bg-[linear-gradient(180deg,#ffd05a,#f4ae16)] text-[#392100] hover:brightness-105",
+                      )}
+                    >
+                      <Crown className="mr-2 size-4" />
+                      {userHasVip ? "Perpanjang VIP" : "Pilih paket"}
+                    </Link>
                   ) : (
                     <Link
                       href={`/sign-in?next=${encodeURIComponent(next)}`}
@@ -265,14 +257,13 @@ export default async function VipPage(props: PageProps<"/vip">) {
             <div className="space-y-3 text-sm leading-6 text-[var(--muted)]">
               <p>1. Masuk atau buat akun terlebih dahulu.</p>
               <p>2. Pilih paket VIP yang paling cocok.</p>
-              <p>3. Checkout akan aktif setelah payment gateway diintegrasikan.</p>
+              <p>3. Bayar lewat Paymenku, lalu refresh status untuk aktivasi otomatis.</p>
             </div>
 
             <div className="space-y-3">
               {user ? (
                 <div className="rounded-[1.4rem] border border-white/10 bg-white/5 px-4 py-4 text-sm text-white/72">
-                  Akunmu sudah siap. Setelah gateway aktif, tombol checkout akan
-                  langsung tersedia di halaman ini.
+                  Akunmu sudah siap untuk checkout VIP.
                 </div>
               ) : (
                 <>

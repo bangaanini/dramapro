@@ -45,12 +45,16 @@ function mapPublicUser(user: {
   email: string;
   name: string;
   createdAt?: Date;
+  vipExpiresAt?: Date | null;
+  vipStartedAt?: Date | null;
 }) {
   return {
     id: user.id,
     email: user.email,
     name: user.name,
     createdAt: user.createdAt,
+    vipExpiresAt: user.vipExpiresAt ?? null,
+    vipStartedAt: user.vipStartedAt ?? null,
   };
 }
 
@@ -107,6 +111,8 @@ export async function registerUser(input: {
       email: true,
       name: true,
       createdAt: true,
+      vipExpiresAt: true,
+      vipStartedAt: true,
     },
   });
 
@@ -248,6 +254,8 @@ async function validateSessionToken(token: string) {
           email: true,
           name: true,
           createdAt: true,
+          vipExpiresAt: true,
+          vipStartedAt: true,
         },
       },
     },

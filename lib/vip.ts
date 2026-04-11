@@ -3,6 +3,10 @@ export type VipLockConfig = {
   lockFromEpisode: number;
 } | null;
 
+export function isVipActive(vipExpiresAt: Date | null | undefined) {
+  return Boolean(vipExpiresAt && vipExpiresAt.getTime() > Date.now());
+}
+
 export function getVipLockStartEpisode(config: VipLockConfig) {
   if (!config?.isEnabled) {
     return null;

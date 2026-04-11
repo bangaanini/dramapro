@@ -11,7 +11,12 @@ import {
   normalizeStreamPayload,
   resolveStreamRequest,
 } from "@/lib/provider-adapter";
-import { getVipLockStartEpisode, isEpisodeVipLocked } from "@/lib/vip";
+import { getUserFromRequest } from "@/lib/user-auth";
+import {
+  getVipLockStartEpisode,
+  isEpisodeVipLocked,
+  isVipActive,
+} from "@/lib/vip";
 
 export const runtime = "nodejs";
 
@@ -37,7 +42,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const [drama, vipSettings] = await Promise.all([
+  const [drama, vipSettings, user] = await Promise.all([
     prisma.drama.findUnique({
       where: { id: internalDramaId },
       select: {
@@ -54,6 +59,7 @@ export async function GET(request: NextRequest) {
         lockFromEpisode: true,
       },
     }),
+    getUserFromRequest(request),
   ]);
 
   if (!drama) {
@@ -67,7 +73,9 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const vipLockFromEpisode = getVipLockStartEpisode(vipSettings);
+  const vipLockFromEpisode = isVipActive(user?.vipExpiresAt)
+    ? null
+    : getVipLockStartEpisode(vipSettings);
 
   if (isEpisodeVipLocked(episodeIndex, vipLockFromEpisode)) {
     return Response.json(

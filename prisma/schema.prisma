@@ -25,6 +25,14 @@ enum FeedSource {
   popular
 }
 
+enum VipPaymentStatus {
+  pending
+  paid
+  failed
+  expired
+  cancelled
+}
+
 model Drama {
   id              String       @id @default(uuid()) @db.Uuid
   providerDramaId String
@@ -84,9 +92,12 @@ model User {
   email        String         @unique
   name         String
   passwordHash String
+  vipStartedAt DateTime?
+  vipExpiresAt DateTime?
   sessions     UserSession[]
   favorites    FavoriteDrama[]
   watchHistory WatchHistory[]
+  vipPayments  VipPayment[]
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 }
@@ -139,17 +150,48 @@ model VipSettings {
 }
 
 model VipPricePlan {
-  id          String   @id @default(uuid()) @db.Uuid
-  name        String
-  slug        String   @unique
-  description String   @default("")
-  priceAmount Int
-  currency    String   @default("IDR")
+  id           String       @id @default(uuid()) @db.Uuid
+  name         String
+  slug         String       @unique
+  description  String       @default("")
+  priceAmount  Int
+  currency     String       @default("IDR")
   durationDays Int
-  sortOrder   Int      @default(0)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  sortOrder    Int          @default(0)
+  isActive     Boolean      @default(true)
+  payments     VipPayment[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   @@index([isActive, sortOrder])
+}
+
+model VipPayment {
+  id                    String           @id @default(uuid()) @db.Uuid
+  userId                String           @db.Uuid
+  vipPricePlanId        String           @db.Uuid
+  referenceId           String           @unique
+  providerTransactionId String?          @unique
+  channelCode           String
+  channelName           String           @default("")
+  amount                Int
+  paidAmount            Int?
+  currency              String           @default("IDR")
+  status                VipPaymentStatus @default(pending)
+  payUrl                String
+  qrUrl                 String?
+  qrString              String?
+  returnUrl             String
+  expiresAt             DateTime?
+  lastCheckedAt         DateTime?
+  activatedAt           DateTime?
+  providerPayload       Json?
+  statusPayload         Json?
+  user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan                  VipPricePlan     @relation(fields: [vipPricePlanId], references: [id], onDelete: Restrict)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  @@index([userId, status, createdAt])
+  @@index([vipPricePlanId, createdAt])
 }
