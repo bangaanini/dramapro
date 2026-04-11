@@ -20,6 +20,9 @@ export default async function ProfilePage() {
           id: user.id,
           name: user.name,
           email: user.email,
+          authProvider: user.authProvider,
+          telegramUsername: user.telegramUsername,
+          telegramPhotoUrl: user.telegramPhotoUrl,
           vipStartedAt: user.vipStartedAt ? user.vipStartedAt.toISOString() : null,
           vipExpiresAt: user.vipExpiresAt ? user.vipExpiresAt.toISOString() : null,
         }}

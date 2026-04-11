@@ -22,13 +22,21 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { safeSessionStorage } from "@/lib/safe-session-storage";
+import {
+  getUserAvatarUrl,
+  getUserInitials,
+  getUserSecondaryLabel,
+} from "@/lib/user-identity";
 import { isVipActive } from "@/lib/vip";
 
 type ProfileOverviewProps = {
   user: {
     id: string;
     name: string;
-    email: string;
+    email: string | null;
+    authProvider: "local" | "telegram";
+    telegramUsername: string | null;
+    telegramPhotoUrl: string | null;
     vipStartedAt: string | null;
     vipExpiresAt: string | null;
   };
@@ -38,7 +46,10 @@ type ProfileResponse = {
   user: {
     id: string;
     name: string;
-    email: string;
+    email: string | null;
+    authProvider: "local" | "telegram";
+    telegramUsername: string | null;
+    telegramPhotoUrl: string | null;
     vipStartedAt: string | null;
     vipExpiresAt: string | null;
   };
@@ -153,17 +164,23 @@ export function ProfileOverview({ user }: ProfileOverviewProps) {
     ? new Date(displayUser.vipStartedAt)
     : null;
   const hasActiveVip = isVipActive(vipExpiresAt);
-  const initials = displayUser.name
-    .split(/\s+/)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .slice(0, 2)
-    .join("");
+  const initials = getUserInitials(displayUser.name);
+  const avatarUrl = getUserAvatarUrl(displayUser);
+  const secondaryLabel = getUserSecondaryLabel(displayUser);
   const vipRemainingDays = hasActiveVip && vipExpiresAt
     ? Math.max(
         1,
         Math.ceil((vipExpiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
       )
     : 0;
+
+  const visibleProfileMenuItems = profileMenuItems.filter((item) => {
+    if (displayUser.authProvider === "telegram" && item.href === "/profile/password") {
+      return false;
+    }
+
+    return true;
+  });
 
   return (
     <>
@@ -172,11 +189,21 @@ export function ProfileOverview({ user }: ProfileOverviewProps) {
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-4">
               <div className="flex size-14 items-center justify-center rounded-full border border-white/12 bg-black/25 text-lg font-semibold text-white shadow-[0_10px_24px_rgba(0,0,0,0.22)]">
-                {initials || <UserRound className="size-6" />}
+                {avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={avatarUrl}
+                    alt={displayUser.name}
+                    className="size-full rounded-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  initials || <UserRound className="size-6" />
+                )}
               </div>
               <div>
                 <p className="text-lg font-semibold text-white">{displayUser.name}</p>
-                <p className="text-sm text-white/72">{displayUser.email}</p>
+                <p className="text-sm text-white/72">{secondaryLabel}</p>
               </div>
             </div>
 
@@ -189,6 +216,9 @@ export function ProfileOverview({ user }: ProfileOverviewProps) {
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
+            <Badge className="border-white/12 bg-black/22 px-3 py-1.5 text-white">
+              {displayUser.authProvider === "telegram" ? "Telegram login" : "Akun web"}
+            </Badge>
             <Badge className="border-white/12 bg-black/22 px-3 py-1.5 text-white">
               {isLoading ? (
                 <span className="inline-flex items-center gap-2">
@@ -270,7 +300,7 @@ export function ProfileOverview({ user }: ProfileOverviewProps) {
 
       <section className="mt-6 space-y-3">
         <div className="space-y-3">
-          {profileMenuItems.map((item) => {
+          {visibleProfileMenuItems.map((item) => {
             const Icon = item.icon;
 
             return (

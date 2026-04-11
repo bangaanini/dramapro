@@ -3,6 +3,7 @@ import { Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
+import { getUserSecondaryLabel } from "@/lib/user-identity";
 import { isVipActive } from "@/lib/vip";
 
 export const dynamic = "force-dynamic";
@@ -114,12 +115,15 @@ export default async function AdminUsersPage() {
                           <div>
                             <p className="font-semibold text-white">{user.name}</p>
                             <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-                              {user.email}
+                              {getUserSecondaryLabel(user)}
                             </p>
                           </div>
                         </td>
                         <td className="px-5 py-4">
                           <div className="space-y-2">
+                            <Badge className="border-white/12 bg-black/20 text-white">
+                              {user.authProvider === "telegram" ? "Telegram" : "Web"}
+                            </Badge>
                             <Badge
                               className={
                                 hasActiveVip

@@ -5,6 +5,7 @@ import { NextRequest } from "next/server";
 
 import { ensureUserAffiliateCode, readAffiliateCookieCode } from "@/lib/affiliate";
 import { prisma } from "@/lib/prisma";
+import { resolveUserPaymentEmail } from "@/lib/user-identity";
 
 export const USER_SESSION_COOKIE = "dramapro_user_session";
 
@@ -41,18 +42,48 @@ function hashSessionToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
-function mapPublicUser(user: {
+export type PublicUser = {
   id: string;
-  email: string;
+  email: string | null;
   name: string;
+  authProvider: "local" | "telegram";
+  telegramId: string | null;
+  telegramUsername: string | null;
+  telegramPhotoUrl: string | null;
+  telegramFirstName: string | null;
+  telegramLastName: string | null;
+  telegramLanguageCode: string | null;
   createdAt?: Date;
   vipExpiresAt?: Date | null;
   vipStartedAt?: Date | null;
-}) {
+};
+
+function mapPublicUser(user: {
+  id: string;
+  email: string | null;
+  name: string;
+  authProvider: "local" | "telegram";
+  telegramId: string | null;
+  telegramUsername: string | null;
+  telegramPhotoUrl: string | null;
+  telegramFirstName: string | null;
+  telegramLastName: string | null;
+  telegramLanguageCode: string | null;
+  createdAt?: Date;
+  vipExpiresAt?: Date | null;
+  vipStartedAt?: Date | null;
+}): PublicUser {
   return {
     id: user.id,
     email: user.email,
     name: user.name,
+    authProvider: user.authProvider,
+    telegramId: user.telegramId,
+    telegramUsername: user.telegramUsername,
+    telegramPhotoUrl: user.telegramPhotoUrl,
+    telegramFirstName: user.telegramFirstName,
+    telegramLastName: user.telegramLastName,
+    telegramLanguageCode: user.telegramLanguageCode,
     createdAt: user.createdAt,
     vipExpiresAt: user.vipExpiresAt ?? null,
     vipStartedAt: user.vipStartedAt ?? null,
@@ -113,6 +144,7 @@ export async function registerUser(input: {
     data: {
       email,
       name,
+      authProvider: "local",
       passwordHash: hashPassword(password),
       referredById: referralUser?.id ?? null,
     },
@@ -120,6 +152,13 @@ export async function registerUser(input: {
       id: true,
       email: true,
       name: true,
+      authProvider: true,
+      telegramId: true,
+      telegramUsername: true,
+      telegramPhotoUrl: true,
+      telegramFirstName: true,
+      telegramLastName: true,
+      telegramLanguageCode: true,
       createdAt: true,
       vipExpiresAt: true,
       vipStartedAt: true,
@@ -142,6 +181,10 @@ export async function authenticateUser(email: string, password: string) {
   });
 
   if (!user) {
+    return null;
+  }
+
+  if (user.authProvider !== "local" || !user.passwordHash) {
     return null;
   }
 
@@ -194,11 +237,26 @@ export async function changeCurrentUserPassword(input: {
     where: { id: input.userId },
     select: {
       id: true,
+      authProvider: true,
       passwordHash: true,
     },
   });
 
-  if (!user || !verifyPassword(currentPassword, user.passwordHash)) {
+  if (!user) {
+    return {
+      ok: false as const,
+      error: "Akun tidak ditemukan.",
+    };
+  }
+
+  if (user.authProvider !== "local" || !user.passwordHash) {
+    return {
+      ok: false as const,
+      error: "Akun Telegram tidak memakai password lokal.",
+    };
+  }
+
+  if (!verifyPassword(currentPassword, user.passwordHash)) {
     return {
       ok: false as const,
       error: "Password saat ini tidak valid.",
@@ -265,6 +323,13 @@ async function validateSessionToken(token: string) {
           id: true,
           email: true,
           name: true,
+          authProvider: true,
+          telegramId: true,
+          telegramUsername: true,
+          telegramPhotoUrl: true,
+          telegramFirstName: true,
+          telegramLastName: true,
+          telegramLanguageCode: true,
           createdAt: true,
           vipExpiresAt: true,
           vipStartedAt: true,
@@ -323,4 +388,8 @@ export function resolveSafeRedirectPath(candidate: string | null | undefined) {
   }
 
   return normalized;
+}
+
+export function resolveUserPaymentContactEmail(user: PublicUser) {
+  return resolveUserPaymentEmail(user);
 }

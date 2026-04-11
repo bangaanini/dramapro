@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatIdr } from "@/lib/affiliate";
 import { prisma } from "@/lib/prisma";
+import { getUserSecondaryLabel } from "@/lib/user-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,8 @@ export default async function AdminAffiliateWithdrawalsPage(
             name: true,
             email: true,
             affiliateCode: true,
+            authProvider: true,
+            telegramUsername: true,
           },
         },
       },
@@ -54,6 +57,8 @@ export default async function AdminAffiliateWithdrawalsPage(
           select: {
             name: true,
             email: true,
+            authProvider: true,
+            telegramUsername: true,
           },
         },
       },
@@ -128,7 +133,7 @@ export default async function AdminAffiliateWithdrawalsPage(
                       <div className="min-w-0">
                         <p className="font-medium text-white">{item.affiliateUser.name}</p>
                         <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-                          {item.affiliateUser.email}
+                          {getUserSecondaryLabel(item.affiliateUser)}
                           {item.affiliateUser.affiliateCode
                             ? ` • ${item.affiliateUser.affiliateCode}`
                             : ""}
@@ -226,7 +231,7 @@ export default async function AdminAffiliateWithdrawalsPage(
                       <div className="min-w-0">
                         <p className="font-medium text-white">{item.affiliateUser.name}</p>
                         <p className="mt-1 truncate text-xs text-[var(--muted-foreground)]">
-                          {item.affiliateUser.email}
+                          {getUserSecondaryLabel(item.affiliateUser)}
                         </p>
                       </div>
                       <Badge

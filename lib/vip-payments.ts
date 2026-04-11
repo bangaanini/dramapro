@@ -9,7 +9,11 @@ import {
   createActiveGatewayTransaction,
 } from "@/lib/payment-gateway-service";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser, resolveSafeRedirectPath } from "@/lib/user-auth";
+import {
+  getCurrentUser,
+  resolveSafeRedirectPath,
+  resolveUserPaymentContactEmail,
+} from "@/lib/user-auth";
 
 function buildReferenceId() {
   return `VIP-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`;
@@ -126,7 +130,7 @@ export async function createVipPaymentSession(input: {
     referenceId,
     amount: plan.priceAmount,
     customerName: user.name,
-    customerEmail: user.email,
+    customerEmail: resolveUserPaymentContactEmail(user),
     channelCode: input.channelCode,
     returnUrl,
   });

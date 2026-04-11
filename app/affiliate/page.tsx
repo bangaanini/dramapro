@@ -20,6 +20,7 @@ import {
   getAffiliateTier,
 } from "@/lib/affiliate";
 import { prisma } from "@/lib/prisma";
+import { getUserSecondaryLabel } from "@/lib/user-identity";
 import { getCurrentUser } from "@/lib/user-auth";
 import { cn } from "@/lib/utils";
 
@@ -113,6 +114,8 @@ export default async function AffiliatePage(props: PageProps<"/affiliate">) {
             select: {
               name: true,
               email: true,
+              authProvider: true,
+              telegramUsername: true,
             },
           },
         },
@@ -396,7 +399,9 @@ function HistoryTab({
     createdAt: Date;
     referredUser: {
       name: string;
-      email: string;
+      email: string | null;
+      authProvider: "local" | "telegram";
+      telegramUsername: string | null;
     };
   }>;
 }) {
@@ -480,7 +485,7 @@ function HistoryTab({
                       <td className="px-3 py-4">
                         <p className="font-medium text-white">{item.referredUser.name}</p>
                         <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-                          {item.referredUser.email}
+                          {getUserSecondaryLabel(item.referredUser)}
                         </p>
                       </td>
                       <td className="px-3 py-4 text-white">{formatIdr(item.amount)}</td>

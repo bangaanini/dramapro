@@ -1,7 +1,10 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
+import Script from "next/script";
 import "./globals.css";
 import "video.js/dist/video-js.css";
 
+import { TelegramMiniAppBridge } from "@/components/telegram-mini-app-bridge";
 import {
   DEFAULT_OG_IMAGE,
   SITE_DESCRIPTION,
@@ -96,6 +99,13 @@ export default function RootLayout({
   return (
     <html lang="id" className="h-full antialiased">
       <body className="min-h-full bg-[var(--background)] text-[var(--foreground)]">
+        <Script
+          src="https://telegram.org/js/telegram-web-app.js?62"
+          strategy="beforeInteractive"
+        />
+        <Suspense fallback={null}>
+          <TelegramMiniAppBridge />
+        </Suspense>
         {children}
       </body>
     </html>

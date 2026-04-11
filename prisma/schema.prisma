@@ -41,6 +41,11 @@ enum PaymentGatewayProvider {
   doku
 }
 
+enum UserAuthProvider {
+  local
+  telegram
+}
+
 enum AffiliateCommissionStatus {
   approved
   paid
@@ -110,9 +115,16 @@ model AdminSession {
 
 model User {
   id                         String                @id @default(uuid()) @db.Uuid
-  email                      String                @unique
+  email                      String?               @unique
   name                       String
-  passwordHash               String
+  authProvider               UserAuthProvider      @default(local)
+  passwordHash               String?
+  telegramId                 String?               @unique
+  telegramUsername           String?
+  telegramPhotoUrl           String?
+  telegramFirstName          String?
+  telegramLastName           String?
+  telegramLanguageCode       String?
   vipStartedAt               DateTime?
   vipExpiresAt               DateTime?
   affiliateCode              String?               @unique

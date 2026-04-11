@@ -9,6 +9,7 @@ import { SiteHeader } from "@/components/site-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
+import { getUserSecondaryLabel } from "@/lib/user-identity";
 import { getCurrentUser, resolveSafeRedirectPath } from "@/lib/user-auth";
 
 export const dynamic = "force-dynamic";
@@ -124,12 +125,13 @@ export default async function ProfilePayoutSettingsPage(
                 <label className="block space-y-2">
                   <span className="text-sm font-medium text-white">Email payout</span>
                   <input
-                    name="payoutEmail"
-                    type="email"
-                    defaultValue={payoutProfile?.payoutEmail ?? user.email}
-                    className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-accent/60 focus:ring-2 focus:ring-[var(--ring)]"
-                  />
-                </label>
+                  name="payoutEmail"
+                  type="email"
+                  defaultValue={payoutProfile?.payoutEmail ?? user.email ?? ""}
+                  placeholder={getUserSecondaryLabel(user)}
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-accent/60 focus:ring-2 focus:ring-[var(--ring)]"
+                />
+              </label>
               </div>
 
               <label className="block space-y-2">
