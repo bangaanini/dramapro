@@ -39,7 +39,6 @@ export default async function AdminPaymentGatewaysPage(
         </h1>
         <p className="mt-2 max-w-3xl text-sm leading-7 text-[var(--muted)]">
           Simpan credential gateway terenkripsi, pilih provider checkout aktif,
-          dan siapkan integrasi lain untuk fase berikutnya.
         </p>
         <div className="mt-4 rounded-[1.4rem] border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/90">
           Secret merchant disimpan di database dalam bentuk terenkripsi. Server

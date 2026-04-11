@@ -31,9 +31,7 @@ export default async function AdminVipSettingsPage(
           Pengaturan Lock Episode
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-7 text-[var(--muted)]">
-          Atur kapan episode premium mulai terkunci secara global. Setting ini
-          disiapkan untuk alur VIP dan payment gateway yang akan ditambahkan
-          berikutnya.
+          Atur kapan episode premium mulai terkunci secara global
         </p>
       </div>
 

@@ -25,7 +25,7 @@ export default async function AdminSyncPage() {
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-7 text-[var(--muted)]">
           Jalankan sinkronisasi feed provider secara manual untuk home, new, dan
-          popular tanpa keluar dari dashboard admin.
+          popular.
         </p>
       </div>
 

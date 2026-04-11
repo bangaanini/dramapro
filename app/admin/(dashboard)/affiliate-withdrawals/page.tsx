@@ -75,8 +75,7 @@ export default async function AdminAffiliateWithdrawalsPage(
           Request Withdraw Affiliate
         </h1>
         <p className="mt-2 max-w-3xl text-sm leading-7 text-[var(--muted)]">
-          Review semua permintaan withdraw affiliate di satu tempat, lengkap
-          dengan detail rekening, WhatsApp, email, dan status transfer.
+          Review semua permintaan withdraw affiliate.
         </p>
 
         <div className="mt-5 grid gap-3 sm:grid-cols-3">

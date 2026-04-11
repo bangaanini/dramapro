@@ -73,8 +73,7 @@ export default async function AdminUsersPage() {
           Daftar User
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-7 text-[var(--muted)]">
-          Monitor akun terdaftar, jumlah favorit, riwayat tontonan, dan sesi aktif
-          pengguna dari satu tabel admin.
+          Monitor akun terdaftar dan status
         </p>
 
         <div className="mt-5 grid gap-3 sm:grid-cols-4">

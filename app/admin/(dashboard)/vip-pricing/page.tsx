@@ -41,10 +41,6 @@ export default async function AdminVipPricingPage(
         <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white">
           Paket Harga VIP
         </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-7 text-[var(--muted)]">
-          Siapkan daftar paket VIP yang nanti akan dihubungkan ke payment gateway.
-          Untuk sekarang admin sudah bisa menambah dan mengaktifkan paket.
-        </p>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -128,10 +124,6 @@ export default async function AdminVipPricingPage(
           <CardContent className="space-y-5 p-6">
             <div>
               <h2 className="text-xl font-semibold text-white">Tambah paket VIP</h2>
-              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                Paket ini belum terhubung ke payment gateway, tetapi sudah siap
-                dipakai sebagai master pricing.
-              </p>
             </div>
 
             <form action={createVipPricePlanAction} className="space-y-4">
@@ -222,7 +214,7 @@ export default async function AdminVipPricingPage(
                 <div>
                   <p className="font-medium text-white">Aktifkan paket ini</p>
                   <p className="text-xs text-[var(--muted-foreground)]">
-                    Paket aktif akan muncul sebagai pilihan utama saat gateway siap.
+                    Paket aktif akan muncul sebagai pilihan utama atau paket unggulan.
                   </p>
                 </div>
               </label>

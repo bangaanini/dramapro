@@ -50,8 +50,7 @@ export default async function AdminAffiliateSettingsPage(
         </h1>
         <p className="mt-2 max-w-3xl text-sm leading-7 text-[var(--muted)]">
           Atur tingkatan referral, persentase komisi, masa simpan cookie referral,
-          minimum penarikan, dan aturan program affiliate tanpa bercampur dengan
-          review request withdraw.
+          minimum penarikan, dan aturan program affiliate.
         </p>
 
         {pendingWithdrawalsCount > 0 ? (
@@ -200,30 +199,7 @@ export default async function AdminAffiliateSettingsPage(
                 </div>
               </div>
 
-              <div className="rounded-[1.4rem] border border-white/10 bg-black/20 p-4">
-                <div className="flex items-start gap-3">
-                  <div className="flex size-11 items-center justify-center rounded-2xl border border-white/10 bg-white/6 text-white">
-                    <Wallet className="size-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-medium text-white">Request withdraw dipisah</p>
-                    <p className="mt-1 text-sm text-[var(--muted)]">
-                      Semua permintaan penarikan sekarang ada di menu khusus agar
-                      lebih cepat direview admin.
-                    </p>
-                    <Link
-                      href="/admin/affiliate-withdrawals"
-                      className={buttonVariants({
-                        size: "sm",
-                        variant: "secondary",
-                        className: "mt-4 inline-flex",
-                      })}
-                    >
-                      Buka halaman withdraw
-                    </Link>
-                  </div>
-                </div>
-              </div>
+
 
               <div className="space-y-3 text-sm">
                 <TierSummary
