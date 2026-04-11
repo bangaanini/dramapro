@@ -1,10 +1,21 @@
+import { redirect } from "next/navigation";
 
 import { HomeCatalogPanel } from "@/components/home-catalog-panel";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getHomepageCatalogData } from "@/lib/catalog-data";
 
-export default async function HomePage() {
+export default async function HomePage(props: PageProps<"/">) {
+  const searchParams = await props.searchParams;
+  const referralCode =
+    typeof searchParams.ref === "string" ? searchParams.ref.trim().toUpperCase() : "";
+
+  if (referralCode) {
+    redirect(
+      `/api/affiliate/capture?ref=${encodeURIComponent(referralCode)}&next=${encodeURIComponent("/")}`,
+    );
+  }
+
   const catalogData = await getHomepageCatalogData();
 
   return (
