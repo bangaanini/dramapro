@@ -9,9 +9,14 @@ export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   const referralCode = request.nextUrl.searchParams.get("ref")?.trim().toUpperCase();
   const next = resolveSafeRedirectPath(request.nextUrl.searchParams.get("next"));
+  const mode = request.nextUrl.searchParams.get("mode");
   const redirectUrl = new URL(next, request.url);
 
   if (!referralCode) {
+    if (mode === "json") {
+      return NextResponse.json({ ok: false, captured: false }, { status: 400 });
+    }
+
     return NextResponse.redirect(redirectUrl);
   }
 
@@ -23,7 +28,10 @@ export async function GET(request: NextRequest) {
     }),
   ]);
 
-  const response = NextResponse.redirect(redirectUrl);
+  const response =
+    mode === "json"
+      ? NextResponse.json({ ok: true, captured: false })
+      : NextResponse.redirect(redirectUrl);
 
   if (!settings.isEnabled || !referrer) {
     return response;
