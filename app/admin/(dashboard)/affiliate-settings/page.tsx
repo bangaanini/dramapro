@@ -1,4 +1,4 @@
-import { BadgePercent, CheckCircle2, Wallet } from "lucide-react";
+import { BadgePercent, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 
 import {

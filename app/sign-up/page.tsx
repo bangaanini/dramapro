@@ -38,15 +38,14 @@ export default async function SignUpPage(props: PageProps<"/sign-up">) {
             <div className="space-y-3">
               <Badge className="border-accent/30 bg-accent-soft text-accent">
                 <Sparkles className="mr-2 size-3.5" />
-                Personal library ready
+                SignUp
               </Badge>
               <div>
                 <h1 className="text-3xl font-semibold tracking-tight text-white">
                   Sign up
                 </h1>
                 <p className="mt-2 text-sm leading-7 text-[var(--muted)]">
-                  Buat akun user untuk mulai menyimpan drama favorit dan menyiapkan
-                  watch history lintas sesi.
+                  Buat akun user untuk mulai menonton drama favoritmu.
                 </p>
               </div>
             </div>

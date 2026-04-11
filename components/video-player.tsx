@@ -5,6 +5,7 @@ import {
   type ReactNode,
   useEffect,
   useEffectEvent,
+  useId,
   useRef,
   useState,
 } from "react";
@@ -97,6 +98,10 @@ export function VideoPlayer({
   const playerStageRef = useRef<HTMLDivElement | null>(null);
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const playerRef = useRef<Player | null>(null);
+  const surfaceGestureRef = useRef<{
+    startX: number;
+    startY: number;
+  } | null>(null);
   const lastLoadedEpisodeRef = useRef<number | null>(null);
   const hideChromeTimeoutRef = useRef<number | null>(null);
   const singleTapTimeoutRef = useRef<number | null>(null);
@@ -134,6 +139,10 @@ export function VideoPlayer({
   const [isFavoritePending, setIsFavoritePending] = useState(false);
   const [seekNotice, setSeekNotice] = useState<string | null>(null);
   const [toast, setToast] = useState<PlayerToast | null>(null);
+  const [currentTimeSeconds, setCurrentTimeSeconds] = useState(0);
+  const [durationSeconds, setDurationSeconds] = useState(0);
+  const [scrubTimeSeconds, setScrubTimeSeconds] = useState<number | null>(null);
+  const progressSliderId = useId();
   const lastUnlockedEpisode = getLastUnlockedEpisode(
     episodeCount,
     vipLockFromEpisode,
@@ -171,8 +180,19 @@ export function VideoPlayer({
     player.muted(false);
     player.on("play", () => setIsPlaying(true));
     player.on("pause", () => setIsPlaying(false));
+    player.on("timeupdate", () => {
+      setCurrentTimeSeconds(player.currentTime() ?? 0);
+    });
+    player.on("loadedmetadata", () => {
+      setDurationSeconds(player.duration() ?? 0);
+      setCurrentTimeSeconds(player.currentTime() ?? 0);
+    });
+    player.on("durationchange", () => {
+      setDurationSeconds(player.duration() ?? 0);
+    });
     player.on("ended", () => {
       setIsPlaying(false);
+      setCurrentTimeSeconds(player.duration() ?? 0);
       setSelectedEpisode((currentEpisode) =>
         currentEpisode < lastUnlockedEpisode
           ? Math.min(lastUnlockedEpisode, currentEpisode + 1)
@@ -307,6 +327,9 @@ export function VideoPlayer({
         setSelectedQuality(nextStream.defaultQuality);
         setSelectedSubtitle(getPreferredSubtitleLabel(nextStream.subtitles));
         setIsChromeVisible(true);
+        setCurrentTimeSeconds(0);
+        setDurationSeconds(0);
+        setScrubTimeSeconds(null);
       } catch (loadError) {
         if (controller.signal.aborted) {
           return;
@@ -593,7 +616,25 @@ export function VideoPlayer({
 
     player.currentTime(resolvedTime);
     setIsChromeVisible(true);
+    setCurrentTimeSeconds(resolvedTime);
     setSeekNotice(seconds > 0 ? `+${seconds} detik` : `${seconds} detik`);
+  }
+
+  function seekTo(seconds: number) {
+    const player = playerRef.current;
+
+    if (!player) {
+      return;
+    }
+
+    const duration = player.duration() ?? Number.NaN;
+    const resolvedTime = Number.isFinite(duration)
+      ? Math.min(Math.max(0, seconds), duration)
+      : Math.max(0, seconds);
+
+    player.currentTime(resolvedTime);
+    setCurrentTimeSeconds(resolvedTime);
+    setIsChromeVisible(true);
   }
 
   async function requestBestEffortFullscreen() {
@@ -687,6 +728,50 @@ export function VideoPlayer({
     setIsChromeVisible((current) => !current);
   }
 
+  function handleVerticalSwipe(deltaY: number) {
+    const threshold = 80;
+
+    if (Math.abs(deltaY) < threshold) {
+      return false;
+    }
+
+    if (deltaY < 0) {
+      if (
+        selectedEpisode === episodeCount ||
+        !hasUnlockedEpisodes ||
+        nextEpisodeLocked
+      ) {
+        setToast({
+          message: "Tidak ada episode berikutnya yang bisa dibuka.",
+          tone: "info",
+        });
+        return true;
+      }
+
+      changeEpisode(selectedEpisode + 1);
+      setToast({
+        message: `Pindah ke EP.${selectedEpisode + 1}`,
+        tone: "info",
+      });
+      return true;
+    }
+
+    if (selectedEpisode === 1 || !hasUnlockedEpisodes) {
+      setToast({
+        message: "Sudah di episode pertama.",
+        tone: "info",
+      });
+      return true;
+    }
+
+    changeEpisode(selectedEpisode - 1);
+    setToast({
+      message: `Kembali ke EP.${selectedEpisode - 1}`,
+      tone: "info",
+    });
+    return true;
+  }
+
   function resolveTapZone(clientX: number) {
     const shell = playerStageRef.current;
 
@@ -709,6 +794,27 @@ export function VideoPlayer({
   }
 
   function handleSurfacePointerUp(event: PointerEvent<HTMLButtonElement>) {
+    const gesture = surfaceGestureRef.current;
+
+    if (gesture) {
+      const deltaX = event.clientX - gesture.startX;
+      const deltaY = event.clientY - gesture.startY;
+      surfaceGestureRef.current = null;
+
+      if (
+        Math.abs(deltaY) > Math.abs(deltaX) * 1.25 &&
+        handleVerticalSwipe(deltaY)
+      ) {
+        if (singleTapTimeoutRef.current) {
+          window.clearTimeout(singleTapTimeoutRef.current);
+          singleTapTimeoutRef.current = null;
+        }
+
+        lastTapRef.current = null;
+        return;
+      }
+    }
+
     const zone = resolveTapZone(event.clientX);
     const now = Date.now();
     const previousTap = lastTapRef.current;
@@ -751,6 +857,40 @@ export function VideoPlayer({
       lastTapRef.current = null;
       singleTapTimeoutRef.current = null;
     }, 220);
+  }
+
+  function handleSurfacePointerDown(event: PointerEvent<HTMLButtonElement>) {
+    surfaceGestureRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+    };
+  }
+
+  function handleSurfacePointerCancel() {
+    surfaceGestureRef.current = null;
+  }
+
+  function handleProgressInput(value: string) {
+    const nextTime = Number.parseFloat(value);
+
+    if (!Number.isFinite(nextTime)) {
+      return;
+    }
+
+    setScrubTimeSeconds(nextTime);
+    setCurrentTimeSeconds(nextTime);
+  }
+
+  function commitProgressInput(value: string) {
+    const nextTime = Number.parseFloat(value);
+
+    if (!Number.isFinite(nextTime)) {
+      setScrubTimeSeconds(null);
+      return;
+    }
+
+    seekTo(nextTime);
+    setScrubTimeSeconds(null);
   }
 
   async function handleShare() {
@@ -935,6 +1075,12 @@ export function VideoPlayer({
     };
   }, [selectedEpisode]);
 
+  const displayedTimeSeconds = scrubTimeSeconds ?? currentTimeSeconds;
+  const resolvedDurationSeconds = Number.isFinite(durationSeconds)
+    ? Math.max(0, durationSeconds)
+    : 0;
+  const progressMax = resolvedDurationSeconds > 0 ? resolvedDurationSeconds : 0;
+
   return (
     <div className="space-y-5">
       <div
@@ -956,7 +1102,9 @@ export function VideoPlayer({
 
             <button
               type="button"
+              onPointerDown={handleSurfacePointerDown}
               onPointerUp={handleSurfacePointerUp}
+              onPointerCancel={handleSurfacePointerCancel}
               className="absolute inset-0 z-10 cursor-pointer"
               aria-label="Toggle player controls"
             />
@@ -1061,6 +1209,39 @@ export function VideoPlayer({
                   )}
                   {isMuted ? "Unmute" : "Sound on"}
                 </button>
+              </div>
+
+              <div className="rounded-[1.4rem] border border-white/10 bg-black/40 px-3 py-3 backdrop-blur">
+                <div className="flex items-center gap-3">
+                  <Play className="size-3.5 shrink-0 text-white/70" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <label htmlFor={progressSliderId} className="sr-only">
+                      Geser durasi video
+                    </label>
+                    <input
+                      id={progressSliderId}
+                      type="range"
+                      min={0}
+                      max={progressMax}
+                      step={0.1}
+                      value={Math.min(displayedTimeSeconds, progressMax)}
+                      onChange={(event) => handleProgressInput(event.target.value)}
+                      onPointerUp={(event) => commitProgressInput(event.currentTarget.value)}
+                      onTouchEnd={(event) => commitProgressInput(event.currentTarget.value)}
+                      disabled={
+                        isLoading ||
+                        selectedEpisodeIsLocked ||
+                        !hasUnlockedEpisodes ||
+                        progressMax <= 0
+                      }
+                      className="h-2 w-full cursor-pointer appearance-none rounded-full bg-white/15 accent-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50"
+                    />
+                    <div className="flex items-center justify-between text-[11px] tabular-nums text-white/70">
+                      <span>{formatPlaybackTime(displayedTimeSeconds)}</span>
+                      <span>{formatPlaybackTime(resolvedDurationSeconds)}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="flex items-center justify-between gap-2 rounded-[1.4rem] border border-white/10 bg-black/40 px-3 py-3 backdrop-blur">
@@ -1396,6 +1577,16 @@ function applySubtitleSelection(player: Player, selectedSubtitle: string) {
         ? "showing"
         : "disabled";
   }
+}
+
+function formatPlaybackTime(value: number) {
+  const safeValue = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+  const minutes = Math.floor(safeValue / 60);
+  const seconds = safeValue % 60;
+
+  return `${minutes.toString().padStart(2, "0")}:${seconds
+    .toString()
+    .padStart(2, "0")}`;
 }
 
 function PlayerAction({
