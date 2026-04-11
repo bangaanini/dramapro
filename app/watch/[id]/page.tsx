@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   Clapperboard,
-  Flame,
   Layers3,
   Lock,
   Sparkles,

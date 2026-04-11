@@ -28,7 +28,7 @@ export function HomeHeroBanner({ items }: HomeHeroBannerProps) {
     "Drama paling ramai lintas provider dengan episode lengkap dan siap kamu putar sekarang.";
 
   return (
-    <section className="relative mt-10 overflow-hidden rounded-[2.2rem] border border-white/8 bg-black/30">
+    <section className="relative mt-4 overflow-hidden rounded-[1.7rem] border border-white/8 bg-black/30 sm:mt-6 sm:rounded-[2.2rem]">
       <div className="absolute inset-0">
         {featuredThumbUrl ? (
           <Image
@@ -45,9 +45,9 @@ export function HomeHeroBanner({ items }: HomeHeroBannerProps) {
         <div className="absolute inset-0 bg-[linear-gradient(105deg,rgba(9,7,7,0.94)_16%,rgba(9,7,7,0.68)_56%,rgba(9,7,7,0.84)_100%)]" />
       </div>
 
-      <div className="relative px-5 py-6 sm:px-7 sm:py-7 lg:px-8 lg:py-8">
+      <div className="relative px-4 py-4 sm:px-7 sm:py-7 lg:px-8 lg:py-8">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] lg:items-end">
-          <div className="space-y-5">
+          <div className="space-y-4 sm:space-y-5">
             <div className="flex flex-wrap items-center gap-2">
               <Badge className="border-accent/30 bg-accent-soft text-accent">
                 <Flame className="mr-2 size-3.5" />
@@ -62,10 +62,10 @@ export function HomeHeroBanner({ items }: HomeHeroBannerProps) {
               <p className="text-xs font-medium uppercase tracking-[0.28em] text-white/55">
                 Peringkat #1 lintas provider
               </p>
-              <h2 className="max-w-2xl text-3xl font-semibold tracking-tight text-white sm:text-4xl lg:text-5xl">
+              <h2 className="max-w-2xl text-2xl font-semibold tracking-tight text-white sm:text-4xl lg:text-5xl">
                 {featuredItem.title}
               </h2>
-              <p className="max-w-xl text-sm leading-7 text-white/72 sm:text-base">
+              <p className="max-w-xl text-sm leading-6 text-white/72 sm:text-base sm:leading-7">
                 {synopsis}
               </p>
             </div>
@@ -74,7 +74,7 @@ export function HomeHeroBanner({ items }: HomeHeroBannerProps) {
               <Link
                 href={featuredItem.href}
                 prefetch
-                className={cn(buttonVariants({ size: "lg" }), "h-11 rounded-full px-5")}
+                className={cn(buttonVariants({ size: "lg" }), "h-10 rounded-full px-4 sm:h-11 sm:px-5")}
               >
                 <PlayCircle className="mr-2 size-4.5" />
                 Lihat detail

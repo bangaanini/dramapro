@@ -1,6 +1,6 @@
 import { Sparkles } from "lucide-react";
 
-import { HomeFeedSection } from "@/components/home-feed-section";
+import { HomeFeedTabs } from "@/components/home-feed-tabs";
 import { HomeHeroBanner } from "@/components/home-hero-banner";
 import { Card, CardContent } from "@/components/ui/card";
 import type { HomeFeedEntry } from "@/lib/catalog-data";
@@ -41,29 +41,14 @@ export function HomeCatalogPanel({ data }: { data: HomeCatalogResponse }) {
           </Card>
         </section>
       ) : (
-        <>
-          <HomeFeedSection
-            title="Rekomendasi Untukmu"
-            description="Koleksi drama untukmu"
-            entries={data.homeEntries}
-            total={data.homeTotal}
-            source="home"
-          />
-          <HomeFeedSection
-            title="New Releases"
-            description="Drama terbaru."
-            entries={data.newEntries}
-            total={data.newTotal}
-            source="new"
-          />
-          <HomeFeedSection
-            title="Populer"
-            description="Drama populer"
-            entries={data.popularEntries}
-            total={data.popularTotal}
-            source="popular"
-          />
-        </>
+        <HomeFeedTabs
+          homeEntries={data.homeEntries}
+          homeTotal={data.homeTotal}
+          newEntries={data.newEntries}
+          newTotal={data.newTotal}
+          popularEntries={data.popularEntries}
+          popularTotal={data.popularTotal}
+        />
       )}
     </>
   );
