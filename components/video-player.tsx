@@ -740,14 +740,11 @@ export function VideoPlayer({
     }
 
     if (document.fullscreenElement && document.exitFullscreen) {
-      try {
-        await document.exitFullscreen();
-      } catch {
-        // Ignore fullscreen exit errors and continue back to detail.
-      }
+      void document.exitFullscreen().catch(() => undefined);
     }
 
-    router.push(`/watch/${internalDramaId}`, { scroll: false });
+    player?.pause();
+    router.replace(`/watch/${internalDramaId}`, { scroll: false });
   }
 
   function changeEpisode(nextEpisode: number) {

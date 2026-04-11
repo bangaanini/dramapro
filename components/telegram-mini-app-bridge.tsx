@@ -1,9 +1,16 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { safeSessionStorage } from "@/lib/safe-session-storage";
+
+type TelegramBackButton = {
+  show?: () => void;
+  hide?: () => void;
+  onClick?: (callback: () => void) => void;
+  offClick?: (callback: () => void) => void;
+};
 
 type TelegramWebApp = {
   initData?: string;
@@ -11,6 +18,7 @@ type TelegramWebApp = {
   expand?: () => void;
   setHeaderColor?: (color: string) => void;
   setBackgroundColor?: (color: string) => void;
+  BackButton?: TelegramBackButton;
 };
 
 declare global {
@@ -43,7 +51,7 @@ export function TelegramMiniAppBridge() {
   const searchParams = useSearchParams();
   const target = searchParams.get("tg_target");
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const webApp = window.Telegram?.WebApp;
 
     if (!webApp) {
@@ -69,7 +77,14 @@ export function TelegramMiniAppBridge() {
         return;
       }
 
-      router.replace(TARGET_ROUTES[target]);
+      window.history.replaceState(window.history.state, "", "/");
+
+      if (target === "home") {
+        router.replace("/");
+        return;
+      }
+
+      router.push(TARGET_ROUTES[target], { scroll: false });
     };
 
     if (cached?.initData === initData) {
@@ -111,6 +126,45 @@ export function TelegramMiniAppBridge() {
       cancelled = true;
     };
   }, [pathname, router, target]);
+
+  useEffect(() => {
+    const webApp = window.Telegram?.WebApp;
+    const backButton = webApp?.BackButton;
+
+    if (!webApp || !backButton) {
+      return;
+    }
+
+    const match = pathname.match(/^\/watch\/([^/]+)\/play$/);
+    const watchDetailPath = match ? `/watch/${match[1]}` : null;
+    const shouldShowBackButton = pathname !== "/";
+
+    const handleBack = () => {
+      if (watchDetailPath) {
+        router.replace(watchDetailPath, { scroll: false });
+        return;
+      }
+
+      if (window.history.length > 1) {
+        router.back();
+        return;
+      }
+
+      router.replace("/", { scroll: false });
+    };
+
+    if (shouldShowBackButton) {
+      backButton.show?.();
+      backButton.onClick?.(handleBack);
+    } else {
+      backButton.hide?.();
+    }
+
+    return () => {
+      backButton.offClick?.(handleBack);
+      backButton.hide?.();
+    };
+  }, [pathname, router]);
 
   return null;
 }

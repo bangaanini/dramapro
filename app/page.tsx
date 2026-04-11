@@ -54,6 +54,37 @@ export default async function HomePage(props: PageProps<"/">) {
   const searchParams = await props.searchParams;
   const referralCode =
     typeof searchParams.ref === "string" ? searchParams.ref.trim().toUpperCase() : "";
+  const telegramTarget =
+    typeof searchParams.tg_target === "string" ? searchParams.tg_target.trim() : "";
+
+  if (telegramTarget) {
+    return (
+      <main className="mx-auto flex min-h-screen w-full max-w-none flex-col px-0 py-0">
+        {referralCode ? <AffiliateCaptureEffect referralCode={referralCode} /> : null}
+        <div className="flex min-h-screen items-center justify-center px-6">
+          <div className="glass-panel w-full max-w-md rounded-[2rem] px-6 py-8 text-center">
+            <div className="mx-auto flex size-14 items-center justify-center rounded-2xl border border-accent/25 bg-accent-soft text-accent shadow-[0_18px_38px_rgba(255,122,69,0.22)]">
+              <span className="inline-flex size-3 rounded-full bg-current opacity-90" />
+            </div>
+            <p className="mt-5 text-xs uppercase tracking-[0.24em] text-accent/80">
+              Telegram Mini App
+            </p>
+            <h1 className="mt-3 text-2xl font-semibold tracking-tight text-white">
+              Menyiapkan halaman tujuanmu
+            </h1>
+            <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
+              Session Telegram sedang disinkronkan agar kamu langsung masuk ke menu yang dipilih tanpa login manual.
+            </p>
+            <div className="mt-6 flex items-center justify-center gap-2">
+              <span className="size-2 rounded-full bg-accent/90 animate-pulse" />
+              <span className="size-2 rounded-full bg-accent/60 animate-pulse [animation-delay:120ms]" />
+              <span className="size-2 rounded-full bg-accent/35 animate-pulse [animation-delay:240ms]" />
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   const catalogData = await getHomepageCatalogData();
   const structuredData = {
