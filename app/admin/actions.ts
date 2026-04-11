@@ -3,12 +3,18 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { Prisma } from "@/app/generated/prisma/client";
 import {
   authenticateAdmin,
   createAdminSession,
   getCurrentAdmin,
   deleteCurrentAdminSession,
 } from "@/lib/admin-auth";
+import { encryptPaymentSecret } from "@/lib/payment-crypto";
+import {
+  getPaymentGatewayDefinition,
+  isPaymentGatewayProvider,
+} from "@/lib/payment-gateways";
 import { prisma } from "@/lib/prisma";
 
 export async function loginAdminAction(formData: FormData) {
@@ -272,4 +278,135 @@ export async function updateAffiliateWithdrawalStatusAction(formData: FormData) 
   revalidatePath("/admin/affiliate-settings");
   revalidatePath("/affiliate");
   redirect("/admin/affiliate-settings?saved=1");
+}
+
+export async function savePaymentGatewayConfigAction(formData: FormData) {
+  await requireAdminSession();
+
+  const provider = String(formData.get("provider") ?? "").trim();
+
+  if (!isPaymentGatewayProvider(provider)) {
+    redirect("/admin/payment-gateways?error=Gateway%20tidak%20valid");
+  }
+
+  const definition = getPaymentGatewayDefinition(provider);
+
+  if (!definition) {
+    redirect("/admin/payment-gateways?error=Gateway%20tidak%20dikenali");
+  }
+
+  const displayName =
+    String(formData.get("displayName") ?? "").trim() || definition.displayName;
+  const isEnabled = String(formData.get("isEnabled") ?? "") === "on";
+  const defaultChannelCode =
+    String(formData.get("defaultChannelCode") ?? "qris").trim().toLowerCase() ||
+    "qris";
+  const merchantId = String(formData.get("merchantId") ?? "").trim();
+  const clientKey = String(formData.get("clientKey") ?? "").trim();
+  const secret = String(formData.get("secret") ?? "").trim();
+  const configJsonRaw = String(formData.get("configJson") ?? "").trim();
+
+  let configJson: Prisma.InputJsonValue | typeof Prisma.DbNull = Prisma.DbNull;
+
+  if (configJsonRaw) {
+    try {
+      configJson = JSON.parse(configJsonRaw) as Prisma.InputJsonValue;
+    } catch {
+      redirect("/admin/payment-gateways?error=Config%20JSON%20tidak%20valid");
+    }
+  }
+
+  const existing = await prisma.paymentGatewayConfig.findUnique({
+    where: { provider },
+    select: { secretCiphertext: true },
+  });
+
+  let secretCiphertext = existing?.secretCiphertext ?? null;
+
+  if (secret) {
+    try {
+      secretCiphertext = encryptPaymentSecret(secret);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Credential gateway gagal dienkripsi.";
+      redirect(
+        `/admin/payment-gateways?error=${encodeURIComponent(message)}`,
+      );
+    }
+  }
+
+  await prisma.paymentGatewayConfig.upsert({
+    where: { provider },
+    update: {
+      displayName,
+      isEnabled,
+      defaultChannelCode,
+      merchantId,
+      clientKey,
+      secretCiphertext,
+      configJson,
+      lastError: "",
+      lastValidatedAt: new Date(),
+    },
+    create: {
+      provider,
+      displayName,
+      isEnabled,
+      defaultChannelCode,
+      merchantId,
+      clientKey,
+      secretCiphertext,
+      configJson,
+      lastValidatedAt: new Date(),
+    },
+  });
+
+  revalidatePath("/admin/payment-gateways");
+  redirect("/admin/payment-gateways?saved=1");
+}
+
+export async function setActivePaymentGatewayAction(formData: FormData) {
+  await requireAdminSession();
+
+  const provider = String(formData.get("provider") ?? "").trim();
+
+  if (!isPaymentGatewayProvider(provider)) {
+    redirect("/admin/payment-gateways?error=Gateway%20checkout%20tidak%20valid");
+  }
+
+  const definition = getPaymentGatewayDefinition(provider);
+
+  if (!definition?.capability.implemented) {
+    redirect(
+      "/admin/payment-gateways?error=Gateway%20ini%20baru%20siap%20konfigurasi,%20belum%20bisa%20dipakai%20checkout",
+    );
+  }
+
+  const config = await prisma.paymentGatewayConfig.findUnique({
+    where: { provider },
+    select: {
+      isEnabled: true,
+    },
+  });
+
+  if (!config?.isEnabled && !(provider === "paymenku" && process.env.PAYMENKU_API_KEY)) {
+    redirect("/admin/payment-gateways?error=Aktifkan%20dan%20isi%20credential%20gateway%20terlebih%20dahulu");
+  }
+
+  await prisma.paymentGatewaySettings.upsert({
+    where: { id: "global" },
+    update: {
+      activeProvider: provider,
+    },
+    create: {
+      id: "global",
+      activeProvider: provider,
+    },
+  });
+
+  revalidatePath("/admin/payment-gateways");
+  revalidatePath("/vip");
+  redirect("/admin/payment-gateways?saved=1");
 }

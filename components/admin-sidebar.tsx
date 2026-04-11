@@ -40,6 +40,12 @@ const adminNavItems = [
     icon: BadgePercent,
   },
   {
+    href: "/admin/payment-gateways",
+    label: "Payment Gateway",
+    description: "Atur checkout dan credential",
+    icon: Crown,
+  },
+  {
     href: "/admin/sync",
     label: "Sync",
     description: "Jalankan sinkronisasi metadata",

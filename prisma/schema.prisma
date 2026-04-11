@@ -33,6 +33,14 @@ enum VipPaymentStatus {
   cancelled
 }
 
+enum PaymentGatewayProvider {
+  paymenku
+  xendit
+  midtrans
+  tripay
+  doku
+}
+
 enum AffiliateCommissionStatus {
   approved
   paid
@@ -188,11 +196,35 @@ model VipPricePlan {
   @@index([isActive, sortOrder])
 }
 
+model PaymentGatewaySettings {
+  id             String                 @id @default("global")
+  activeProvider PaymentGatewayProvider?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+}
+
+model PaymentGatewayConfig {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  provider           PaymentGatewayProvider @unique
+  displayName        String
+  isEnabled          Boolean                @default(false)
+  defaultChannelCode String                 @default("qris")
+  merchantId         String                 @default("")
+  clientKey          String                 @default("")
+  secretCiphertext   String?
+  configJson         Json?
+  lastError          String                 @default("")
+  lastValidatedAt    DateTime?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+}
+
 model VipPayment {
   id                    String           @id @default(uuid()) @db.Uuid
   userId                String           @db.Uuid
   vipPricePlanId        String           @db.Uuid
   referenceId           String           @unique
+  gatewayProvider       PaymentGatewayProvider @default(paymenku)
   providerTransactionId String?          @unique
   channelCode           String
   channelName           String           @default("")

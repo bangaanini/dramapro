@@ -55,24 +55,15 @@ export type PaymenkuStatusResponse = {
   message?: string;
 };
 
-function getPaymenkuApiKey() {
-  const apiKey = process.env.PAYMENKU_API_KEY?.trim();
-
-  if (!apiKey) {
-    throw new Error("PAYMENKU_API_KEY is not configured.");
-  }
-
-  return apiKey;
-}
-
 async function paymenkuFetch<T>(
+  apiKey: string,
   path: string,
   init?: RequestInit,
 ): Promise<T> {
   const response = await fetch(`${PAYMENKU_API_BASE}${path}`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${getPaymenkuApiKey()}`,
+      Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
       ...(init?.headers ?? {}),
     },
@@ -98,6 +89,12 @@ async function paymenkuFetch<T>(
 }
 
 export async function getPaymenkuPaymentChannels() {
+  const apiKey = process.env.PAYMENKU_API_KEY?.trim();
+
+  if (!apiKey) {
+    return [];
+  }
+
   const payload = await paymenkuFetch<
     | {
         status?: string;
@@ -114,7 +111,7 @@ export async function getPaymenkuPaymentChannels() {
         group?: string | null;
         fee?: string | null;
       }>
-  >("/payment-channels", {
+  >(apiKey, "/payment-channels", {
     method: "GET",
   });
 
@@ -135,9 +132,11 @@ export async function getPaymenkuPaymentChannels() {
 }
 
 export async function createPaymenkuTransaction(
+  apiKey: string,
   input: PaymenkuCreateTransactionInput,
 ) {
   return paymenkuFetch<PaymenkuCreateTransactionResponse>(
+    apiKey,
     "/transaction/create",
     {
       method: "POST",
@@ -146,8 +145,12 @@ export async function createPaymenkuTransaction(
   );
 }
 
-export async function checkPaymenkuTransactionStatus(orderIdOrReference: string) {
+export async function checkPaymenkuTransactionStatus(
+  apiKey: string,
+  orderIdOrReference: string,
+) {
   return paymenkuFetch<PaymenkuStatusResponse>(
+    apiKey,
     `/check-status/${encodeURIComponent(orderIdOrReference)}`,
     {
       method: "GET",

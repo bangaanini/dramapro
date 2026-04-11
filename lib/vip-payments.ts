@@ -4,13 +4,11 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { DEFAULT_AFFILIATE_SETTINGS, getAffiliateTier } from "@/lib/affiliate";
-import { prisma } from "@/lib/prisma";
 import {
-  checkPaymenkuTransactionStatus,
-  createPaymenkuTransaction,
-  normalizePaymenkuStatus,
-  parsePaymenkuAmount,
-} from "@/lib/paymenku";
+  checkGatewayTransactionStatus,
+  createActiveGatewayTransaction,
+} from "@/lib/payment-gateway-service";
+import { prisma } from "@/lib/prisma";
 import { getCurrentUser, resolveSafeRedirectPath } from "@/lib/user-auth";
 
 function buildReferenceId() {
@@ -124,17 +122,17 @@ export async function createVipPaymentSession(input: {
   const baseUrl = await getBaseUrl();
   const returnUrl = `${baseUrl}/vip/checkout/${referenceId}?next=${encodeURIComponent(safeNext)}`;
 
-  const payload = await createPaymenkuTransaction({
-    reference_id: referenceId,
+  const { gateway, result } = await createActiveGatewayTransaction({
+    referenceId,
     amount: plan.priceAmount,
-    customer_name: user.name,
-    customer_email: user.email,
-    channel_code: input.channelCode,
-    return_url: returnUrl,
+    customerName: user.name,
+    customerEmail: user.email,
+    channelCode: input.channelCode,
+    returnUrl,
   });
 
-  if (!payload.data?.pay_url) {
-    throw new Error(payload.message || "Paymenku tidak mengembalikan pay_url.");
+  if (!result.payUrl) {
+    throw new Error("Gateway pembayaran tidak mengembalikan pay_url.");
   }
 
   await prisma.vipPayment.create({
@@ -142,23 +140,20 @@ export async function createVipPaymentSession(input: {
       userId: user.id,
       vipPricePlanId: plan.id,
       referenceId,
-      providerTransactionId: payload.data.trx_id,
-      channelCode: input.channelCode,
-      channelName: input.channelCode.toUpperCase(),
+      gatewayProvider: gateway.provider,
+      providerTransactionId: result.providerTransactionId,
+      channelCode: result.channelCode,
+      channelName: result.channelName,
       amount: plan.priceAmount,
-      paidAmount: parsePaymenkuAmount(payload.data.amount),
+      paidAmount: result.amount,
       currency: plan.currency,
-      status: normalizePaymenkuStatus(
-        payload.data.payment_info?.transaction_status ?? payload.data.status,
-      ),
-      payUrl: payload.data.pay_url,
-      qrUrl: payload.data.payment_info?.qr_url,
-      qrString: payload.data.payment_info?.qr_string,
+      status: result.status,
+      payUrl: result.payUrl,
+      qrUrl: result.qrUrl,
+      qrString: result.qrString,
       returnUrl,
-      expiresAt: payload.data.payment_info?.expiration_date
-        ? new Date(payload.data.payment_info.expiration_date)
-        : null,
-      providerPayload: payload as unknown as object,
+      expiresAt: result.expiresAt,
+      providerPayload: result.providerPayload,
       lastCheckedAt: new Date(),
     },
   });
@@ -188,17 +183,15 @@ export async function syncVipPaymentStatus(referenceId: string, userId: string) 
     return null;
   }
 
-  const payload = await checkPaymenkuTransactionStatus(
+  const payload = await checkGatewayTransactionStatus(
+    payment.gatewayProvider as
+      | "paymenku"
+      | "xendit"
+      | "midtrans"
+      | "tripay"
+      | "doku",
     payment.providerTransactionId || payment.referenceId,
   );
-
-  const nextStatus = normalizePaymenkuStatus(
-    payload.data?.payment_info?.transaction_status ?? payload.data?.status,
-  );
-  const nextPaidAmount = parsePaymenkuAmount(payload.data?.amount);
-  const expiresAt = payload.data?.payment_info?.expiration_date
-    ? new Date(payload.data.payment_info.expiration_date)
-    : payment.expiresAt;
 
   return prisma.$transaction(async (tx) => {
     const latestPayment = await tx.vipPayment.findUnique({
@@ -223,19 +216,19 @@ export async function syncVipPaymentStatus(referenceId: string, userId: string) 
       where: { id: latestPayment.id },
       data: {
         providerTransactionId:
-          payload.data?.trx_id || latestPayment.providerTransactionId,
-        status: nextStatus,
-        paidAmount: nextPaidAmount ?? latestPayment.paidAmount,
-        payUrl: payload.data?.pay_url || latestPayment.payUrl,
-        qrUrl: payload.data?.payment_info?.qr_url || latestPayment.qrUrl,
-        qrString: payload.data?.payment_info?.qr_string || latestPayment.qrString,
-        expiresAt,
-        statusPayload: payload as unknown as object,
+          payload.providerTransactionId || latestPayment.providerTransactionId,
+        status: payload.status,
+        paidAmount: payload.amount ?? latestPayment.paidAmount,
+        payUrl: payload.payUrl || latestPayment.payUrl,
+        qrUrl: payload.qrUrl || latestPayment.qrUrl,
+        qrString: payload.qrString || latestPayment.qrString,
+        expiresAt: payload.expiresAt ?? latestPayment.expiresAt,
+        statusPayload: payload.providerPayload,
         lastCheckedAt: new Date(),
       },
     });
 
-    if (nextStatus === "paid" && !latestPayment.activatedAt) {
+    if (payload.status === "paid" && !latestPayment.activatedAt) {
       const now = new Date();
       const currentExpiry =
         latestPayment.user.vipExpiresAt &&

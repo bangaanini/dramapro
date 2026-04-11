@@ -7,6 +7,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
+import { createVipCheckoutAction } from "@/app/vip/actions";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +22,8 @@ export const dynamic = "force-dynamic";
 
 export default async function VipPage(props: PageProps<"/vip">) {
   const searchParams = await props.searchParams;
+  const error =
+    typeof searchParams.error === "string" ? searchParams.error : null;
   const next = resolveSafeRedirectPath(
     typeof searchParams.next === "string" ? searchParams.next : "/vip",
   );
@@ -100,6 +103,12 @@ export default async function VipPage(props: PageProps<"/vip">) {
       </section>
 
       <section className="mt-8 grid gap-5 lg:grid-cols-3">
+        {error ? (
+          <div className="lg:col-span-3 rounded-[1.6rem] border border-red-400/20 bg-red-500/10 px-5 py-4 text-sm text-red-100">
+            {error}
+          </div>
+        ) : null}
+
         {plans.length > 0 ? (
           plans.map((plan) => {
             const isFeatured = featuredPlan?.id === plan.id;
@@ -147,7 +156,7 @@ export default async function VipPage(props: PageProps<"/vip">) {
                       "Buka semua episode premium",
                       "Akses lebih cepat ke konten VIP",
                       "Kualitas stream terbaik",
-                      "Checkout gateway akan segera aktif",
+                      "Checkout QRIS langsung otomatis",
                     ].map((feature) => (
                       <div
                         key={feature}
@@ -162,18 +171,22 @@ export default async function VipPage(props: PageProps<"/vip">) {
                   </div>
 
                   {user ? (
-                    <Link
-                      href={`/vip/checkout?plan=${encodeURIComponent(plan.id)}&next=${encodeURIComponent(next)}`}
-                      className={cn(
-                        buttonVariants({ size: "lg" }),
-                        "h-12 w-full rounded-2xl",
-                        isFeatured &&
-                          "bg-[linear-gradient(180deg,#ffd05a,#f4ae16)] text-[#392100] hover:brightness-105",
-                      )}
-                    >
-                      <Crown className="mr-2 size-4" />
-                      {userHasVip ? "Perpanjang VIP" : "Pilih paket"}
-                    </Link>
+                    <form action={createVipCheckoutAction}>
+                      <input type="hidden" name="planId" value={plan.id} />
+                      <input type="hidden" name="next" value={next} />
+                      <button
+                        type="submit"
+                        className={cn(
+                          buttonVariants({ size: "lg" }),
+                          "h-12 w-full rounded-2xl",
+                          isFeatured &&
+                            "bg-[linear-gradient(180deg,#ffd05a,#f4ae16)] text-[#392100] hover:brightness-105",
+                        )}
+                      >
+                        <Crown className="mr-2 size-4" />
+                        {userHasVip ? "Perpanjang VIP" : "Beli VIP sekarang"}
+                      </button>
+                    </form>
                   ) : (
                     <Link
                       href={`/sign-in?next=${encodeURIComponent(next)}`}
@@ -256,8 +269,8 @@ export default async function VipPage(props: PageProps<"/vip">) {
 
             <div className="space-y-3 text-sm leading-6 text-[var(--muted)]">
               <p>1. Masuk atau buat akun terlebih dahulu.</p>
-              <p>2. Pilih paket VIP yang paling cocok.</p>
-              <p>3. Bayar lewat Paymenku, lalu refresh status untuk aktivasi otomatis.</p>
+              <p>2. Klik paket VIP yang paling cocok.</p>
+              <p>3. QRIS akan langsung tampil dan status pembayaran dipantau otomatis.</p>
             </div>
 
             <div className="space-y-3">
