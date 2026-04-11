@@ -6,13 +6,15 @@ import {
   Clapperboard,
   Layers3,
   Lock,
+  Share2,
   Sparkles,
 } from "lucide-react";
 import { notFound } from "next/navigation";
 
+import { DramaDetailShareButton } from "@/components/drama-detail-share-button";
 import { PlayDramaButton } from "@/components/play-drama-button";
 import { SiteFooter } from "@/components/site-footer";
-import { SiteHeader } from "@/components/site-header";
+
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -163,6 +165,7 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
   });
 
   const playHref = `/watch/${drama.id}/play?episode=${preferredInitialEpisode}`;
+  const shareUrl = absoluteUrl(`/watch/${drama.id}`);
   const structuredData = {
     "@context": "https://schema.org",
     "@graph": [
@@ -203,8 +206,6 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
         suppressHydrationWarning
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
       />
-
-      <SiteHeader current="watch" />
 
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)] lg:items-start">
         <Card className="glass-panel overflow-hidden rounded-[2.2rem] border-white/10">
@@ -253,6 +254,7 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
                       "h-12 rounded-full px-6",
                     )}
                   />
+                  <DramaDetailShareButton title={drama.title} shareUrl={shareUrl} />
                   <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-4 py-2 text-sm text-white/75 backdrop-blur">
                     <Clapperboard className="size-4 text-accent" />
                     {drama.episodeCount} episode
@@ -266,16 +268,20 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
         <div className="space-y-5">
           <Card className="glass-panel rounded-[2rem] border-white/10">
             <CardContent className="space-y-4 p-6">
-              <div className="grid gap-3 rounded-[1.6rem] border border-white/10 bg-black/18 p-4 text-sm sm:grid-cols-3">
-                <div className="flex items-center gap-3 text-white">
-                  <Clapperboard className="size-4 text-accent" />
-                  <span>{drama.episodeCount} episode</span>
+                <div className="grid gap-3 rounded-[1.6rem] border border-white/10 bg-black/18 p-4 text-sm sm:grid-cols-3">
+                  <div className="flex items-center gap-3 text-white">
+                    <Clapperboard className="size-4 text-accent" />
+                    <span>{drama.episodeCount} episode</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-white">
+                    <Layers3 className="size-4 text-accent" />
+                    <span>{drama.watchValue || "Fresh sync"}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-white">
+                    <Share2 className="size-4 text-accent" />
+                    <span>Bagikan ke Telegram</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3 text-white">
-                  <Layers3 className="size-4 text-accent" />
-                  <span>{drama.watchValue || "Fresh sync"}</span>
-                </div>
-              </div>
 
               {vipLockFromEpisode ? (
                 <div className="rounded-[1.4rem] border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">

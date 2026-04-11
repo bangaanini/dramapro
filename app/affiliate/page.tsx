@@ -7,7 +7,7 @@ import { requestAffiliateWithdrawalAction } from "@/app/affiliate/actions";
 import { AffiliateLinkCard } from "@/components/affiliate-link-card";
 import { FormSubmitButton } from "@/components/form-submit-button";
 import { SiteFooter } from "@/components/site-footer";
-import { SiteHeader } from "@/components/site-header";
+
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -171,7 +171,7 @@ export default async function AffiliatePage(props: PageProps<"/affiliate">) {
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-6 sm:px-6 lg:px-8">
-      <SiteHeader current="account" />
+
 
       <div className="mt-6 flex items-center gap-3">
         <Badge className="border-accent/30 bg-accent-soft text-accent">

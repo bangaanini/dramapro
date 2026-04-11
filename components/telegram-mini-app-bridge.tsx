@@ -4,30 +4,7 @@ import { useEffect, useLayoutEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { safeSessionStorage } from "@/lib/safe-session-storage";
-
-type TelegramBackButton = {
-  show?: () => void;
-  hide?: () => void;
-  onClick?: (callback: () => void) => void;
-  offClick?: (callback: () => void) => void;
-};
-
-type TelegramWebApp = {
-  initData?: string;
-  ready?: () => void;
-  expand?: () => void;
-  setHeaderColor?: (color: string) => void;
-  setBackgroundColor?: (color: string) => void;
-  BackButton?: TelegramBackButton;
-};
-
-declare global {
-  interface Window {
-    Telegram?: {
-      WebApp?: TelegramWebApp;
-    };
-  }
-}
+import "@/lib/telegram-web-app";
 
 const TELEGRAM_SESSION_CACHE_KEY = "dramapro.telegram.session.v1";
 const TELEGRAM_REF_CAPTURE_PREFIX = "dramapro.telegram.ref.";
