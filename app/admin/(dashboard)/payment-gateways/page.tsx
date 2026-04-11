@@ -112,6 +112,7 @@ export default async function AdminPaymentGatewaysPage(
                       type="submit"
                       variant={isActive ? "secondary" : "default"}
                       disabled={!gateway.capability.implemented}
+                      className="w-full sm:w-auto"
                     >
                       {isActive ? "Sedang aktif" : "Jadikan checkout aktif"}
                     </Button>

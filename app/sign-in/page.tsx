@@ -36,15 +36,14 @@ export default async function SignInPage(props: PageProps<"/sign-in">) {
             <div className="space-y-3">
               <Badge className="border-accent/30 bg-accent-soft text-accent">
                 <Sparkles className="mr-2 size-3.5" />
-                User account access
+                User account
               </Badge>
               <div>
                 <h1 className="text-3xl font-semibold tracking-tight text-white">
                   Sign in
                 </h1>
                 <p className="mt-2 text-sm leading-7 text-[var(--muted)]">
-                  Masuk untuk mulai menyimpan drama favorit dan menyiapkan riwayat
-                  tontonan akunmu.
+                  Masuk untuk mulai menonton drama favoritmu.
                 </p>
               </div>
             </div>

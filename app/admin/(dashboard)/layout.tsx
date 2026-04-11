@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { ChevronLeft, LogOut } from "lucide-react";
+import { ChevronLeft, LogOut, ShieldCheck, Sparkles } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { logoutAdminAction } from "@/app/admin/actions";
 import { AdminSidebar } from "@/components/admin-sidebar";
+import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { getCurrentAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
@@ -28,22 +29,81 @@ export default async function AdminDashboardLayout({
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <Link href="/" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <Link
+          href="/"
+          className={buttonVariants({ variant: "ghost", size: "sm" })}
+        >
           <ChevronLeft className="mr-2 size-4" />
           Back to catalog
         </Link>
 
-        <form action={logoutAdminAction}>
-          <button className={buttonVariants({ variant: "secondary", size: "sm" })}>
+        <form action={logoutAdminAction} className="w-full sm:w-auto">
+          <button
+            className={buttonVariants({ variant: "secondary", size: "sm" })}
+          >
             <LogOut className="mr-2 size-4" />
             Logout
           </button>
         </form>
       </div>
 
+      <section className="relative mb-6 overflow-hidden rounded-[2.3rem] border border-white/10 bg-[linear-gradient(180deg,rgba(43,29,24,0.96),rgba(18,13,12,0.96))] px-5 py-6 shadow-[0_28px_90px_rgba(0,0,0,0.34)] sm:px-6">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,140,92,0.18),transparent_30%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_right,rgba(255,204,120,0.12),transparent_28%)]" />
+
+        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <Badge className="border-accent/30 bg-accent-soft text-accent">
+              <ShieldCheck className="mr-2 size-3.5" />
+              DramaPro Control Room
+            </Badge>
+            <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+              Dashboard admin yang lebih cepat, rapi, dan nyaman dipakai lintas device.
+            </h1>
+            <p className="mt-3 text-sm leading-7 text-[var(--muted)] sm:text-base">
+              Kelola user, VIP, affiliate, pembayaran, dan sinkronisasi provider
+              dari satu shell admin yang sekarang lebih responsif untuk mobile
+              maupun desktop.
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-[1.5rem] border border-white/10 bg-black/20 px-4 py-4">
+              <div className="flex items-center gap-2 text-[var(--muted-foreground)]">
+                <Sparkles className="size-4 text-accent" />
+                <span className="text-xs uppercase tracking-[0.18em]">
+                  Pending review
+                </span>
+              </div>
+              <p className="mt-2 text-2xl font-semibold text-white">
+                {pendingAffiliateWithdrawals}
+              </p>
+              <p className="mt-1 text-sm text-[var(--muted)]">
+                withdrawal affiliate menunggu tindakan
+              </p>
+            </div>
+
+            <div className="rounded-[1.5rem] border border-white/10 bg-black/20 px-4 py-4">
+              <div className="flex items-center gap-2 text-[var(--muted-foreground)]">
+                <ShieldCheck className="size-4 text-accent" />
+                <span className="text-xs uppercase tracking-[0.18em]">
+                  Admin aktif
+                </span>
+              </div>
+              <p className="mt-2 text-lg font-semibold text-white">
+                {admin.name}
+              </p>
+              <p className="mt-1 truncate text-sm text-[var(--muted)]">
+                {admin.email}
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
-        <div className="lg:sticky lg:top-6 lg:self-start">
+        <div className="min-w-0 lg:sticky lg:top-6 lg:self-start">
           <AdminSidebar
             adminName={admin.name}
             adminEmail={admin.email}
@@ -51,7 +111,7 @@ export default async function AdminDashboardLayout({
           />
         </div>
 
-        <section className="space-y-6">{children}</section>
+        <section className="min-w-0 space-y-6">{children}</section>
       </div>
     </main>
   );

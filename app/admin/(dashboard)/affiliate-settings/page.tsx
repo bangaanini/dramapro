@@ -252,7 +252,7 @@ export default async function AdminAffiliateSettingsPage(
                         ) : null}
                       </div>
 
-                      <div className="mt-4 flex gap-2">
+                      <div className="mt-4 flex flex-wrap gap-2">
                         <form action={updateAffiliateWithdrawalStatusAction}>
                           <input type="hidden" name="id" value={item.id} />
                           <input type="hidden" name="nextStatus" value="approved" />
@@ -430,7 +430,7 @@ function TierSummary({
   rate: number;
 }) {
   return (
-    <div className="flex items-center justify-between rounded-[1.3rem] border border-white/10 bg-black/20 px-4 py-3">
+    <div className="flex flex-col gap-1 rounded-[1.3rem] border border-white/10 bg-black/20 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <span className="font-medium text-white">{label}</span>
       <span className="text-[var(--muted)]">
         {referrals}+ referral aktif • {rate}%

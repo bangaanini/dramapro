@@ -1,16 +1,21 @@
+import type { Metadata } from "next";
+import { cache } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Clapperboard, Flame, Layers3, Sparkles } from "lucide-react";
 import { notFound } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
-
 import { Card, CardContent } from "@/components/ui/card";
-
 import { SiteFooter } from "@/components/site-footer";
-
 import { VideoPlayer } from "@/components/video-player";
 import { prisma } from "@/lib/prisma";
+import {
+  DEFAULT_OG_IMAGE,
+  SITE_NAME,
+  absoluteUrl,
+  toSeoDescription,
+} from "@/lib/site";
 import { getCurrentUser } from "@/lib/user-auth";
 import {
   normalizeDisplayImageUrl,
@@ -24,14 +29,68 @@ import {
 
 export const dynamic = "force-dynamic";
 
+const getDramaById = cache(async (id: string) =>
+  prisma.drama.findUnique({
+    where: { id },
+  }),
+);
+
+export async function generateMetadata(
+  props: PageProps<"/watch/[id]">,
+): Promise<Metadata> {
+  const { id } = await props.params;
+  const drama = await getDramaById(id);
+
+  if (!drama) {
+    return {
+      title: "Drama tidak ditemukan",
+      robots: {
+        index: false,
+        follow: false,
+      },
+    };
+  }
+
+  const description = toSeoDescription(
+    drama.description,
+    `${drama.title} dari ${drama.providerName} dengan ${drama.episodeCount} episode di ${SITE_NAME}.`,
+  );
+  const image = normalizeDisplayImageUrl(drama.thumbUrl) || DEFAULT_OG_IMAGE;
+
+  return {
+    title: drama.title,
+    description,
+    keywords: [drama.title, drama.providerName, ...drama.tags].slice(0, 12),
+    alternates: {
+      canonical: `/watch/${drama.id}`,
+    },
+    openGraph: {
+      type: "website",
+      title: drama.title,
+      description,
+      url: `/watch/${drama.id}`,
+      images: [
+        {
+          url: image,
+          alt: drama.title,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: drama.title,
+      description,
+      images: [image],
+    },
+  };
+}
+
 export default async function WatchPage(props: PageProps<"/watch/[id]">) {
   const { id } = await props.params;
   const user = await getCurrentUser();
 
   const [drama, favorite, watchHistory, vipSettings] = await Promise.all([
-    prisma.drama.findUnique({
-      where: { id },
-    }),
+    getDramaById(id),
     user
       ? prisma.favoriteDrama.findUnique({
           where: {
@@ -71,6 +130,11 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
   }
 
   const dramaThumbUrl = normalizeDisplayImageUrl(drama.thumbUrl);
+  const dramaImage = dramaThumbUrl || DEFAULT_OG_IMAGE;
+  const watchPageDescription = toSeoDescription(
+    drama.description,
+    `${drama.title} dari ${drama.providerName} dengan ${drama.episodeCount} episode di ${SITE_NAME}.`,
+  );
   const vipLockFromEpisode = isVipActive(user?.vipExpiresAt)
     ? null
     : getVipLockStartEpisode(vipSettings);
@@ -102,8 +166,51 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
     take: 6,
   });
 
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: "Home",
+            item: absoluteUrl("/"),
+          },
+          {
+            "@type": "ListItem",
+            position: 2,
+            name: drama.title,
+            item: absoluteUrl(`/watch/${drama.id}`),
+          },
+        ],
+      },
+      {
+        "@type": "TVSeries",
+        name: drama.title,
+        description: watchPageDescription,
+        image: absoluteUrl(dramaImage),
+        url: absoluteUrl(`/watch/${drama.id}`),
+        inLanguage: "id-ID",
+        numberOfEpisodes: drama.episodeCount > 0 ? drama.episodeCount : undefined,
+        genre: drama.tags.length > 0 ? drama.tags : undefined,
+        publisher: {
+          "@type": "Organization",
+          name: SITE_NAME,
+          url: absoluteUrl("/"),
+        },
+      },
+    ],
+  };
+
   return (
     <main className="mx-auto min-h-screen w-full max-w-7xl px-0 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:py-5 lg:px-8">
+      <script
+        type="application/ld+json"
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+      />
 
       <section className="grid gap-6 sm:gap-8 xl:grid-cols-[minmax(0,460px)_minmax(0,1fr)] xl:items-start">
         <div className="px-4 sm:px-0 xl:sticky xl:top-6">
@@ -202,8 +309,6 @@ export default async function WatchPage(props: PageProps<"/watch/[id]">) {
               </div>
             </CardContent>
           </Card>
-
-
 
           {drama.tags.length > 0 ? (
             <Card className="glass-panel rounded-[2rem] border-white/10">
