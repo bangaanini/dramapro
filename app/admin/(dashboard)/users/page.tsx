@@ -3,6 +3,7 @@ import { Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
+import { isVipActive } from "@/lib/vip";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,7 @@ export default async function AdminUsersPage() {
       },
     }),
   ]);
+  const premiumUsers = users.filter((user) => isVipActive(user.vipExpiresAt)).length;
 
   return (
     <div className="space-y-6">
@@ -53,8 +55,9 @@ export default async function AdminUsersPage() {
           pengguna dari satu tabel admin.
         </p>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        <div className="mt-5 grid gap-3 sm:grid-cols-4">
           <StatCard label="Total user" value={String(totalUsers)} />
+          <StatCard label="User premium" value={String(premiumUsers)} />
           <StatCard label="Sesi aktif" value={String(activeSessions)} />
           <StatCard
             label="Baris ditampilkan"
@@ -70,6 +73,7 @@ export default async function AdminUsersPage() {
               <thead className="border-b border-white/10 bg-white/4 text-[var(--muted)]">
                 <tr>
                   <th className="px-5 py-4 font-medium">User</th>
+                  <th className="px-5 py-4 font-medium">Status</th>
                   <th className="px-5 py-4 font-medium">Favorit</th>
                   <th className="px-5 py-4 font-medium">Riwayat</th>
                   <th className="px-5 py-4 font-medium">Sesi</th>
@@ -78,28 +82,50 @@ export default async function AdminUsersPage() {
               </thead>
               <tbody>
                 {users.length > 0 ? (
-                  users.map((user) => (
-                    <tr key={user.id} className="border-b border-white/6 last:border-b-0">
-                      <td className="px-5 py-4">
-                        <div>
-                          <p className="font-semibold text-white">{user.name}</p>
-                          <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-                            {user.email}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 text-white">{user._count.favorites}</td>
-                      <td className="px-5 py-4 text-white">{user._count.watchHistory}</td>
-                      <td className="px-5 py-4 text-white">{user._count.sessions}</td>
-                      <td className="px-5 py-4 text-[var(--muted)]">
-                        {formatDate(user.createdAt)}
-                      </td>
-                    </tr>
-                  ))
+                  users.map((user) => {
+                    const hasActiveVip = isVipActive(user.vipExpiresAt);
+
+                    return (
+                      <tr key={user.id} className="border-b border-white/6 last:border-b-0">
+                        <td className="px-5 py-4">
+                          <div>
+                            <p className="font-semibold text-white">{user.name}</p>
+                            <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                              {user.email}
+                            </p>
+                          </div>
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="space-y-2">
+                            <Badge
+                              className={
+                                hasActiveVip
+                                  ? "border-amber-400/20 bg-amber-500/12 text-amber-100"
+                                  : "border-white/12 bg-white/6 text-white"
+                              }
+                            >
+                              {hasActiveVip ? "Premium" : "Free"}
+                            </Badge>
+                            {hasActiveVip && user.vipExpiresAt ? (
+                              <p className="text-xs text-[var(--muted-foreground)]">
+                                Aktif sampai {formatDate(user.vipExpiresAt)}
+                              </p>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 text-white">{user._count.favorites}</td>
+                        <td className="px-5 py-4 text-white">{user._count.watchHistory}</td>
+                        <td className="px-5 py-4 text-white">{user._count.sessions}</td>
+                        <td className="px-5 py-4 text-[var(--muted)]">
+                          {formatDate(user.createdAt)}
+                        </td>
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
                     <td
-                      colSpan={5}
+                      colSpan={6}
                       className="px-5 py-10 text-center text-[var(--muted)]"
                     >
                       Belum ada user terdaftar.

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import {
   ChevronRight,
   CircleHelp,
+  Crown,
   Download,
   Gem,
   History,
@@ -20,12 +21,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { safeSessionStorage } from "@/lib/safe-session-storage";
+import { isVipActive } from "@/lib/vip";
 
 type ProfileOverviewProps = {
   user: {
     id: string;
     name: string;
     email: string;
+    vipStartedAt: string | null;
+    vipExpiresAt: string | null;
   };
 };
 
@@ -34,6 +38,8 @@ type ProfileResponse = {
     id: string;
     name: string;
     email: string;
+    vipStartedAt: string | null;
+    vipExpiresAt: string | null;
   };
   favoritesCount: number;
   historyCount: number;
@@ -127,11 +133,24 @@ export function ProfileOverview({ user }: ProfileOverviewProps) {
   const displayUser = profileData?.user ?? user;
   const favoritesCount = profileData?.favoritesCount ?? 0;
   const historyCount = profileData?.historyCount ?? 0;
+  const vipExpiresAt = displayUser.vipExpiresAt
+    ? new Date(displayUser.vipExpiresAt)
+    : null;
+  const vipStartedAt = displayUser.vipStartedAt
+    ? new Date(displayUser.vipStartedAt)
+    : null;
+  const hasActiveVip = isVipActive(vipExpiresAt);
   const initials = displayUser.name
     .split(/\s+/)
     .map((part) => part[0]?.toUpperCase() ?? "")
     .slice(0, 2)
     .join("");
+  const vipRemainingDays = hasActiveVip && vipExpiresAt
+    ? Math.max(
+        1,
+        Math.ceil((vipExpiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
+      )
+    : 0;
 
   return (
     <>
@@ -181,20 +200,56 @@ export function ProfileOverview({ user }: ProfileOverviewProps) {
 
           <div className="mt-4 rounded-[1.6rem] border border-white/10 bg-black/18 p-4">
             <div className="space-y-2">
-              <Badge className="border-white/12 bg-white/8 text-white">
-                <Gem className="mr-2 size-3.5" />
-                DramaPro VIP
+              <Badge
+                className={
+                  hasActiveVip
+                    ? "border-amber-400/20 bg-amber-500/12 text-amber-100"
+                    : "border-white/12 bg-white/8 text-white"
+                }
+              >
+                {hasActiveVip ? (
+                  <Crown className="mr-2 size-3.5" />
+                ) : (
+                  <Gem className="mr-2 size-3.5" />
+                )}
+                {hasActiveVip ? "DramaPro Premium Aktif" : "DramaPro VIP"}
               </Badge>
               <p className="text-sm leading-7 text-white/72">
-                Aktifkan VIP untuk membuka semua episode, akses prioritas, dan
-                pengalaman menonton tanpa batas.
+                {hasActiveVip
+                  ? "Akunmu sedang premium. Semua episode VIP sudah terbuka dan masa aktifmu masih berjalan."
+                  : "Aktifkan VIP untuk membuka semua episode, akses prioritas, dan pengalaman menonton tanpa batas."}
               </p>
             </div>
+
+            {hasActiveVip && vipExpiresAt ? (
+              <div className="mt-4 rounded-[1.4rem] border border-amber-400/15 bg-amber-500/8 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-amber-100/70">
+                      Masa aktif VIP
+                    </p>
+                    <p className="mt-2 text-lg font-semibold text-white">
+                      {formatLongDate(vipExpiresAt)}
+                    </p>
+                  </div>
+                  <Badge className="border-emerald-400/20 bg-emerald-500/12 px-3 py-1.5 text-emerald-100">
+                    {vipRemainingDays} hari lagi
+                  </Badge>
+                </div>
+
+                {vipStartedAt ? (
+                  <p className="mt-3 text-xs leading-6 text-white/56">
+                    Premium aktif sejak {formatLongDate(vipStartedAt)}.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
             <Link
               href="/vip?next=/profile"
               className="mt-4 inline-flex w-full items-center justify-center rounded-2xl bg-[linear-gradient(180deg,#ffc62d,#f2a501)] px-4 py-3 text-sm font-semibold text-[#2d1800] shadow-[0_18px_40px_rgba(255,198,45,0.22)] transition hover:brightness-105"
             >
-              Aktifkan VIP
+              {hasActiveVip ? "Perpanjang VIP" : "Aktifkan VIP"}
             </Link>
           </div>
         </div>
@@ -253,4 +308,11 @@ export function ProfileOverview({ user }: ProfileOverviewProps) {
       </section>
     </>
   );
+}
+
+function formatLongDate(value: Date) {
+  return new Intl.DateTimeFormat("id-ID", {
+    dateStyle: "long",
+    timeStyle: "short",
+  }).format(value);
 }

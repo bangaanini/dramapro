@@ -20,6 +20,8 @@ export default async function ProfilePage() {
           id: user.id,
           name: user.name,
           email: user.email,
+          vipStartedAt: user.vipStartedAt ? user.vipStartedAt.toISOString() : null,
+          vipExpiresAt: user.vipExpiresAt ? user.vipExpiresAt.toISOString() : null,
         }}
       />
 
