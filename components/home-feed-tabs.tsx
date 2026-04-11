@@ -110,10 +110,10 @@ export function HomeFeedTabs({
   });
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const feedsRef = useRef(feeds);
-  const lastRequestedOffsetRef = useRef<Record<FeedTabKey, number | null>>({
-    home: null,
-    new: null,
-    popular: null,
+  const inFlightRef = useRef<Record<FeedTabKey, boolean>>({
+    home: false,
+    new: false,
+    popular: false,
   });
 
   useEffect(() => {
@@ -186,7 +186,7 @@ export function HomeFeedTabs({
 
   const loadMore = useCallback(async (tabKey: FeedTabKey) => {
     const currentFeedState = feedsRef.current[tabKey];
-    const requestOffset = currentFeedState.nextOffset;
+    const requestOffset = currentFeedState.entries.length;
 
     if (
       currentFeedState.isLoading ||
@@ -195,11 +195,11 @@ export function HomeFeedTabs({
       return;
     }
 
-    if (lastRequestedOffsetRef.current[tabKey] === requestOffset) {
+    if (inFlightRef.current[tabKey]) {
       return;
     }
 
-    lastRequestedOffsetRef.current[tabKey] = requestOffset;
+    inFlightRef.current[tabKey] = true;
 
     setFeeds((current) => ({
       ...current,
@@ -215,6 +215,7 @@ export function HomeFeedTabs({
         `/api/catalog/feed?source=${encodeURIComponent(tabKey)}&offset=${requestOffset}&limit=${FEED_PAGE_SIZE}`,
         {
           credentials: "same-origin",
+          cache: "no-store",
         },
       );
 
@@ -239,15 +240,14 @@ export function HomeFeedTabs({
           [tabKey]: {
             entries: mergedEntries,
             total: nextPage.total,
-            nextOffset: nextPage.nextOffset,
-            hasMore: nextPage.hasMore,
+            nextOffset: mergedEntries.length,
+            hasMore: mergedEntries.length < nextPage.total,
             isLoading: false,
             error: null,
           },
         };
       });
     } catch (loadError) {
-      lastRequestedOffsetRef.current[tabKey] = null;
       setFeeds((current) => ({
         ...current,
         [tabKey]: {
@@ -259,6 +259,8 @@ export function HomeFeedTabs({
               : "Gagal memuat katalog berikutnya.",
         },
       }));
+    } finally {
+      inFlightRef.current[tabKey] = false;
     }
   }, []);
 
