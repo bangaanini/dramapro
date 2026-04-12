@@ -359,7 +359,16 @@ Telegram settings:
 - webhook secret,
 - support URL,
 - Mini App URL,
-- site/public URL.
+- site/public URL,
+- kalimat sambutan bot `/start`,
+- label tombol inline,
+- URL tombol inline seperti channel drama, channel movie, support, atau link custom.
+
+Catatan tombol Mini App:
+
+- Tombol `Buka`, `Cari Judul`, `Gabung Affiliate`, dan `Join VIP` boleh dikosongkan URL-nya.
+- Jika URL dikosongkan, sistem otomatis memakai target Mini App internal yang benar.
+- Gunakan placeholder `{name}` dan `{siteName}` di kalimat sambutan bot.
 
 SEO settings:
 

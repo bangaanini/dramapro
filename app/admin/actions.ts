@@ -194,6 +194,23 @@ function parseOptionalUrl(value: FormDataEntryValue | null, fieldLabel: string) 
   }
 }
 
+function parseLimitedText(value: FormDataEntryValue | null, maxLength: number) {
+  return parseOptionalText(value).slice(0, maxLength);
+}
+
+function parseOptionalButtonUrl(
+  value: FormDataEntryValue | null,
+  fieldLabel: string,
+) {
+  const rawValue = parseOptionalText(value);
+
+  if (!rawValue) {
+    return "";
+  }
+
+  return parseOptionalUrl(rawValue, fieldLabel);
+}
+
 export async function saveVipSettingsAction(formData: FormData) {
   await requireAdminSession();
 
@@ -448,6 +465,66 @@ export async function saveTelegramSettingsAction(formData: FormData) {
       "Telegram mini app URL",
     );
     const siteUrl = parseOptionalUrl(formData.get("siteUrl"), "Site URL");
+    const telegramWelcomeMessage = parseLimitedText(
+      formData.get("telegramWelcomeMessage"),
+      3000,
+    );
+    const telegramOpenButtonText = parseLimitedText(
+      formData.get("telegramOpenButtonText"),
+      40,
+    );
+    const telegramOpenButtonUrl = parseOptionalButtonUrl(
+      formData.get("telegramOpenButtonUrl"),
+      "URL tombol Buka",
+    );
+    const telegramSearchButtonText = parseLimitedText(
+      formData.get("telegramSearchButtonText"),
+      40,
+    );
+    const telegramSearchButtonUrl = parseOptionalButtonUrl(
+      formData.get("telegramSearchButtonUrl"),
+      "URL tombol Cari Judul",
+    );
+    const telegramAffiliateButtonText = parseLimitedText(
+      formData.get("telegramAffiliateButtonText"),
+      40,
+    );
+    const telegramAffiliateButtonUrl = parseOptionalButtonUrl(
+      formData.get("telegramAffiliateButtonUrl"),
+      "URL tombol Gabung Affiliate",
+    );
+    const telegramDramaChannelButtonText = parseLimitedText(
+      formData.get("telegramDramaChannelButtonText"),
+      40,
+    );
+    const telegramDramaChannelUrl = parseOptionalButtonUrl(
+      formData.get("telegramDramaChannelUrl"),
+      "URL Channel Drama",
+    );
+    const telegramMovieChannelButtonText = parseLimitedText(
+      formData.get("telegramMovieChannelButtonText"),
+      40,
+    );
+    const telegramMovieChannelUrl = parseOptionalButtonUrl(
+      formData.get("telegramMovieChannelUrl"),
+      "URL Channel Movie",
+    );
+    const telegramSupportButtonText = parseLimitedText(
+      formData.get("telegramSupportButtonText"),
+      40,
+    );
+    const telegramSupportButtonUrl = parseOptionalButtonUrl(
+      formData.get("telegramSupportButtonUrl"),
+      "URL tombol Support",
+    );
+    const telegramVipButtonText = parseLimitedText(
+      formData.get("telegramVipButtonText"),
+      40,
+    );
+    const telegramVipButtonUrl = parseOptionalButtonUrl(
+      formData.get("telegramVipButtonUrl"),
+      "URL tombol VIP",
+    );
 
     const existing = await prisma.appSettings.findUnique({
       where: { id: "global" },
@@ -479,6 +556,21 @@ export async function saveTelegramSettingsAction(formData: FormData) {
         telegramSupportUrl: supportUrl,
         telegramMiniAppUrl: miniAppUrl,
         siteUrl,
+        telegramWelcomeMessage,
+        telegramOpenButtonText,
+        telegramOpenButtonUrl,
+        telegramSearchButtonText,
+        telegramSearchButtonUrl,
+        telegramAffiliateButtonText,
+        telegramAffiliateButtonUrl,
+        telegramDramaChannelButtonText,
+        telegramDramaChannelUrl,
+        telegramMovieChannelButtonText,
+        telegramMovieChannelUrl,
+        telegramSupportButtonText,
+        telegramSupportButtonUrl,
+        telegramVipButtonText,
+        telegramVipButtonUrl,
       },
       create: {
         id: "global",
@@ -488,6 +580,21 @@ export async function saveTelegramSettingsAction(formData: FormData) {
         telegramSupportUrl: supportUrl,
         telegramMiniAppUrl: miniAppUrl,
         siteUrl,
+        telegramWelcomeMessage,
+        telegramOpenButtonText,
+        telegramOpenButtonUrl,
+        telegramSearchButtonText,
+        telegramSearchButtonUrl,
+        telegramAffiliateButtonText,
+        telegramAffiliateButtonUrl,
+        telegramDramaChannelButtonText,
+        telegramDramaChannelUrl,
+        telegramMovieChannelButtonText,
+        telegramMovieChannelUrl,
+        telegramSupportButtonText,
+        telegramSupportButtonUrl,
+        telegramVipButtonText,
+        telegramVipButtonUrl,
       },
     });
   } catch (error) {

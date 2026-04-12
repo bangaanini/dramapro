@@ -204,6 +204,96 @@ export default async function AdminSettingsPage(
                 />
               </div>
 
+              <div className="rounded-[1.6rem] border border-white/10 bg-black/20 p-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-white">
+                    Sambutan dan tombol inline bot
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                    Teks ini dipakai saat user mengetik{" "}
+                    <span className="font-medium text-white">/start</span>.
+                    Gunakan placeholder{" "}
+                    <span className="font-medium text-white">{"{name}"}</span>{" "}
+                    dan{" "}
+                    <span className="font-medium text-white">{"{siteName}"}</span>.
+                    URL tombol Mini App boleh dikosongkan agar sistem memakai
+                    target internal otomatis.
+                  </p>
+                </div>
+
+                <label className="mt-4 block space-y-2">
+                  <span className="text-sm font-medium text-white">
+                    Kalimat sambutan
+                  </span>
+                  <textarea
+                    name="telegramWelcomeMessage"
+                    rows={10}
+                    defaultValue={telegram.menu.welcomeMessage}
+                    placeholder="Tulis pesan sambutan bot..."
+                    className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-[var(--muted-foreground)] focus:border-accent/60 focus:ring-2 focus:ring-[var(--ring)]"
+                  />
+                </label>
+
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <BotButtonFields
+                    title="Tombol Buka"
+                    textName="telegramOpenButtonText"
+                    textDefaultValue={telegram.menu.openButtonText}
+                    urlName="telegramOpenButtonUrl"
+                    urlDefaultValue={telegram.menu.openButtonUrl}
+                    urlPlaceholder="Kosongkan untuk Mini App home"
+                  />
+                  <BotButtonFields
+                    title="Tombol Cari Judul"
+                    textName="telegramSearchButtonText"
+                    textDefaultValue={telegram.menu.searchButtonText}
+                    urlName="telegramSearchButtonUrl"
+                    urlDefaultValue={telegram.menu.searchButtonUrl}
+                    urlPlaceholder="Kosongkan untuk Mini App search"
+                  />
+                  <BotButtonFields
+                    title="Tombol Affiliate"
+                    textName="telegramAffiliateButtonText"
+                    textDefaultValue={telegram.menu.affiliateButtonText}
+                    urlName="telegramAffiliateButtonUrl"
+                    urlDefaultValue={telegram.menu.affiliateButtonUrl}
+                    urlPlaceholder="Kosongkan untuk Mini App affiliate"
+                  />
+                  <BotButtonFields
+                    title="Tombol VIP"
+                    textName="telegramVipButtonText"
+                    textDefaultValue={telegram.menu.vipButtonText}
+                    urlName="telegramVipButtonUrl"
+                    urlDefaultValue={telegram.menu.vipButtonUrl}
+                    urlPlaceholder="Kosongkan untuk Mini App VIP"
+                  />
+                  <BotButtonFields
+                    title="Channel Drama"
+                    textName="telegramDramaChannelButtonText"
+                    textDefaultValue={telegram.menu.dramaChannelButtonText}
+                    urlName="telegramDramaChannelUrl"
+                    urlDefaultValue={telegram.menu.dramaChannelUrl}
+                    urlPlaceholder="https://t.me/channel-drama"
+                  />
+                  <BotButtonFields
+                    title="Channel Movie"
+                    textName="telegramMovieChannelButtonText"
+                    textDefaultValue={telegram.menu.movieChannelButtonText}
+                    urlName="telegramMovieChannelUrl"
+                    urlDefaultValue={telegram.menu.movieChannelUrl}
+                    urlPlaceholder="https://t.me/channel-movie"
+                  />
+                  <BotButtonFields
+                    title="Support Admin"
+                    textName="telegramSupportButtonText"
+                    textDefaultValue={telegram.menu.supportButtonText}
+                    urlName="telegramSupportButtonUrl"
+                    urlDefaultValue={telegram.menu.supportButtonUrl}
+                    urlPlaceholder="https://t.me/admin-support"
+                  />
+                </div>
+              </div>
+
               <Button type="submit" className="w-full sm:w-fit">
                 Simpan pengaturan Telegram
               </Button>
@@ -384,6 +474,54 @@ function Field({
         className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition placeholder:text-[var(--muted-foreground)] focus:border-accent/60 focus:ring-2 focus:ring-[var(--ring)]"
       />
     </label>
+  );
+}
+
+function BotButtonFields({
+  title,
+  textName,
+  textDefaultValue,
+  urlName,
+  urlDefaultValue,
+  urlPlaceholder,
+}: {
+  title: string;
+  textName: string;
+  textDefaultValue: string;
+  urlName: string;
+  urlDefaultValue: string;
+  urlPlaceholder: string;
+}) {
+  return (
+    <div className="rounded-[1.35rem] border border-white/10 bg-white/4 p-4">
+      <p className="text-sm font-semibold text-white">{title}</p>
+      <div className="mt-3 grid gap-3">
+        <label className="block space-y-2">
+          <span className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
+            Label tombol
+          </span>
+          <input
+            name={textName}
+            defaultValue={textDefaultValue}
+            maxLength={40}
+            placeholder={title}
+            className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition placeholder:text-[var(--muted-foreground)] focus:border-accent/60 focus:ring-2 focus:ring-[var(--ring)]"
+          />
+        </label>
+        <label className="block space-y-2">
+          <span className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
+            URL tombol
+          </span>
+          <input
+            name={urlName}
+            type="url"
+            defaultValue={urlDefaultValue}
+            placeholder={urlPlaceholder}
+            className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition placeholder:text-[var(--muted-foreground)] focus:border-accent/60 focus:ring-2 focus:ring-[var(--ring)]"
+          />
+        </label>
+      </div>
+    </div>
   );
 }
 

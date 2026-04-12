@@ -11,6 +11,25 @@ export const DEFAULT_SITE_DESCRIPTION =
   "Nonton ribuan short drama dalam 1 platform. Short drama terbaru dari berbagai sumber cepat dan aman.";
 export const DEFAULT_SITE_LOGO = "/site-logo.jpg";
 export const DEFAULT_OG_IMAGE = "/opengraph.jpg";
+export const DEFAULT_TELEGRAM_DRAMA_CHANNEL_URL = "https://t.me/LayarDramaID";
+export const DEFAULT_TELEGRAM_MOVIE_CHANNEL_URL = "https://t.me/layarboxoffice";
+export const DEFAULT_TELEGRAM_WELCOME_MESSAGE = [
+  "👋 Hai {name}! Selamat datang di {siteName}",
+  "",
+  "🎬 Nonton Drama China & Film Box Office langsung dari Telegram!",
+  "🔥 Tanpa ribet • Full HD • Update setiap hari",
+  "",
+  "📌 Cara pakai:",
+  "• Buka -> Langsung mulai nonton",
+  "• Cari Judul -> Cari drama / film favoritmu",
+  "• Gabung Affiliate -> Dapat cuan dari Telegram",
+  "• Channel Drama -> Drama China trending",
+  "• Channel Movie -> Film bioskop & box office",
+  "• Hubungi Admin -> Jika ada kendala",
+  "• Join VIP -> Buka semua koleksi",
+  "",
+  "👇 Pilih menu di bawah dan mulai sekarang",
+].join("\n");
 
 function readTrimmed(value?: string | null) {
   return value?.trim() ?? "";
@@ -94,6 +113,34 @@ export const getAppSettings = cache(async () => {
   const telegramMiniAppUrl = normalizeSiteUrl(
     row?.telegramMiniAppUrl || process.env.TELEGRAM_MINI_APP_URL || siteUrl,
   );
+  const telegramMenu = {
+    welcomeMessage:
+      readTrimmed(row?.telegramWelcomeMessage) ||
+      DEFAULT_TELEGRAM_WELCOME_MESSAGE,
+    openButtonText: readTrimmed(row?.telegramOpenButtonText) || "🎬 Buka",
+    openButtonUrl: readTrimmed(row?.telegramOpenButtonUrl),
+    searchButtonText:
+      readTrimmed(row?.telegramSearchButtonText) || "🔍 Cari Judul",
+    searchButtonUrl: readTrimmed(row?.telegramSearchButtonUrl),
+    affiliateButtonText:
+      readTrimmed(row?.telegramAffiliateButtonText) || "💰 Gabung Affiliate",
+    affiliateButtonUrl: readTrimmed(row?.telegramAffiliateButtonUrl),
+    dramaChannelButtonText:
+      readTrimmed(row?.telegramDramaChannelButtonText) || "🏠 Channel Drama",
+    dramaChannelUrl:
+      readTrimmed(row?.telegramDramaChannelUrl) ||
+      DEFAULT_TELEGRAM_DRAMA_CHANNEL_URL,
+    movieChannelButtonText:
+      readTrimmed(row?.telegramMovieChannelButtonText) || "🎥 Channel Movie",
+    movieChannelUrl:
+      readTrimmed(row?.telegramMovieChannelUrl) ||
+      DEFAULT_TELEGRAM_MOVIE_CHANNEL_URL,
+    supportButtonText:
+      readTrimmed(row?.telegramSupportButtonText) || "📞 Hubungi Admin",
+    supportButtonUrl: readTrimmed(row?.telegramSupportButtonUrl) || telegramSupportUrl,
+    vipButtonText: readTrimmed(row?.telegramVipButtonText) || "💎 Join VIP",
+    vipButtonUrl: readTrimmed(row?.telegramVipButtonUrl),
+  };
 
   return {
     raw: row,
@@ -113,6 +160,7 @@ export const getAppSettings = cache(async () => {
       supportUrl: telegramSupportUrl,
       miniAppUrl: telegramMiniAppUrl,
       webhookUrl: absoluteUrlFromSiteUrl(siteUrl, "/api/telegram/webhook"),
+      menu: telegramMenu,
     },
   };
 });

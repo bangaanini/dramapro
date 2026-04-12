@@ -35,9 +35,6 @@ type TelegramWebhookMessage = {
 
 type TelegramMiniAppTarget = "home" | "search" | "vip" | "profile" | "affiliate";
 
-const TELEGRAM_DRAMA_CHANNEL_URL = "https://t.me/LayarDramaID";
-const TELEGRAM_MOVIE_CHANNEL_URL = "https://t.me/layarboxoffice";
-
 async function getTelegramBotToken() {
   const token = (await getTelegramSettings()).botToken?.trim();
 
@@ -106,25 +103,12 @@ export function buildDramaShareStartParam(input: {
 
 export async function buildTelegramStartMessage(firstName?: string) {
   const safeName = firstName?.trim() || "Sobat Drama";
-  const siteName = (await getAppSettings()).site.name;
+  const settings = await getAppSettings();
 
-  return [
-    `👋 Hai ${safeName}! Selamat datang di ${siteName}`,
-    "",
-    "🎬 Nonton Drama China & Film Box Office langsung dari Telegram!",
-    "🔥 Tanpa ribet • Full HD • Update setiap hari",
-    "",
-    "📌 Cara pakai:",
-    "• Buka -> Langsung mulai nonton",
-    "• Cari Judul -> Cari drama / film favoritmu",
-    "• Gabung Affiliate -> Dapat cuan dari Telegram",
-    "• Channel Drama -> Drama China trending",
-    "• Channel Movie -> Film bioskop & box office",
-    "• Hubungi Admin -> Jika ada kendala",
-    "• Join VIP -> Buka semua koleksi",
-    "",
-    "👇 Pilih menu di bawah dan mulai sekarang",
-  ].join("\n");
+  return formatTelegramTemplate(settings.telegram.menu.welcomeMessage, {
+    name: safeName,
+    siteName: settings.site.name,
+  });
 }
 
 export async function buildTelegramStartKeyboard(
@@ -137,41 +121,84 @@ export async function buildTelegramStartKeyboard(
     referralCode,
     botUsername: options?.botUsername,
   };
+  const menu = (await getTelegramSettings()).menu;
 
   return {
     inline_keyboard: [
       [
-        {
-          text: "🎬 Buka",
-          web_app: { url: await getTelegramMiniAppUrl("home", miniAppOptions) },
-        },
+        await buildTelegramMenuButton(
+          menu.openButtonText,
+          menu.openButtonUrl,
+          "home",
+          miniAppOptions,
+        ),
       ],
       [
-        {
-          text: "🔍 Cari Judul",
-          web_app: { url: await getTelegramMiniAppUrl("search", miniAppOptions) },
-        },
+        await buildTelegramMenuButton(
+          menu.searchButtonText,
+          menu.searchButtonUrl,
+          "search",
+          miniAppOptions,
+        ),
       ],
       [
-        {
-          text: "💰 Gabung Affiliate",
-          web_app: {
-            url: await getTelegramMiniAppUrl("affiliate", miniAppOptions),
-          },
-        },
+        await buildTelegramMenuButton(
+          menu.affiliateButtonText,
+          menu.affiliateButtonUrl,
+          "affiliate",
+          miniAppOptions,
+        ),
       ],
       [
-        { text: "🏠 Channel Drama", url: TELEGRAM_DRAMA_CHANNEL_URL },
-        { text: "🎥 Channel Movie", url: TELEGRAM_MOVIE_CHANNEL_URL },
+        { text: menu.dramaChannelButtonText, url: menu.dramaChannelUrl },
+        { text: menu.movieChannelButtonText, url: menu.movieChannelUrl },
       ],
       [
-        { text: "📞 Hubungi Admin", url: await getTelegramSupportUrl() },
-        {
-          text: "💎 Join VIP",
-          web_app: { url: await getTelegramMiniAppUrl("vip", miniAppOptions) },
-        },
+        { text: menu.supportButtonText, url: menu.supportButtonUrl },
+        await buildTelegramMenuButton(
+          menu.vipButtonText,
+          menu.vipButtonUrl,
+          "vip",
+          miniAppOptions,
+        ),
       ],
     ],
+  };
+}
+
+function formatTelegramTemplate(
+  template: string,
+  values: {
+    name: string;
+    siteName: string;
+  },
+) {
+  return template
+    .replaceAll("{name}", values.name)
+    .replaceAll("{siteName}", values.siteName);
+}
+
+async function buildTelegramMenuButton(
+  text: string,
+  customUrl: string,
+  target: TelegramMiniAppTarget,
+  options: {
+    referralCode?: string | null;
+    botUsername?: string | null;
+  },
+): Promise<TelegramInlineKeyboardButton> {
+  if (customUrl) {
+    return {
+      text,
+      url: customUrl,
+    };
+  }
+
+  return {
+    text,
+    web_app: {
+      url: await getTelegramMiniAppUrl(target, options),
+    },
   };
 }
 

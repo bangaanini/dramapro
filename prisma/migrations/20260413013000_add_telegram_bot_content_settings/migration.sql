@@ -1,0 +1,16 @@
+ALTER TABLE "AppSettings"
+ADD COLUMN "telegramWelcomeMessage" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "telegramOpenButtonText" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "telegramOpenButtonUrl" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "telegramSearchButtonText" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "telegramSearchButtonUrl" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "telegramAffiliateButtonText" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "telegramAffiliateButtonUrl" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "telegramDramaChannelButtonText" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "telegramDramaChannelUrl" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "telegramMovieChannelButtonText" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "telegramMovieChannelUrl" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "telegramSupportButtonText" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "telegramSupportButtonUrl" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "telegramVipButtonText" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "telegramVipButtonUrl" TEXT NOT NULL DEFAULT '';
