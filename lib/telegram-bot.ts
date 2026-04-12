@@ -35,6 +35,9 @@ type TelegramWebhookMessage = {
 
 type TelegramMiniAppTarget = "home" | "search" | "vip" | "profile" | "affiliate";
 
+const TELEGRAM_DRAMA_CHANNEL_URL = "https://t.me/LayarDramaID";
+const TELEGRAM_MOVIE_CHANNEL_URL = "https://t.me/layarboxoffice";
+
 async function getTelegramBotToken() {
   const token = (await getTelegramSettings()).botToken?.trim();
 
@@ -106,11 +109,21 @@ export async function buildTelegramStartMessage(firstName?: string) {
   const siteName = (await getAppSettings()).site.name;
 
   return [
-    `Hai ${safeName}! Selamat datang di ${siteName}!`,
+    `👋 Hai ${safeName}! Selamat datang di ${siteName}`,
     "",
-    "Tonton ribuan short drama seru tanpa batas!",
+    "🎬 Nonton Drama China & Film Box Office langsung dari Telegram!",
+    "🔥 Tanpa ribet • Full HD • Update setiap hari",
     "",
-    "Klik tombol di bawah untuk mulai nonton:",
+    "📌 Cara pakai:",
+    "• Nonton Sekarang -> Langsung mulai nonton",
+    "• Cari Judul -> Cari drama / film favoritmu",
+    "• Gabung Affiliate -> Dapat cuan dari Telegram",
+    "• Channel Drama -> Drama China trending",
+    "• Channel Movie -> Film bioskop & box office",
+    "• Hubungi Admin -> Jika ada kendala",
+    "• Join VIP -> Buka semua koleksi",
+    "",
+    "👇 Pilih menu di bawah dan mulai sekarang",
   ].join("\n");
 }
 
@@ -129,7 +142,7 @@ export async function buildTelegramStartKeyboard(
     inline_keyboard: [
       [
         {
-          text: "🎬 Buka",
+          text: "🎬 Nonton Sekarang",
           web_app: { url: await getTelegramMiniAppUrl("home", miniAppOptions) },
         },
       ],
@@ -141,23 +154,21 @@ export async function buildTelegramStartKeyboard(
       ],
       [
         {
-          text: "💎 Beli VIP",
-          web_app: { url: await getTelegramMiniAppUrl("vip", miniAppOptions) },
-        },
-      ],
-      [
-        {
-          text: "👤 Profile",
-          web_app: { url: await getTelegramMiniAppUrl("profile", miniAppOptions) },
-        },
-      ],
-      [{ text: "💬 Lapor Kendala", url: await getTelegramSupportUrl() }],
-      [
-        {
-          text: "💰 Cari Cuan Referral",
+          text: "💰 Gabung Affiliate",
           web_app: {
             url: await getTelegramMiniAppUrl("affiliate", miniAppOptions),
           },
+        },
+      ],
+      [
+        { text: "🏠 Channel Drama", url: TELEGRAM_DRAMA_CHANNEL_URL },
+        { text: "🎥 Channel Movie", url: TELEGRAM_MOVIE_CHANNEL_URL },
+      ],
+      [
+        { text: "📞 Hubungi Admin", url: await getTelegramSupportUrl() },
+        {
+          text: "💎 Join VIP",
+          web_app: { url: await getTelegramMiniAppUrl("vip", miniAppOptions) },
         },
       ],
     ],
