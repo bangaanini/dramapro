@@ -111,7 +111,6 @@ export function VipCheckoutPanel({
   const [pollError, setPollError] = useState<string | null>(null);
   const [hasCopiedVa, setHasCopiedVa] = useState(false);
   const [remainingLabel, setRemainingLabel] = useState<string | null>(null);
-  const [sheetVisible, setSheetVisible] = useState(presentation !== "sheet");
   const [openInstructionKey, setOpenInstructionKey] = useState<string | null>(null);
   const [copyToast, setCopyToast] = useState<string | null>(null);
   const hasRefreshedAfterPaidRef = useRef(false);
@@ -161,12 +160,14 @@ export function VipCheckoutPanel({
       return;
     }
 
-    const rafId = window.requestAnimationFrame(() => {
-      setSheetVisible(true);
-    });
+    const htmlOverflow = document.documentElement.style.overflow;
+    const bodyOverflow = document.body.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
 
     return () => {
-      window.cancelAnimationFrame(rafId);
+      document.documentElement.style.overflow = htmlOverflow;
+      document.body.style.overflow = bodyOverflow;
     };
   }, [presentation]);
 
@@ -769,7 +770,7 @@ export function VipCheckoutPanel({
   }
 
   return (
-    <div className="fixed inset-0 z-[90]">
+    <div className="fixed inset-0 z-[90] flex items-end justify-center">
       <Link
         href={closeHref}
         onPointerDown={() => triggerSelectionHaptic()}
@@ -777,11 +778,10 @@ export function VipCheckoutPanel({
         aria-label="Tutup checkout"
       />
 
-      <div className="absolute inset-x-0 bottom-0 flex max-h-[92dvh] items-end">
+      <div className="pointer-events-none relative z-10 flex h-full w-full items-end">
         <div
           className={cn(
-            "max-h-[92dvh] w-full overflow-y-auto rounded-t-[2.4rem] border border-white/10 bg-[linear-gradient(180deg,rgba(28,18,12,0.98),rgba(14,10,8,0.99))] px-4 pb-[calc(1.2rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-28px_80px_rgba(0,0,0,0.45)] transition-transform duration-300 ease-out will-change-transform",
-            sheetVisible ? "translate-y-0" : "translate-y-full",
+            "pointer-events-auto checkout-sheet-enter max-h-[92dvh] w-full overflow-y-auto rounded-t-[2.4rem] border border-white/10 bg-[linear-gradient(180deg,rgba(28,18,12,0.98),rgba(14,10,8,0.99))] px-4 pb-[calc(1.2rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-28px_80px_rgba(0,0,0,0.45)] will-change-transform",
           )}
         >
           <div className="mx-auto max-w-5xl">

@@ -18,7 +18,6 @@ import {
 import { getActivePaymentGateway } from "@/lib/payment-gateways";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, resolveSafeRedirectPath } from "@/lib/user-auth";
-import { syncVipPaymentStatus } from "@/lib/vip-payments";
 import { isVipActive } from "@/lib/vip";
 
 export const dynamic = "force-dynamic";
@@ -44,12 +43,10 @@ export default async function VipPage(props: PageProps<"/vip">) {
       : PAYMENKU_PRIMARY_CHANNELS;
   const checkoutPayment =
     checkoutReferenceId && user
-      ? await syncVipPaymentStatus(checkoutReferenceId, user.id).catch(async () =>
-          prisma.vipPayment.findUnique({
-            where: { referenceId: checkoutReferenceId },
-            include: { plan: true },
-          }),
-        )
+      ? await prisma.vipPayment.findUnique({
+          where: { referenceId: checkoutReferenceId },
+          include: { plan: true },
+        })
       : null;
 
   const resolvedCheckoutPayment =

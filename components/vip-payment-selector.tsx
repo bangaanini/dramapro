@@ -64,6 +64,7 @@ export function VipPaymentSelector({
   const [selectedChannelCode, setSelectedChannelCode] = useState("qris");
   const [expandedGroup, setExpandedGroup] = useState<"va" | "qris">("qris");
   const [toast, setToast] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const selectedPlan =
     plans.find((plan) => plan.id === selectedPlanId) ?? plans[0] ?? null;
@@ -388,7 +389,13 @@ export function VipPaymentSelector({
         </CardContent>
       </Card>
 
-      <form action={createVipCheckoutAction} className="pb-28 sm:pb-0">
+      <form
+        action={createVipCheckoutAction}
+        className="pb-28 sm:pb-0"
+        onSubmit={() => {
+          setIsSubmitting(true);
+        }}
+      >
         <input type="hidden" name="planId" value={selectedPlan.id} />
         <input
           type="hidden"
@@ -436,6 +443,20 @@ export function VipPaymentSelector({
             >
               <X className="size-4" />
             </button>
+          </div>
+        </div>
+      ) : null}
+
+      {isSubmitting ? (
+        <div className="pointer-events-none fixed inset-0 z-[96] flex items-center justify-center bg-black/38 px-4 backdrop-blur-md">
+          <div className="w-full max-w-sm rounded-[2rem] border border-amber-400/16 bg-[linear-gradient(180deg,rgba(29,19,12,0.97),rgba(15,10,8,0.98))] p-5 text-center shadow-[0_24px_60px_rgba(0,0,0,0.38)]">
+            <div className="mx-auto h-11 w-11 animate-spin rounded-full border-2 border-amber-300/20 border-t-amber-300" />
+            <p className="mt-4 text-base font-semibold text-white">
+              Menyiapkan pembayaran
+            </p>
+            <p className="mt-2 text-sm leading-6 text-white/62">
+              Kami sedang membuat transaksi dan menampilkan detail pembayaranmu.
+            </p>
           </div>
         </div>
       ) : null}
