@@ -15,8 +15,6 @@ import type Player from "video.js/dist/types/player";
 import {
   AlertCircle,
   Bookmark,
-  ChevronsLeft,
-  ChevronsRight,
   CheckCircle2,
   Crown,
   Lock,
@@ -26,8 +24,6 @@ import {
   Minimize2,
   Pause,
   Play,
-  RotateCcw,
-  RotateCw,
   Share2,
   Sparkles,
   TriangleAlert,
@@ -773,7 +769,7 @@ export function VideoPlayer({
   }
 
   function handleSurfaceTap() {
-    setIsChromeVisible((current) => !current);
+    togglePlayback();
   }
 
   function handleVerticalSwipe(deltaY: number) {
@@ -886,7 +882,7 @@ export function VideoPlayer({
     clearPendingTapTimeout();
 
     singleTapTimeoutRef.current = window.setTimeout(() => {
-      handleSurfaceTap();
+      setIsChromeVisible(true);
       lastTapRef.current = null;
       singleTapTimeoutRef.current = null;
     }, 220);
@@ -1303,7 +1299,7 @@ export function VideoPlayer({
               onTouchEnd={handleSurfaceTouchEnd}
               onTouchCancel={handleSurfaceTouchCancel}
               className="absolute inset-0 z-10 cursor-pointer touch-none"
-              aria-label="Toggle player controls"
+              aria-label="Area gesture video"
             />
 
             <div
@@ -1452,78 +1448,31 @@ export function VideoPlayer({
                 </div>
               </div>
 
-              <div className="flex items-center justify-between gap-2 rounded-[1.4rem] border border-white/10 bg-black/40 px-3 py-3 backdrop-blur">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => changeEpisode(selectedEpisode - 1)}
-                  disabled={selectedEpisode === 1 || isLoading || !hasUnlockedEpisodes}
-                  className="h-11 min-w-11 rounded-full px-3"
-                  aria-label="Episode sebelumnya"
-                  title="Episode sebelumnya"
-                >
-                  <ChevronsLeft className="size-4" />
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => seekBy(-10)}
-                  disabled={isLoading || selectedEpisodeIsLocked || !hasUnlockedEpisodes}
-                  className="h-11 min-w-11 rounded-full px-3"
-                  aria-label="Mundur 10 detik"
-                  title="Mundur 10 detik"
-                >
-                  <RotateCcw className="size-4" />
-                </Button>
-                <button
-                  type="button"
-                  onClick={togglePlayback}
-                  disabled={selectedEpisodeIsLocked || !hasUnlockedEpisodes}
-                  className={cn(
-                    "inline-flex h-14 w-14 items-center justify-center rounded-full text-white transition",
-                    selectedEpisodeIsLocked || !hasUnlockedEpisodes
-                      ? "cursor-not-allowed bg-white/12 text-white/60 shadow-none"
-                      : "bg-accent shadow-[0_16px_40px_rgba(255,122,69,0.35)] hover:bg-[var(--accent-strong)]",
-                  )}
-                  aria-label={isPlaying ? "Pause video" : "Play video"}
-                >
-                  {isPlaying ? (
-                    <Pause className="size-5" />
-                  ) : (
-                    <Play className="size-5 fill-current" />
-                  )}
-                </button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => seekBy(10)}
-                  disabled={isLoading || selectedEpisodeIsLocked || !hasUnlockedEpisodes}
-                  className="h-11 min-w-11 rounded-full px-3"
-                  aria-label="Maju 10 detik"
-                  title="Maju 10 detik"
-                >
-                  <RotateCw className="size-4" />
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => changeEpisode(selectedEpisode + 1)}
-                  disabled={
-                    selectedEpisode === episodeCount ||
-                    isLoading ||
-                    !hasUnlockedEpisodes ||
-                    nextEpisodeLocked
-                  }
-                  className="h-11 min-w-11 rounded-full px-3"
-                  aria-label="Episode berikutnya"
-                  title="Episode berikutnya"
-                >
-                  <ChevronsRight className="size-4" />
-                </Button>
-              </div>
-
-
             </div>
+
+            {!isLoading && !error ? (
+              <button
+                type="button"
+                onClick={togglePlayback}
+                disabled={selectedEpisodeIsLocked || !hasUnlockedEpisodes}
+                className={cn(
+                  "absolute left-1/2 top-1/2 z-30 inline-flex h-20 w-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border text-white backdrop-blur-md transition duration-300",
+                  isChromeVisible || !isPlaying
+                    ? "scale-100 opacity-100"
+                    : "pointer-events-none scale-95 opacity-0",
+                  selectedEpisodeIsLocked || !hasUnlockedEpisodes
+                    ? "cursor-not-allowed border-white/10 bg-white/10 text-white/55"
+                    : "border-white/15 bg-black/38 shadow-[0_20px_55px_rgba(0,0,0,0.36)] hover:bg-black/52",
+                )}
+                aria-label={isPlaying ? "Pause video" : "Play video"}
+              >
+                {isPlaying ? (
+                  <Pause className="size-9" strokeWidth={2.2} />
+                ) : (
+                  <Play className="ml-1 size-9 fill-current" strokeWidth={2.2} />
+                )}
+              </button>
+            ) : null}
 
             {isLoading ? (
               <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/55 backdrop-blur-sm">
