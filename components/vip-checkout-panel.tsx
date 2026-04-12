@@ -770,7 +770,7 @@ export function VipCheckoutPanel({
   }
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-end justify-center">
+    <div className="fixed inset-0 z-[90] flex items-end justify-center overflow-hidden">
       <Link
         href={closeHref}
         onPointerDown={() => triggerSelectionHaptic()}
@@ -781,32 +781,37 @@ export function VipCheckoutPanel({
       <div className="pointer-events-none relative z-10 flex h-full w-full items-end">
         <div
           className={cn(
-            "pointer-events-auto checkout-sheet-enter max-h-[92dvh] w-full overflow-y-auto rounded-t-[2.4rem] border border-white/10 bg-[linear-gradient(180deg,rgba(28,18,12,0.98),rgba(14,10,8,0.99))] px-4 pb-[calc(1.2rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-28px_80px_rgba(0,0,0,0.45)] will-change-transform",
+            "pointer-events-auto checkout-sheet-enter flex h-[100dvh] w-full flex-col overflow-hidden rounded-t-[2.4rem] border border-white/10 bg-[linear-gradient(180deg,rgba(28,18,12,0.98),rgba(14,10,8,0.99))] shadow-[0_-28px_80px_rgba(0,0,0,0.45)] will-change-transform sm:mx-auto sm:h-[92dvh] sm:max-w-2xl",
           )}
         >
-          <div className="mx-auto max-w-5xl">
-          <div className="relative sticky top-0 z-10 flex items-center justify-between gap-3 bg-transparent pb-3 pt-1">
-            <span className="mx-auto h-1.5 w-16 rounded-full bg-white/18" />
-            <Link
-              href={closeHref}
-              onPointerDown={() => triggerSelectionHaptic()}
-              className="absolute right-0 top-0 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/78 transition hover:bg-white/10"
-              aria-label="Tutup checkout"
-            >
-              <X className="size-4" />
-            </Link>
+          <div className="relative shrink-0 px-4 pb-3 pt-3">
+            <div className="relative flex items-center justify-between gap-3">
+              <span className="mx-auto h-1.5 w-16 rounded-full bg-white/18" />
+              <Link
+                href={closeHref}
+                onPointerDown={() => triggerSelectionHaptic()}
+                className="absolute right-0 top-0 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/78 transition hover:bg-white/10"
+                aria-label="Tutup checkout"
+              >
+                <X className="size-4" />
+              </Link>
+            </div>
           </div>
-          {content}
-          {copyToast ? (
-            <FloatingToast
-              message={copyToast}
-              tone={hasCopiedVa ? "success" : "info"}
-              className="sticky bottom-2 mt-4"
-            />
-          ) : null}
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(1.2rem+env(safe-area-inset-bottom))]">
+            <div className="mx-auto max-w-5xl">
+              {content}
+              {copyToast ? (
+                <FloatingToast
+                  message={copyToast}
+                  tone={hasCopiedVa ? "success" : "info"}
+                  className="sticky bottom-2 mt-4"
+                />
+              ) : null}
+            </div>
+          </div>
         </div>
       </div>
-    </div>
     </div>
   );
 }

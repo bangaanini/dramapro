@@ -81,9 +81,8 @@ export default async function VipPage(props: PageProps<"/vip">) {
 
   const userHasVip = isVipActive(user?.vipExpiresAt);
   return (
-    <main className="route-transition-shell mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
-
-      <section className="relative mt-4 overflow-hidden rounded-[2.4rem] border border-amber-400/10 bg-[linear-gradient(180deg,#17110b_0%,#120d09_55%,#0f0a08_100%)] px-5 py-8 sm:px-8 sm:py-10">
+    <main className="route-transition-shell mx-auto flex h-[100dvh] w-full max-w-6xl flex-col overflow-hidden px-4 pb-4 pt-3 sm:px-6 sm:pb-6 sm:pt-5 lg:px-8">
+      <section className="relative shrink-0 overflow-hidden rounded-[2rem] border border-amber-400/10 bg-[linear-gradient(180deg,#17110b_0%,#120d09_55%,#0f0a08_100%)] px-5 py-5 sm:px-7 sm:py-6">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,178,42,0.14),transparent_34%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_right,rgba(255,122,69,0.12),transparent_28%)]" />
 
@@ -93,17 +92,17 @@ export default async function VipPage(props: PageProps<"/vip">) {
             Premium membership
           </Badge>
 
-          <h1 className="mt-6 text-4xl font-semibold leading-tight tracking-tight text-white sm:text-6xl">
+          <h1 className="mt-4 text-3xl font-semibold leading-tight tracking-tight text-white sm:text-5xl">
             Upgrade ke{" "}
             <span className="bg-[linear-gradient(180deg,#ffd56a,#ffb115)] bg-clip-text text-transparent">
               VIP Premium
             </span>
           </h1>
-          <p className="mx-auto mt-5 max-w-2xl text-sm leading-7 text-white/68 sm:text-base">
+          <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-white/68 sm:text-base">
             Buka episode premium, nikmati akses ke semua drama.
           </p>
 
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
             {userHasVip ? (
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-100">
                 <ShieldCheck className="size-4 text-emerald-300" />
@@ -120,9 +119,9 @@ export default async function VipPage(props: PageProps<"/vip">) {
         </div>
       </section>
 
-      <section className="mt-8">
+      <section className="mt-4 flex min-h-0 flex-1 flex-col">
         {error ? (
-          <div className="mb-5 rounded-[1.6rem] border border-red-400/20 bg-red-500/10 px-5 py-4 text-sm text-red-100">
+          <div className="mb-3 shrink-0 rounded-[1.6rem] border border-red-400/20 bg-red-500/10 px-5 py-4 text-sm text-red-100">
             {error}
           </div>
         ) : null}
