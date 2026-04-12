@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { ProfileOverview } from "@/components/profile-overview";
 import { SiteFooter } from "@/components/site-footer";
+import { getTelegramSupportUrl } from "@/lib/telegram-bot";
 import { getCurrentUser } from "@/lib/user-auth";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +27,7 @@ export default async function ProfilePage() {
           vipStartedAt: user.vipStartedAt ? user.vipStartedAt.toISOString() : null,
           vipExpiresAt: user.vipExpiresAt ? user.vipExpiresAt.toISOString() : null,
         }}
+        supportUrl={getTelegramSupportUrl()}
       />
 
       <SiteFooter />

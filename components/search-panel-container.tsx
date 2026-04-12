@@ -113,10 +113,6 @@ export function SearchPanelContainer({
             </div>
             <div className="space-y-2">
               <p className="font-medium text-white">Menyiapkan panel pencarian</p>
-              <p className="max-w-md text-sm text-[var(--muted)]">
-                Shortcut provider dan tag sedang dimuat agar navigasi katalog tetap
-                ringan.
-              </p>
             </div>
           </CardContent>
         </Card>

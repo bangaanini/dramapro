@@ -12,6 +12,7 @@ export type TelegramWebApp = {
   setHeaderColor?: (color: string) => void;
   setBackgroundColor?: (color: string) => void;
   openTelegramLink?: (url: string) => void;
+  addToHomeScreen?: () => void;
   BackButton?: TelegramBackButton;
 };
 

@@ -160,26 +160,12 @@ export function SearchPanel({ providers, tags }: SearchPanelProps) {
         <CardContent className="space-y-6 p-6 sm:p-7">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="space-y-2">
-              <Badge className="border-accent/30 bg-accent-soft text-accent">
-                <Search className="mr-2 size-3.5" />
-                Live search
-              </Badge>
               <div>
                 <h2 className="text-2xl font-semibold text-white">
                   Cari drama favoritmu
                 </h2>
-                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                  Ketik minimal 3 karakter
-                </p>
               </div>
             </div>
-
-            {activeFilterCount > 0 ? (
-              <Button variant="ghost" size="sm" onClick={clearFilters}>
-                <X className="mr-2 size-4" />
-                Reset filter
-              </Button>
-            ) : null}
           </div>
 
           <div className="space-y-4">
@@ -196,131 +182,11 @@ export function SearchPanel({ providers, tags }: SearchPanelProps) {
               </div>
             </label>
 
-          <div className="rounded-[1.5rem] border border-white/10 bg-black/18 p-4">
-            {!canSearch ? (
-              <div className="flex min-h-36 flex-col items-center justify-center gap-3 text-center">
-                <div className="rounded-full border border-white/10 bg-white/5 p-3">
-                  <Sparkles className="size-6 text-accent" />
-                </div>
-                <div className="space-y-1">
-                  <p className="font-medium text-white">
-                    Ketik keyword minimal 3 karakter
-                  </p>
-                  <p className="text-sm text-[var(--muted)]">
-                    Atau tekan shortcut provider/tag untuk menampilkan hasil
-                    secara instan.
-                  </p>
-                </div>
-              </div>
-            ) : isLoading ? (
-              <div className="flex min-h-36 items-center justify-center gap-3 text-sm text-white">
-                <LoaderCircle className="size-4 animate-spin text-accent" />
-                Menjalankan pencarian...
-              </div>
-            ) : error ? (
-              <div className="rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-                {error}
-              </div>
-            ) : results.results.length === 0 ? (
-              <div className="flex min-h-36 flex-col items-center justify-center gap-2 text-center">
-                <p className="font-medium text-white">Belum ada hasil cocok</p>
-                <p className="max-w-md text-sm text-[var(--muted)]">
-                  Coba keyword lain, atau ganti kombinasi provider dan tag.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-sm text-[var(--muted)]">
-                    Menampilkan <span className="text-white">{results.results.length}</span>{" "}
-                    dari <span className="text-white">{results.total}</span> hasil
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedProvider ? (
-                      <Badge className="border-white/10 bg-black/35 text-white">
-                        Provider: {formatProviderName(selectedProvider)}
-                      </Badge>
-                    ) : null}
-                    {selectedTag ? (
-                      <Badge className="border-white/10 bg-black/35 text-white">
-                        Tag: #{selectedTag}
-                      </Badge>
-                    ) : null}
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
-                  {results.results.map((drama) => (
-                    <DramaCard
-                      key={drama.id}
-                      href={`/watch/${drama.id}`}
-                      title={drama.title}
-                      thumbUrl={drama.thumbUrl}
-                      providerName={drama.providerName}
-                      episodeCount={drama.episodeCount}
-                      extraMeta={
-                        drama.tags.length > 0
-                          ? drama.tags.slice(0, 2).join(" • ")
-                          : null
-                      }
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
 
-            <div className="space-y-3">
-              <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-foreground)]">
-                Cari berdasarkan provider
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {providers.map((provider) => (
-                  <button
-                    key={provider.value}
-                    type="button"
-                    onClick={() => toggleProvider(provider.value)}
-                    className={cn(
-                      "rounded-full border px-3 py-2 text-sm transition",
-                      selectedProvider === provider.value
-                        ? "border-accent/30 bg-accent-soft text-white"
-                        : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:bg-white/8 hover:text-white",
-                    )}
-                  >
-                    {formatProviderName(provider.value)}{" "}
-                    <span className="text-[11px] text-[var(--muted-foreground)]">
-                      {provider.count}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
 
-            <div className="space-y-3">
-              <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-foreground)]">
-                Populer tag
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {tags.map((tag) => (
-                  <button
-                    key={tag.value}
-                    type="button"
-                    onClick={() => toggleTag(tag.value)}
-                    className={cn(
-                      "rounded-full border px-3 py-2 text-sm transition",
-                      selectedTag === tag.value
-                        ? "border-accent/30 bg-accent-soft text-white"
-                        : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:bg-white/8 hover:text-white",
-                    )}
-                  >
-                    #{tag.value}{" "}
-                    <span className="text-[11px] text-[var(--muted-foreground)]">
-                      {tag.count}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
+
+
           </div>
 
 

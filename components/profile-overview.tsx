@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { safeSessionStorage } from "@/lib/safe-session-storage";
+import "@/lib/telegram-web-app";
 import {
   getUserAvatarUrl,
   getUserInitials,
@@ -30,6 +31,7 @@ import {
 import { isVipActive } from "@/lib/vip";
 
 type ProfileOverviewProps = {
+  supportUrl: string;
   user: {
     id: string;
     name: string;
@@ -55,6 +57,14 @@ type ProfileResponse = {
   };
   favoritesCount: number;
   historyCount: number;
+};
+
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice?: Promise<{
+    outcome: "accepted" | "dismissed";
+    platform: string;
+  }>;
 };
 
 const profileMenuItems = [
@@ -90,22 +100,13 @@ const profileMenuItems = [
   },
 ] as const;
 
-const secondaryMenuItems = [
-  {
-    label: "Download App",
-    description: "Versi aplikasi mobile akan segera hadir.",
-    icon: Download,
-  },
-  {
-    label: "Bantuan",
-    description: "Hubungi admin jika ada kendala akun atau playback.",
-    icon: CircleHelp,
-  },
-] as const;
-
-export function ProfileOverview({ user }: ProfileOverviewProps) {
+export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
   const [profileData, setProfileData] = useState<ProfileResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [installPromptEvent, setInstallPromptEvent] =
+    useState<BeforeInstallPromptEvent | null>(null);
+  const [isInstalling, setIsInstalling] = useState(false);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -154,6 +155,33 @@ export function ProfileOverview({ user }: ProfileOverviewProps) {
     };
   }, [user.id]);
 
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPromptEvent(event as BeforeInstallPromptEvent);
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!actionMessage) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setActionMessage(null);
+    }, 2400);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [actionMessage]);
+
   const displayUser = profileData?.user ?? user;
   const favoritesCount = profileData?.favoritesCount ?? 0;
   const historyCount = profileData?.historyCount ?? 0;
@@ -181,6 +209,53 @@ export function ProfileOverview({ user }: ProfileOverviewProps) {
 
     return true;
   });
+
+  async function handleAddToHomescreen() {
+    if (isInstalling) {
+      return;
+    }
+
+    setIsInstalling(true);
+
+    try {
+      const telegramWebApp = window.Telegram?.WebApp;
+
+      if (telegramWebApp?.addToHomeScreen) {
+        telegramWebApp.addToHomeScreen();
+        setActionMessage("Telegram sedang menyiapkan shortcut ke layar utama.");
+        return;
+      }
+
+      if (installPromptEvent) {
+        await installPromptEvent.prompt();
+        const choice = await installPromptEvent.userChoice;
+        setActionMessage(
+          choice?.outcome === "accepted"
+            ? "DramaPro ditambahkan ke layar utama."
+            : "Permintaan add to homescreen dibatalkan.",
+        );
+        setInstallPromptEvent(null);
+        return;
+      }
+
+      setActionMessage(
+        "Buka menu browser lalu pilih 'Add to Home screen' untuk menambahkan shortcut.",
+      );
+    } finally {
+      setIsInstalling(false);
+    }
+  }
+
+  function handleSupportClick() {
+    const telegramWebApp = window.Telegram?.WebApp;
+
+    if (telegramWebApp?.openTelegramLink) {
+      telegramWebApp.openTelegramLink(supportUrl);
+      return;
+    }
+
+    window.open(supportUrl, "_blank", "noopener,noreferrer");
+  }
 
   return (
     <>
@@ -325,29 +400,64 @@ export function ProfileOverview({ user }: ProfileOverviewProps) {
             );
           })}
 
-          {secondaryMenuItems.map((item) => {
-            const Icon = item.icon;
-
-            return (
-              <Card key={item.label} className="soft-panel rounded-[1.6rem] border-white/10">
-                <CardContent className="flex items-center justify-between gap-4 p-4">
-                  <div className="flex items-center gap-4">
-                    <div className="flex size-11 items-center justify-center rounded-2xl border border-white/10 bg-white/6 text-white shadow-[0_10px_24px_rgba(0,0,0,0.18)]">
-                      <Icon className="size-5" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-white">{item.label}</p>
-                      <p className="text-sm text-[var(--muted-foreground)]">
-                        {item.description}
-                      </p>
-                    </div>
+          <button
+            type="button"
+            onClick={() => {
+              void handleAddToHomescreen();
+            }}
+            className="block w-full text-left"
+          >
+            <Card className="soft-panel rounded-[1.6rem] border-white/10 transition hover:border-accent/35">
+              <CardContent className="flex items-center justify-between gap-4 p-4">
+                <div className="flex items-center gap-4">
+                  <div className="flex size-11 items-center justify-center rounded-2xl border border-white/10 bg-white/6 text-white shadow-[0_10px_24px_rgba(0,0,0,0.18)]">
+                    {isInstalling ? (
+                      <LoaderCircle className="size-5 animate-spin" />
+                    ) : (
+                      <Download className="size-5" />
+                    )}
                   </div>
-                  <Badge variant="secondary">Soon</Badge>
-                </CardContent>
-              </Card>
-            );
-          })}
+                  <div>
+                    <p className="font-medium text-white">Add to Homescreen</p>
+                    <p className="text-sm text-[var(--muted-foreground)]">
+                      Tambahkan shortcut DramaPro ke layar utama seperti aplikasi.
+                    </p>
+                  </div>
+                </div>
+                <Badge variant="secondary">Aktif</Badge>
+              </CardContent>
+            </Card>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSupportClick}
+            className="block w-full text-left"
+          >
+            <Card className="soft-panel rounded-[1.6rem] border-white/10 transition hover:border-accent/35">
+              <CardContent className="flex items-center justify-between gap-4 p-4">
+                <div className="flex items-center gap-4">
+                  <div className="flex size-11 items-center justify-center rounded-2xl border border-white/10 bg-white/6 text-white shadow-[0_10px_24px_rgba(0,0,0,0.18)]">
+                    <CircleHelp className="size-5" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-white">Bantuan</p>
+                    <p className="text-sm text-[var(--muted-foreground)]">
+                      Hubungi support Telegram jika ada kendala akun atau playback.
+                    </p>
+                  </div>
+                </div>
+                <Badge variant="secondary">Telegram</Badge>
+              </CardContent>
+            </Card>
+          </button>
         </div>
+
+        {actionMessage ? (
+          <div className="rounded-[1.4rem] border border-white/10 bg-white/6 px-4 py-3 text-sm text-white/82">
+            {actionMessage}
+          </div>
+        ) : null}
       </section>
     </>
   );
