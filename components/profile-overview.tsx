@@ -76,12 +76,6 @@ const profileMenuItems = [
     description: "Perbarui password akun dengan aman.",
     icon: KeyRound,
   },
-  {
-    href: "/profile/payout-settings",
-    label: "Detail Withdraw",
-    description: "Atur rekening default untuk pencairan komisi.",
-    icon: Download,
-  },
 ] as const;
 
 function normalizeTelegramHomeScreenStatus(

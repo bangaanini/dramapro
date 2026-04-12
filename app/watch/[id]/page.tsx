@@ -236,7 +236,7 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)] lg:items-start">
         <Card className="glass-panel overflow-hidden rounded-[2.2rem] border-white/10">
           <CardContent className="p-0">
-            <div className="relative aspect-[9/14] overflow-hidden bg-black">
+            <div className="relative aspect-[9/13] overflow-hidden bg-black sm:aspect-[9/12]">
               {dramaThumbUrl ? (
                 <Image
                   src={dramaThumbUrl}
@@ -248,9 +248,9 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
                   unoptimized={shouldBypassImageOptimization(dramaThumbUrl)}
                 />
               ) : null}
-              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(8,8,8,0.08)_12%,rgba(8,8,8,0.72)_64%,rgba(8,8,8,0.96)_100%)]" />
+              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(8,8,8,0.04)_20%,rgba(8,8,8,0.18)_62%,rgba(8,8,8,0.72)_100%)]" />
 
-              <div className="absolute inset-x-0 bottom-0 space-y-5 p-5 sm:p-6">
+              <div className="absolute inset-x-0 bottom-0 space-y-4 p-5 sm:p-6">
                 <div className="flex flex-wrap gap-2">
                   <Badge className="border-accent/25 bg-accent-soft text-accent">
                     <Sparkles className="mr-1.5 size-3.5" />
@@ -259,43 +259,42 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
                   <Badge variant="secondary">{drama.providerName}</Badge>
                 </div>
 
-                <div className="space-y-3">
-                  <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                    {drama.title}
-                  </h1>
-                  <p className="max-w-2xl text-sm leading-7 text-white/80 sm:text-base">
-                    {drama.description || "Sinopsis belum tersedia untuk drama ini."}
-                  </p>
-                </div>
+                <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-white drop-shadow-[0_8px_24px_rgba(0,0,0,0.55)] sm:text-4xl">
+                  {drama.title}
+                </h1>
+              </div>
+            </div>
 
-                <div className="flex flex-wrap gap-3">
-                  <PlayDramaButton
-                    href={playHref}
-                    label={
-                      watchHistory && !watchHistoryIsLocked
-                        ? `Lanjutkan EP.${preferredInitialEpisode}`
-                        : "Mulai Nonton"
-                    }
-                    className={cn(
-                      "h-12 rounded-full px-6",
-                    )}
-                  />
-                  <DramaDetailShareButton
-                    title={drama.title}
-                    shareUrl={shareUrl}
-                    telegramShareUrl={telegramShareUrl}
-                  />
-                  <FavoriteDramaButton
-                    dramaId={drama.id}
-                    redirectTo={`/watch/${drama.id}`}
-                    isFavorite={Boolean(favorite)}
-                    size="lg"
-                    className="h-12 rounded-full px-5"
-                  />
-                  <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-4 py-2 text-sm text-white/75 backdrop-blur">
-                    <Clapperboard className="size-4 text-accent" />
-                    {drama.episodeCount} episode
-                  </div>
+            <div className="space-y-5 border-t border-white/8 bg-[linear-gradient(180deg,rgba(23,16,16,0.98),rgba(12,9,9,0.98))] p-5 sm:p-6">
+              <p className="text-sm leading-7 text-white/78 sm:text-base">
+                {drama.description || "Sinopsis belum tersedia untuk drama ini."}
+              </p>
+
+              <div className="flex flex-wrap gap-3">
+                <PlayDramaButton
+                  href={playHref}
+                  label={
+                    watchHistory && !watchHistoryIsLocked
+                      ? `Lanjutkan EP.${preferredInitialEpisode}`
+                      : "Mulai Nonton"
+                  }
+                  className={cn("h-12 rounded-full px-6")}
+                />
+                <DramaDetailShareButton
+                  title={drama.title}
+                  shareUrl={shareUrl}
+                  telegramShareUrl={telegramShareUrl}
+                />
+                <FavoriteDramaButton
+                  dramaId={drama.id}
+                  redirectTo={`/watch/${drama.id}`}
+                  isFavorite={Boolean(favorite)}
+                  size="lg"
+                  className="h-12 rounded-full px-5"
+                />
+                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-4 py-2 text-sm text-white/75 backdrop-blur">
+                  <Clapperboard className="size-4 text-accent" />
+                  {drama.episodeCount} episode
                 </div>
               </div>
             </div>
