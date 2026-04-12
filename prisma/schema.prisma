@@ -216,6 +216,7 @@ model VipPricePlan {
   name         String
   slug         String       @unique
   description  String       @default("")
+  badgeText    String       @default("")
   priceAmount  Int
   currency     String       @default("IDR")
   durationDays Int

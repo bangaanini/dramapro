@@ -1,0 +1,2 @@
+ALTER TABLE "VipPricePlan"
+ADD COLUMN "badgeText" TEXT NOT NULL DEFAULT '';

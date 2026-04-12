@@ -122,6 +122,7 @@ export default async function VipPage(props: PageProps<"/vip">) {
               id: plan.id,
               name: plan.name,
               description: plan.description,
+              badgeText: plan.badgeText,
               durationDays: plan.durationDays,
               priceAmount: plan.priceAmount,
               currency: plan.currency,

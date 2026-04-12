@@ -21,6 +21,7 @@ type VipPlanOption = {
   id: string;
   name: string;
   description: string | null;
+  badgeText: string;
   durationDays: number;
   priceAmount: number;
   currency: string;
@@ -131,10 +132,18 @@ export function VipPaymentSelector({
                   "h-full overflow-hidden rounded-[2rem] border p-0 transition",
                   isSelected
                     ? "border-amber-400/45 bg-[linear-gradient(180deg,rgba(75,49,11,0.95),rgba(27,19,11,0.98))] shadow-[0_28px_80px_rgba(255,177,21,0.18)]"
-                    : "glass-panel border-white/10",
+                    : plan.badgeText
+                      ? "border-amber-400/25 bg-[linear-gradient(180deg,rgba(41,27,12,0.92),rgba(16,11,8,0.98))]"
+                      : "glass-panel border-white/10",
                 )}
               >
                 <CardContent className="space-y-4 p-5">
+                  {plan.badgeText ? (
+                    <div className="inline-flex rounded-full border border-amber-300/22 bg-amber-400/12 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100">
+                      {plan.badgeText}
+                    </div>
+                  ) : null}
+
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-xs font-medium uppercase tracking-[0.22em] text-white/45">
@@ -178,6 +187,11 @@ export function VipPaymentSelector({
                 {formatIdr(selectedPlan.priceAmount, selectedPlan.currency)}
               </Badge>
             </div>
+            {selectedPlan.badgeText ? (
+              <div className="mt-4 inline-flex rounded-full border border-amber-300/20 bg-amber-400/12 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-100">
+                {selectedPlan.badgeText}
+              </div>
+            ) : null}
             <p className="mt-5 text-sm leading-6 text-white/72">
               Akses semua episode drama
             </p>

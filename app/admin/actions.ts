@@ -99,6 +99,7 @@ function slugifyVipPlan(value: string) {
 function parseVipPricePlanPayload(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
+  const badgeText = String(formData.get("badgeText") ?? "").trim().slice(0, 32);
   const currency = String(formData.get("currency") ?? "IDR").trim().toUpperCase() || "IDR";
   const durationDays = parsePositiveInt(formData.get("durationDays"), 0);
   const sortOrder = parsePositiveInt(formData.get("sortOrder"), 0);
@@ -109,6 +110,7 @@ function parseVipPricePlanPayload(formData: FormData) {
   return {
     name,
     description,
+    badgeText,
     currency,
     durationDays,
     sortOrder,

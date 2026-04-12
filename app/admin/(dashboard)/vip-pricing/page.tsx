@@ -65,6 +65,7 @@ export default async function AdminVipPricingPage(
                 <thead className="border-b border-white/10 text-[var(--muted)]">
                   <tr>
                     <th className="px-3 py-3 font-medium">Paket</th>
+                    <th className="px-3 py-3 font-medium">Badge</th>
                     <th className="px-3 py-3 font-medium">Durasi</th>
                     <th className="px-3 py-3 font-medium">Harga</th>
                     <th className="px-3 py-3 font-medium">Status</th>
@@ -81,6 +82,17 @@ export default async function AdminVipPricingPage(
                             {plan.slug}
                             {plan.description ? ` • ${plan.description}` : ""}
                           </p>
+                        </td>
+                        <td className="px-3 py-4">
+                          {plan.badgeText ? (
+                            <Badge className="border-amber-400/25 bg-amber-500/12 text-amber-100">
+                              {plan.badgeText}
+                            </Badge>
+                          ) : (
+                            <span className="text-[var(--muted-foreground)]">
+                              -
+                            </span>
+                          )}
                         </td>
                         <td className="px-3 py-4 text-white">{plan.durationDays} hari</td>
                         <td className="px-3 py-4 text-white">
@@ -109,7 +121,7 @@ export default async function AdminVipPricingPage(
                   ) : (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={6}
                         className="px-3 py-10 text-center text-[var(--muted)]"
                       >
                         Belum ada paket VIP. Tambahkan paket pertama di panel samping.
@@ -167,6 +179,13 @@ export default async function AdminVipPricingPage(
                             name="slug"
                             defaultValue={plan.slug}
                             placeholder="vip-30-hari"
+                          />
+                          <Field
+                            label="Badge highlight"
+                            name="badgeText"
+                            defaultValue={plan.badgeText}
+                            placeholder="Promo"
+                            helper="Kosongkan jika paket tidak perlu badge."
                           />
                         </div>
 
@@ -285,6 +304,22 @@ export default async function AdminVipPricingPage(
                   placeholder="vip-30-hari"
                   className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition placeholder:text-[var(--muted-foreground)] focus:border-accent/60 focus:ring-2 focus:ring-[var(--ring)]"
                 />
+              </label>
+
+              <label className="block space-y-2">
+                <span className="text-sm font-medium text-white">
+                  Badge highlight
+                </span>
+                <input
+                  name="badgeText"
+                  type="text"
+                  maxLength={32}
+                  placeholder="Promo"
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition placeholder:text-[var(--muted-foreground)] focus:border-accent/60 focus:ring-2 focus:ring-[var(--ring)]"
+                />
+                <span className="block text-xs text-[var(--muted-foreground)]">
+                  Contoh: Promo, Terlaris, Best Value. Kosongkan untuk tanpa badge.
+                </span>
               </label>
 
               <div className="grid gap-4 sm:grid-cols-2">
