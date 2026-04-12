@@ -39,6 +39,7 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { triggerImpactHaptic, triggerSelectionHaptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 import {
   clampEpisodeForVipAccess,
@@ -1156,6 +1157,7 @@ export function VideoPlayer({
           type="button"
           onClick={() => {
             if (isLocked) {
+              triggerImpactHaptic("light");
               router.push(
                 `/vip?next=${encodeURIComponent(
                   `/watch/${internalDramaId}/play?episode=${episode}`,
@@ -1164,6 +1166,7 @@ export function VideoPlayer({
               return;
             }
 
+            triggerSelectionHaptic();
             setSelectedEpisode(episode);
             onPickEpisode?.();
           }}
@@ -1327,6 +1330,7 @@ export function VideoPlayer({
               <PlayerAction
                 label={isFavorite ? "Favorit" : "Simpan"}
                 onClick={handleFavoriteToggle}
+                hapticStyle={isFavorite ? "selection" : "impact"}
                 disabled={isFavoritePending}
                 active={isFavorite}
                 icon={
@@ -1343,6 +1347,7 @@ export function VideoPlayer({
                   setIsChromeVisible(true);
                   setIsEpisodeSheetOpen(true);
                 }}
+                hapticStyle="selection"
                 icon={<ListVideo className="size-4" />}
               />
               <PlayerAction
@@ -1355,6 +1360,7 @@ export function VideoPlayer({
 
                   void toggleFullscreen();
                 }}
+                hapticStyle="selection"
                 icon={
                   immersive || isFullscreen ? (
                     <Minimize2 className="size-4" />
@@ -1366,6 +1372,7 @@ export function VideoPlayer({
               <PlayerAction
                 label="Bagikan"
                 onClick={handleShare}
+                hapticStyle="selection"
                 icon={<Share2 className="size-4" />}
               />
             </div>
@@ -1778,16 +1785,30 @@ function PlayerAction({
   onClick,
   disabled = false,
   active = false,
+  hapticStyle = "selection",
 }: {
   icon: ReactNode;
   label: string;
   onClick: () => void;
   disabled?: boolean;
   active?: boolean;
+  hapticStyle?: "selection" | "impact";
 }) {
   return (
     <button
       type="button"
+      onPointerDown={() => {
+        if (disabled) {
+          return;
+        }
+
+        if (hapticStyle === "impact") {
+          triggerImpactHaptic("light");
+          return;
+        }
+
+        triggerSelectionHaptic();
+      }}
       onClick={onClick}
       disabled={disabled}
       className="flex w-16 flex-col items-center gap-2 text-center text-xs text-white disabled:opacity-70"

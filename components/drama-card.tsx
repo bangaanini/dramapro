@@ -1,9 +1,12 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
+import { triggerSelectionHaptic } from "@/lib/haptics";
 import {
   formatProviderName,
   normalizeDisplayImageUrl,
@@ -39,8 +42,12 @@ export function DramaCard({
 
   if (compact) {
     return (
-      <Link href={href} className="group block">
-        <article className="overflow-hidden rounded-[1rem] border border-white/8 bg-[linear-gradient(180deg,rgba(34,22,20,0.96),rgba(14,10,10,0.98))] shadow-[0_14px_36px_rgba(0,0,0,0.26)] transition duration-300 hover:-translate-y-0.5 hover:border-accent/28">
+      <Link
+        href={href}
+        onPointerDown={() => triggerSelectionHaptic()}
+        className="group block"
+      >
+        <article className="overflow-hidden rounded-[1rem] border border-white/8 bg-[linear-gradient(180deg,rgba(34,22,20,0.96),rgba(14,10,10,0.98))] shadow-[0_14px_36px_rgba(0,0,0,0.26)] transition duration-300 active:scale-[0.985] hover:-translate-y-0.5 hover:border-accent/28">
           <div className="relative aspect-[0.74] overflow-hidden bg-white/5">
             {displayThumbUrl ? (
               <Image
@@ -87,8 +94,12 @@ export function DramaCard({
   }
 
   return (
-    <Link href={href} className="group">
-      <Card className="glass-panel h-full overflow-hidden rounded-[1.6rem] border-white/8 transition duration-300 hover:-translate-y-1 hover:border-accent/35 hover:shadow-[0_24px_60px_rgba(0,0,0,0.42)]">
+    <Link
+      href={href}
+      onPointerDown={() => triggerSelectionHaptic()}
+      className="group"
+    >
+      <Card className="glass-panel h-full overflow-hidden rounded-[1.6rem] border-white/8 transition duration-300 active:scale-[0.985] hover:-translate-y-1 hover:border-accent/35 hover:shadow-[0_24px_60px_rgba(0,0,0,0.42)]">
         <div className="relative aspect-[3/4] overflow-hidden bg-white/5">
           {displayThumbUrl ? (
             <Image

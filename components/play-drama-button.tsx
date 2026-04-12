@@ -5,6 +5,7 @@ import { LoaderCircle, PlayCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { buttonVariants } from "@/components/ui/button";
+import { triggerSelectionHaptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 
 type PlayDramaButtonProps = {
@@ -44,6 +45,13 @@ export function PlayDramaButton({
       type="button"
       disabled={isLoading}
       aria-busy={isLoading}
+      onPointerDown={() => {
+        if (isLoading) {
+          return;
+        }
+
+        triggerSelectionHaptic();
+      }}
       onClick={() => {
         if (isLoading) {
           return;

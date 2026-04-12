@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { triggerSelectionHaptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 
 type PaymentStatus = "pending" | "paid" | "failed" | "expired" | "cancelled";
@@ -321,6 +322,7 @@ export function VipCheckoutPanel({
                   href={payment.payUrl}
                   target="_blank"
                   rel="noreferrer"
+                  onPointerDown={() => triggerSelectionHaptic()}
                   className={cn(buttonVariants({ size: "lg" }), "rounded-2xl")}
                 >
                   <ExternalLink className="mr-2 size-4" />
@@ -328,6 +330,7 @@ export function VipCheckoutPanel({
                 </Link>
                 <button
                   type="button"
+                  onPointerDown={() => triggerSelectionHaptic()}
                   onClick={() => void handleManualRefresh()}
                   disabled={isRefreshing}
                   className={cn(
@@ -346,11 +349,16 @@ export function VipCheckoutPanel({
             </div>
           ) : payment.status === "paid" ? (
             <div className="flex flex-wrap gap-3">
-              <Link href={nextHref} className={buttonVariants({ size: "sm" })}>
+              <Link
+                href={nextHref}
+                onPointerDown={() => triggerSelectionHaptic()}
+                className={buttonVariants({ size: "sm" })}
+              >
                 Lanjutkan ke konten
               </Link>
               <Link
                 href="/profile"
+                onPointerDown={() => triggerSelectionHaptic()}
                 className={buttonVariants({ variant: "secondary", size: "sm" })}
               >
                 Buka profil
@@ -360,6 +368,7 @@ export function VipCheckoutPanel({
             <div className="flex flex-wrap gap-3">
               <Link
                 href={`/vip?next=${encodeURIComponent(nextHref)}`}
+                onPointerDown={() => triggerSelectionHaptic()}
                 className={buttonVariants({ size: "sm" })}
               >
                 Buat transaksi baru
@@ -369,6 +378,7 @@ export function VipCheckoutPanel({
                   href={payment.payUrl}
                   target="_blank"
                   rel="noreferrer"
+                  onPointerDown={() => triggerSelectionHaptic()}
                   className={buttonVariants({ variant: "secondary", size: "sm" })}
                 >
                   <ExternalLink className="mr-2 size-4" />
