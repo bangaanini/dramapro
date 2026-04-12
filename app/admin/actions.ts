@@ -96,10 +96,23 @@ function slugifyVipPlan(value: string) {
     .slice(0, 60);
 }
 
+function normalizeHexColor(value: FormDataEntryValue | null) {
+  const rawValue = String(value ?? "").trim();
+
+  if (!rawValue) {
+    return "";
+  }
+
+  const normalized = rawValue.startsWith("#") ? rawValue : `#${rawValue}`;
+
+  return normalized.slice(0, 7);
+}
+
 function parseVipPricePlanPayload(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const badgeText = String(formData.get("badgeText") ?? "").trim().slice(0, 32);
+  const badgeColor = normalizeHexColor(formData.get("badgeColor"));
   const currency = String(formData.get("currency") ?? "IDR").trim().toUpperCase() || "IDR";
   const durationDays = parsePositiveInt(formData.get("durationDays"), 0);
   const sortOrder = parsePositiveInt(formData.get("sortOrder"), 0);
@@ -111,6 +124,7 @@ function parseVipPricePlanPayload(formData: FormData) {
     name,
     description,
     badgeText,
+    badgeColor,
     currency,
     durationDays,
     sortOrder,
@@ -139,6 +153,12 @@ function validateVipPricePlanPayload(
 
   if (!payload.slug) {
     redirect("/admin/vip-pricing?error=Slug%20paket%20tidak%20valid");
+  }
+
+  if (payload.badgeColor && !/^#[0-9a-fA-F]{6}$/.test(payload.badgeColor)) {
+    redirect(
+      "/admin/vip-pricing?error=Warna%20badge%20harus%20format%20hex%20valid,%20contoh%20%23f59e0b",
+    );
   }
 }
 

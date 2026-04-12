@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useState } from "react";
 import {
   Building2,
   CheckCircle2,
@@ -22,6 +22,7 @@ type VipPlanOption = {
   name: string;
   description: string | null;
   badgeText: string;
+  badgeColor: string;
   durationDays: number;
   priceAmount: number;
   currency: string;
@@ -101,6 +102,9 @@ export function VipPaymentSelector({
     selectedChannel.group === "va"
       ? `Bayar dengan ${selectedChannel.shortName ?? selectedChannel.name}`
       : "Bayar dengan QRIS";
+  const selectedSummaryStyle = selectedPlan.badgeText
+    ? getSelectedSummaryStyle(getPlanAccentColor(selectedPlan))
+    : undefined;
 
   function showVaMinimumNotice() {
     triggerSelectionHaptic();
@@ -110,9 +114,20 @@ export function VipPaymentSelector({
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(19,13,10,0.96),rgba(10,7,6,0.98))] shadow-[0_22px_70px_rgba(0,0,0,0.22)]">
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-4 sm:px-5">
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <section className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
         {plans.map((plan) => {
           const isSelected = plan.id === selectedPlanId;
+          const hasHighlight = Boolean(plan.badgeText);
+          const accentColor = getPlanAccentColor(plan);
+          const highlightStyle = hasHighlight
+            ? getHighlightCardStyle(accentColor, isSelected)
+            : undefined;
+          const badgeStyle = hasHighlight
+            ? getHighlightBadgeStyle(accentColor)
+            : undefined;
+          const accentTextStyle = hasHighlight
+            ? getHighlightTextStyle(accentColor)
+            : undefined;
 
           return (
             <button
@@ -129,38 +144,63 @@ export function VipPaymentSelector({
             >
               <Card
                 className={cn(
-                  "h-full overflow-hidden rounded-[2rem] border p-0 transition",
-                  isSelected
-                    ? "border-amber-400/45 bg-[linear-gradient(180deg,rgba(75,49,11,0.95),rgba(27,19,11,0.98))] shadow-[0_28px_80px_rgba(255,177,21,0.18)]"
-                    : plan.badgeText
-                      ? "border-amber-400/25 bg-[linear-gradient(180deg,rgba(41,27,12,0.92),rgba(16,11,8,0.98))]"
+                  "h-full overflow-hidden rounded-[1.45rem] border p-0 transition",
+                  isSelected && !hasHighlight
+                    ? "border-amber-400/45 bg-[linear-gradient(180deg,rgba(75,49,11,0.95),rgba(27,19,11,0.98))] shadow-[0_18px_44px_rgba(255,177,21,0.14)]"
+                    : hasHighlight
+                      ? "border-white/10"
                       : "glass-panel border-white/10",
                 )}
+                style={highlightStyle}
               >
-                <CardContent className="space-y-4 p-5">
-                  {plan.badgeText ? (
-                    <div className="inline-flex rounded-full border border-amber-300/22 bg-amber-400/12 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100">
-                      {plan.badgeText}
-                    </div>
-                  ) : null}
-
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-[0.22em] text-white/45">
-                        {plan.name}
+                <CardContent className="p-3.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <p
+                          className="truncate text-[13px] font-semibold leading-5 text-white"
+                          style={accentTextStyle}
+                        >
+                          {plan.name}
+                        </p>
+                        {hasHighlight ? (
+                          <span
+                            className="shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em]"
+                            style={badgeStyle}
+                          >
+                            {plan.badgeText}
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-0.5 text-[11px] leading-4 text-white/45">
+                        {plan.durationDays} hari
                       </p>
-                      <p className="mt-3 text-xl font-semibold tracking-tight text-white">
+                    </div>
+
+                    <div className="flex shrink-0 items-center gap-2">
+                      <p
+                        className="whitespace-nowrap text-sm font-bold tracking-tight text-white"
+                        style={accentTextStyle}
+                      >
                         {formatIdr(plan.priceAmount, plan.currency)}
                       </p>
-                    </div>
-                    {isSelected ? (
-                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-amber-400 text-[#392100]">
-                        <CheckCircle2 className="size-4" />
+                      <span
+                        className={cn(
+                          "inline-flex h-6 w-6 items-center justify-center rounded-full border transition",
+                          isSelected
+                            ? "border-transparent bg-amber-400 text-[#392100]"
+                            : "border-white/12 bg-white/5 text-white/30",
+                        )}
+                        style={
+                          isSelected && hasHighlight
+                            ? getSelectedCheckStyle(accentColor)
+                            : undefined
+                        }
+                      >
+                        <CheckCircle2 className="size-3.5" />
                       </span>
-                    ) : null}
+                    </div>
                   </div>
-
-                  
                 </CardContent>
               </Card>
             </button>
@@ -170,7 +210,10 @@ export function VipPaymentSelector({
 
         <Card className="glass-panel mt-4 rounded-[2rem] border-white/10">
           <CardContent className="space-y-5 p-5">
-          <div className="rounded-[1.75rem] border border-amber-400/18 bg-[linear-gradient(180deg,rgba(255,198,74,0.12),rgba(255,122,69,0.08))] p-5">
+          <div
+            className="rounded-[1.75rem] border border-amber-400/18 bg-[linear-gradient(180deg,rgba(255,198,74,0.12),rgba(255,122,69,0.08))] p-5"
+            style={selectedSummaryStyle}
+          >
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.24em] text-white/45">
@@ -188,7 +231,10 @@ export function VipPaymentSelector({
               </Badge>
             </div>
             {selectedPlan.badgeText ? (
-              <div className="mt-4 inline-flex rounded-full border border-amber-300/20 bg-amber-400/12 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-100">
+              <div
+                className="mt-4 inline-flex rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]"
+                style={getHighlightBadgeStyle(getPlanAccentColor(selectedPlan))}
+              >
                 {selectedPlan.badgeText}
               </div>
             ) : null}
@@ -473,6 +519,64 @@ function formatIdr(amount: number, currency: string) {
     currency,
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+function getPlanAccentColor(plan: Pick<VipPlanOption, "badgeColor">) {
+  return /^#[0-9a-fA-F]{6}$/.test(plan.badgeColor) ? plan.badgeColor : "#f59e0b";
+}
+
+function hexToRgba(hexColor: string, alpha: number) {
+  const hex = hexColor.replace("#", "");
+  const red = Number.parseInt(hex.slice(0, 2), 16);
+  const green = Number.parseInt(hex.slice(2, 4), 16);
+  const blue = Number.parseInt(hex.slice(4, 6), 16);
+
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function getHighlightCardStyle(
+  accentColor: string,
+  isSelected: boolean,
+): CSSProperties {
+  return {
+    background: `linear-gradient(180deg, ${hexToRgba(accentColor, isSelected ? 0.28 : 0.18)} 0%, ${hexToRgba(accentColor, isSelected ? 0.12 : 0.07)} 42%, rgba(16, 11, 8, 0.98) 100%)`,
+    borderColor: hexToRgba(accentColor, isSelected ? 0.72 : 0.35),
+    boxShadow: isSelected
+      ? `0 28px 80px ${hexToRgba(accentColor, 0.22)}, inset 0 1px 0 ${hexToRgba(accentColor, 0.28)}`
+      : `inset 0 1px 0 ${hexToRgba(accentColor, 0.14)}`,
+  };
+}
+
+function getHighlightBadgeStyle(accentColor: string): CSSProperties {
+  return {
+    backgroundColor: hexToRgba(accentColor, 0.18),
+    borderColor: hexToRgba(accentColor, 0.36),
+    color: "#fff7ed",
+    boxShadow: `0 0 28px ${hexToRgba(accentColor, 0.16)}`,
+  };
+}
+
+function getHighlightTextStyle(accentColor: string): CSSProperties {
+  return {
+    color: accentColor,
+    textShadow: `0 0 22px ${hexToRgba(accentColor, 0.18)}`,
+  };
+}
+
+function getSelectedCheckStyle(accentColor: string): CSSProperties {
+  return {
+    backgroundColor: accentColor,
+    color: "#1f1308",
+    boxShadow: `0 0 24px ${hexToRgba(accentColor, 0.28)}`,
+  };
+}
+
+function getSelectedSummaryStyle(accentColor: string): CSSProperties {
+  return {
+    background: `linear-gradient(180deg, ${hexToRgba(accentColor, 0.18)}, rgba(255, 122, 69, 0.07))`,
+    borderColor: hexToRgba(accentColor, 0.28),
+    boxShadow: `inset 0 1px 0 ${hexToRgba(accentColor, 0.12)}`,
+  };
 }
 
 function getBankInitials(bankName: string) {

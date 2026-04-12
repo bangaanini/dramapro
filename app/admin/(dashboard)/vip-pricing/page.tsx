@@ -85,9 +85,18 @@ export default async function AdminVipPricingPage(
                         </td>
                         <td className="px-3 py-4">
                           {plan.badgeText ? (
-                            <Badge className="border-amber-400/25 bg-amber-500/12 text-amber-100">
-                              {plan.badgeText}
-                            </Badge>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="size-4 rounded-full border border-white/15"
+                                style={{
+                                  backgroundColor:
+                                    plan.badgeColor || "var(--accent)",
+                                }}
+                              />
+                              <Badge className="border-amber-400/25 bg-amber-500/12 text-amber-100">
+                                {plan.badgeText}
+                              </Badge>
+                            </div>
                           ) : (
                             <span className="text-[var(--muted-foreground)]">
                               -
@@ -186,6 +195,13 @@ export default async function AdminVipPricingPage(
                             defaultValue={plan.badgeText}
                             placeholder="Promo"
                             helper="Kosongkan jika paket tidak perlu badge."
+                          />
+                          <Field
+                            label="Warna badge"
+                            name="badgeColor"
+                            defaultValue={plan.badgeColor}
+                            placeholder="#f59e0b"
+                            helper="Hex opsional. Contoh: #f59e0b, #22c55e, #ef4444."
                           />
                         </div>
 
@@ -319,6 +335,21 @@ export default async function AdminVipPricingPage(
                 />
                 <span className="block text-xs text-[var(--muted-foreground)]">
                   Contoh: Promo, Terlaris, Best Value. Kosongkan untuk tanpa badge.
+                </span>
+              </label>
+
+              <label className="block space-y-2">
+                <span className="text-sm font-medium text-white">
+                  Warna badge
+                </span>
+                <input
+                  name="badgeColor"
+                  type="text"
+                  placeholder="#f59e0b"
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition placeholder:text-[var(--muted-foreground)] focus:border-accent/60 focus:ring-2 focus:ring-[var(--ring)]"
+                />
+                <span className="block text-xs text-[var(--muted-foreground)]">
+                  Opsional. Isi hex agar kartu paket lebih menonjol.
                 </span>
               </label>
 
