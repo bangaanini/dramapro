@@ -3,6 +3,10 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { ensureUserAffiliateCode, readAffiliateCookieCode } from "@/lib/affiliate";
 import { getTelegramSettings } from "@/lib/app-settings";
 import { prisma } from "@/lib/prisma";
+import {
+  getEnabledTelegramPartnerBot,
+  normalizeTelegramBotUsername,
+} from "@/lib/telegram-partner-bots";
 import type { PublicUser } from "@/lib/user-auth";
 import { createUserSession } from "@/lib/user-auth";
 import { buildTelegramDisplayName } from "@/lib/user-identity";
@@ -98,11 +102,27 @@ export function verifyTelegramInitData(
 export async function createTelegramUserSessionFromInitData(
   initData: string,
   referralCodeOverride?: string | null,
+  botUsername?: string | null,
 ) {
-  const botToken = (await getTelegramSettings()).botToken?.trim();
+  const normalizedBotUsername = normalizeTelegramBotUsername(botUsername);
+  const partnerBot = normalizedBotUsername
+    ? await getEnabledTelegramPartnerBot(normalizedBotUsername)
+    : null;
+
+  if (normalizedBotUsername && !partnerBot) {
+    throw new Error("Bot partner tidak ditemukan atau sedang nonaktif.");
+  }
+
+  const botToken = partnerBot
+    ? partnerBot.botToken
+    : (await getTelegramSettings()).botToken?.trim();
 
   if (!botToken) {
-    throw new Error("Telegram bot token belum diatur di server.");
+    throw new Error(
+      partnerBot
+        ? "Token bot partner belum valid."
+        : "Telegram bot token belum diatur di server.",
+    );
   }
 
   const verified = verifyTelegramInitData(initData, botToken);
@@ -113,16 +133,16 @@ export async function createTelegramUserSessionFromInitData(
     username: verified.user.username,
   });
 
-  const referralCode = await readAffiliateCookieCode();
-  const resolvedReferralCode =
-    referralCodeOverride?.trim().toUpperCase() || referralCode;
-  const referralUser =
-    resolvedReferralCode
-      ? await prisma.user.findUnique({
-          where: { affiliateCode: resolvedReferralCode },
-          select: { id: true },
-        })
-      : null;
+  const referralCode = partnerBot ? null : await readAffiliateCookieCode();
+  const resolvedReferralCode = partnerBot
+    ? null
+    : referralCodeOverride?.trim().toUpperCase() || referralCode;
+  const referralUser = resolvedReferralCode
+    ? await prisma.user.findUnique({
+        where: { affiliateCode: resolvedReferralCode },
+        select: { id: true },
+      })
+    : null;
 
   const existingUser = await prisma.user.findUnique({
     where: {
@@ -147,10 +167,13 @@ export async function createTelegramUserSessionFromInitData(
     },
   });
 
+  const partnerOwnerId = partnerBot?.ownerUserId ?? null;
   const referralOwnerId =
-    referralUser && referralUser.id !== existingUser?.id
-      ? referralUser.id
-      : null;
+    partnerOwnerId && partnerOwnerId !== existingUser?.id
+      ? partnerOwnerId
+      : referralUser && referralUser.id !== existingUser?.id
+        ? referralUser.id
+        : null;
 
   const user = existingUser
     ? await prisma.user.update({

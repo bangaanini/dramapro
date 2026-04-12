@@ -17,6 +17,7 @@ import {
   isPaymentGatewayProvider,
 } from "@/lib/payment-gateways";
 import { prisma } from "@/lib/prisma";
+import { normalizeTelegramBotUsername } from "@/lib/telegram-partner-bots";
 
 export async function loginAdminAction(formData: FormData) {
   const email = String(formData.get("email") ?? "");
@@ -518,6 +519,186 @@ export async function saveSeoSettingsAction(formData: FormData) {
   revalidatePath("/profile");
   revalidatePath("/vip");
   redirect("/admin/settings?saved=seo");
+}
+
+function parseTelegramPartnerBotPayload(formData: FormData) {
+  const botUsername = normalizeTelegramBotUsername(
+    String(formData.get("botUsername") ?? ""),
+  );
+  const ownerUserId = String(formData.get("ownerUserId") ?? "").trim();
+  const botToken = String(formData.get("botToken") ?? "").trim();
+  const webhookSecret = String(formData.get("webhookSecret") ?? "").trim();
+  const notes = String(formData.get("notes") ?? "").trim();
+  const isEnabled = String(formData.get("isEnabled") ?? "") === "on";
+
+  return {
+    botUsername,
+    ownerUserId,
+    botToken,
+    webhookSecret,
+    notes,
+    isEnabled,
+  };
+}
+
+async function assertTelegramPartnerBotOwner(ownerUserId: string) {
+  if (!ownerUserId) {
+    redirect("/admin/telegram-bots?error=Owner%20affiliate%20wajib%20dipilih");
+  }
+
+  const owner = await prisma.user.findUnique({
+    where: {
+      id: ownerUserId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!owner) {
+    redirect("/admin/telegram-bots?error=Owner%20affiliate%20tidak%20ditemukan");
+  }
+}
+
+export async function createTelegramPartnerBotAction(formData: FormData) {
+  await requireAdminSession();
+
+  const payload = parseTelegramPartnerBotPayload(formData);
+
+  if (!payload.botUsername) {
+    redirect("/admin/telegram-bots?error=Username%20bot%20partner%20wajib%20diisi");
+  }
+
+  if (!payload.botToken) {
+    redirect("/admin/telegram-bots?error=Token%20bot%20partner%20wajib%20diisi");
+  }
+
+  await assertTelegramPartnerBotOwner(payload.ownerUserId);
+
+  try {
+    await prisma.telegramPartnerBot.create({
+      data: {
+        botUsername: payload.botUsername,
+        botTokenCiphertext: encryptPaymentSecret(payload.botToken),
+        webhookSecretCiphertext: payload.webhookSecret
+          ? encryptPaymentSecret(payload.webhookSecret)
+          : null,
+        ownerUserId: payload.ownerUserId,
+        isEnabled: payload.isEnabled,
+        notes: payload.notes,
+      },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      redirect("/admin/telegram-bots?error=Username%20bot%20partner%20sudah%20dipakai");
+    }
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Bot partner gagal ditambahkan.";
+    redirect(`/admin/telegram-bots?error=${encodeURIComponent(message)}`);
+  }
+
+  revalidatePath("/admin/telegram-bots");
+  redirect("/admin/telegram-bots?saved=created");
+}
+
+export async function updateTelegramPartnerBotAction(formData: FormData) {
+  await requireAdminSession();
+
+  const id = String(formData.get("id") ?? "").trim();
+  const payload = parseTelegramPartnerBotPayload(formData);
+
+  if (!id) {
+    redirect("/admin/telegram-bots?error=Bot%20partner%20tidak%20ditemukan");
+  }
+
+  if (!payload.botUsername) {
+    redirect("/admin/telegram-bots?error=Username%20bot%20partner%20wajib%20diisi");
+  }
+
+  await assertTelegramPartnerBotOwner(payload.ownerUserId);
+
+  const existing = await prisma.telegramPartnerBot.findUnique({
+    where: {
+      id,
+    },
+    select: {
+      botTokenCiphertext: true,
+      webhookSecretCiphertext: true,
+    },
+  });
+
+  if (!existing) {
+    redirect("/admin/telegram-bots?error=Bot%20partner%20tidak%20ditemukan");
+  }
+
+  try {
+    await prisma.telegramPartnerBot.update({
+      where: {
+        id,
+      },
+      data: {
+        botUsername: payload.botUsername,
+        botTokenCiphertext: payload.botToken
+          ? encryptPaymentSecret(payload.botToken)
+          : existing.botTokenCiphertext,
+        webhookSecretCiphertext: payload.webhookSecret
+          ? encryptPaymentSecret(payload.webhookSecret)
+          : existing.webhookSecretCiphertext,
+        ownerUserId: payload.ownerUserId,
+        isEnabled: payload.isEnabled,
+        notes: payload.notes,
+      },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === "P2002") {
+        redirect("/admin/telegram-bots?error=Username%20bot%20partner%20sudah%20dipakai");
+      }
+
+      if (error.code === "P2025") {
+        redirect("/admin/telegram-bots?error=Bot%20partner%20tidak%20ditemukan");
+      }
+    }
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Bot partner gagal diperbarui.";
+    redirect(`/admin/telegram-bots?error=${encodeURIComponent(message)}`);
+  }
+
+  revalidatePath("/admin/telegram-bots");
+  redirect("/admin/telegram-bots?saved=updated");
+}
+
+export async function deleteTelegramPartnerBotAction(formData: FormData) {
+  await requireAdminSession();
+
+  const id = String(formData.get("id") ?? "").trim();
+
+  if (!id) {
+    redirect("/admin/telegram-bots?error=Bot%20partner%20tidak%20ditemukan");
+  }
+
+  try {
+    await prisma.telegramPartnerBot.delete({
+      where: {
+        id,
+      },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+      redirect("/admin/telegram-bots?error=Bot%20partner%20tidak%20ditemukan");
+    }
+
+    throw error;
+  }
+
+  revalidatePath("/admin/telegram-bots");
+  redirect("/admin/telegram-bots?saved=deleted");
 }
 
 export async function updateAffiliateWithdrawalStatusAction(formData: FormData) {

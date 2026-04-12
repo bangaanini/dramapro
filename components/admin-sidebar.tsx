@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   BadgePercent,
+  Bot,
   Crown,
   CreditCard,
   KeyRound,
@@ -63,6 +64,12 @@ const adminNavItems = [
     label: "Settings",
     description: "Atur Telegram dan SEO web",
     icon: SlidersHorizontal,
+  },
+  {
+    href: "/admin/telegram-bots",
+    label: "Telegram Bots",
+    description: "Bot partner affiliate",
+    icon: Bot,
   },
   {
     href: "/admin/password",

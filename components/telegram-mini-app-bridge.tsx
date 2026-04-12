@@ -52,6 +52,7 @@ export function TelegramMiniAppBridge() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const target = searchParams.get("tg_target");
+  const botUsername = searchParams.get("tg_bot")?.trim().replace(/^@/, "") ?? null;
   const startParam = searchParams.get("tgWebAppStartParam");
   const parsedStartParam = parseTelegramStartParam(startParam);
   const referralCode =
@@ -82,7 +83,9 @@ export function TelegramMiniAppBridge() {
     }
 
     const cached =
-      safeSessionStorage.getJSON<{ initData: string }>(TELEGRAM_SESSION_CACHE_KEY);
+      safeSessionStorage.getJSON<{ initData: string; botUsername: string | null }>(
+        TELEGRAM_SESSION_CACHE_KEY,
+      );
 
     const redirectToTarget = () => {
       if (pathname !== "/") {
@@ -108,7 +111,11 @@ export function TelegramMiniAppBridge() {
       router.push(TARGET_ROUTES[target], { scroll: false });
     };
 
-    if (cached?.initData === initData && !referralCode) {
+    if (
+      cached?.initData === initData &&
+      cached.botUsername === botUsername &&
+      !referralCode
+    ) {
       redirectToTarget();
       return;
     }
@@ -139,7 +146,7 @@ export function TelegramMiniAppBridge() {
             "Content-Type": "application/json",
           },
           credentials: "same-origin",
-          body: JSON.stringify({ initData, referralCode }),
+          body: JSON.stringify({ initData, referralCode, botUsername }),
         });
 
         if (!response.ok) {
@@ -150,7 +157,10 @@ export function TelegramMiniAppBridge() {
           return;
         }
 
-        safeSessionStorage.setJSON(TELEGRAM_SESSION_CACHE_KEY, { initData });
+        safeSessionStorage.setJSON(TELEGRAM_SESSION_CACHE_KEY, {
+          initData,
+          botUsername,
+        });
         redirectToTarget();
       } catch {
         // Fail silently so the web shell stays usable outside Telegram.
@@ -162,7 +172,7 @@ export function TelegramMiniAppBridge() {
     return () => {
       cancelled = true;
     };
-  }, [parsedStartParam.dramaId, pathname, referralCode, router, target]);
+  }, [botUsername, parsedStartParam.dramaId, pathname, referralCode, router, target]);
 
   useEffect(() => {
     const webApp = window.Telegram?.WebApp;

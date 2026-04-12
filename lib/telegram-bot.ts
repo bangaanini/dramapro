@@ -3,6 +3,7 @@ import {
   getAppSettings,
   getTelegramSettings,
 } from "@/lib/app-settings";
+import { normalizeTelegramBotUsername } from "@/lib/telegram-partner-bots";
 
 type TelegramInlineKeyboardButton = {
   text: string;
@@ -52,6 +53,7 @@ export async function getTelegramMiniAppUrl(
   target: TelegramMiniAppTarget,
   options?: {
     referralCode?: string | null;
+    botUsername?: string | null;
   },
 ) {
   const settings = await getTelegramSettings();
@@ -59,6 +61,12 @@ export async function getTelegramMiniAppUrl(
 
   url.pathname = "/";
   url.searchParams.set("tg_target", target);
+
+  const botUsername = normalizeTelegramBotUsername(options?.botUsername);
+
+  if (botUsername) {
+    url.searchParams.set("tg_bot", botUsername);
+  }
 
   if (options?.referralCode) {
     url.searchParams.set("tg_ref", options.referralCode);
@@ -106,31 +114,41 @@ export async function buildTelegramStartMessage(firstName?: string) {
   ].join("\n");
 }
 
-export async function buildTelegramStartKeyboard(referralCode?: string | null) {
+export async function buildTelegramStartKeyboard(
+  referralCode?: string | null,
+  options?: {
+    botUsername?: string | null;
+  },
+) {
+  const miniAppOptions = {
+    referralCode,
+    botUsername: options?.botUsername,
+  };
+
   return {
     inline_keyboard: [
       [
         {
           text: "🎬 Buka",
-          web_app: { url: await getTelegramMiniAppUrl("home", { referralCode }) },
+          web_app: { url: await getTelegramMiniAppUrl("home", miniAppOptions) },
         },
       ],
       [
         {
           text: "🔍 Cari Judul",
-          web_app: { url: await getTelegramMiniAppUrl("search", { referralCode }) },
+          web_app: { url: await getTelegramMiniAppUrl("search", miniAppOptions) },
         },
       ],
       [
         {
           text: "💎 Beli VIP",
-          web_app: { url: await getTelegramMiniAppUrl("vip", { referralCode }) },
+          web_app: { url: await getTelegramMiniAppUrl("vip", miniAppOptions) },
         },
       ],
       [
         {
           text: "👤 Profile",
-          web_app: { url: await getTelegramMiniAppUrl("profile", { referralCode }) },
+          web_app: { url: await getTelegramMiniAppUrl("profile", miniAppOptions) },
         },
       ],
       [{ text: "💬 Lapor Kendala", url: await getTelegramSupportUrl() }],
@@ -138,7 +156,7 @@ export async function buildTelegramStartKeyboard(referralCode?: string | null) {
         {
           text: "💰 Cari Cuan Referral",
           web_app: {
-            url: await getTelegramMiniAppUrl("affiliate", { referralCode }),
+            url: await getTelegramMiniAppUrl("affiliate", miniAppOptions),
           },
         },
       ],
@@ -148,6 +166,13 @@ export async function buildTelegramStartKeyboard(referralCode?: string | null) {
 
 export async function sendTelegramMessage(payload: TelegramSendMessagePayload) {
   const token = await getTelegramBotToken();
+  return sendTelegramMessageWithToken(token, payload);
+}
+
+export async function sendTelegramMessageWithToken(
+  token: string,
+  payload: TelegramSendMessagePayload,
+) {
   const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
     headers: {

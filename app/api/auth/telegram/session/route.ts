@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 type TelegramSessionPayload = {
   initData?: unknown;
   referralCode?: unknown;
+  botUsername?: unknown;
 };
 
 export async function POST(request: NextRequest) {
@@ -24,6 +25,8 @@ export async function POST(request: NextRequest) {
     typeof body.referralCode === "string"
       ? body.referralCode.trim().toUpperCase()
       : null;
+  const botUsername =
+    typeof body.botUsername === "string" ? body.botUsername.trim() : null;
 
   if (!initData) {
     return NextResponse.json(
@@ -36,6 +39,7 @@ export async function POST(request: NextRequest) {
     const user = await createTelegramUserSessionFromInitData(
       initData,
       referralCode,
+      botUsername,
     );
 
     return NextResponse.json({

@@ -141,6 +141,7 @@ model User {
   referredAffiliateSales     AffiliateCommission[] @relation("AffiliateReferred")
   affiliateWithdrawals       AffiliateWithdrawal[]
   affiliatePayoutProfile     AffiliatePayoutProfile?
+  ownedTelegramPartnerBots   TelegramPartnerBot[]
   createdAt                  DateTime              @default(now())
   updatedAt                  DateTime              @updatedAt
 
@@ -246,6 +247,21 @@ model AppSettings {
   siteLogoUrl                  String   @default("")
   createdAt                    DateTime @default(now())
   updatedAt                    DateTime @updatedAt
+}
+
+model TelegramPartnerBot {
+  id                      String   @id @default(uuid()) @db.Uuid
+  botUsername             String   @unique
+  botTokenCiphertext      String
+  webhookSecretCiphertext String?
+  ownerUserId             String   @db.Uuid
+  owner                   User     @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  isEnabled               Boolean  @default(true)
+  notes                   String   @default("")
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([ownerUserId, isEnabled])
 }
 
 model PaymentGatewayConfig {
