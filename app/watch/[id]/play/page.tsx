@@ -3,8 +3,9 @@ import { cache } from "react";
 import { notFound } from "next/navigation";
 
 import { VideoPlayer } from "@/components/video-player";
+import { getAppSettings } from "@/lib/app-settings";
 import { prisma } from "@/lib/prisma";
-import { SITE_NAME, toSeoDescription } from "@/lib/site";
+import { toSeoDescription } from "@/lib/site";
 import { getCurrentUser } from "@/lib/user-auth";
 import {
   clampEpisodeForVipAccess,
@@ -33,7 +34,7 @@ export async function generateMetadata(
   props: PageProps<"/watch/[id]/play">,
 ): Promise<Metadata> {
   const { id } = await props.params;
-  const drama = await getDramaById(id);
+  const [drama, settings] = await Promise.all([getDramaById(id), getAppSettings()]);
 
   if (!drama) {
     return {
@@ -49,7 +50,7 @@ export async function generateMetadata(
     title: `${drama.title} - Player`,
     description: toSeoDescription(
       drama.description,
-      `${drama.title} player fullscreen di ${SITE_NAME}.`,
+      `${drama.title} player fullscreen di ${settings.site.name}.`,
     ),
     alternates: {
       canonical: `/watch/${drama.id}`,

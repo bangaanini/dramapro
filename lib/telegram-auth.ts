@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { ensureUserAffiliateCode, readAffiliateCookieCode } from "@/lib/affiliate";
+import { getTelegramSettings } from "@/lib/app-settings";
 import { prisma } from "@/lib/prisma";
 import type { PublicUser } from "@/lib/user-auth";
 import { createUserSession } from "@/lib/user-auth";
@@ -98,10 +99,10 @@ export async function createTelegramUserSessionFromInitData(
   initData: string,
   referralCodeOverride?: string | null,
 ) {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
+  const botToken = (await getTelegramSettings()).botToken?.trim();
 
   if (!botToken) {
-    throw new Error("TELEGRAM_BOT_TOKEN belum diatur di server.");
+    throw new Error("Telegram bot token belum diatur di server.");
   }
 
   const verified = verifyTelegramInitData(initData, botToken);

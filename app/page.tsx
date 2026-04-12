@@ -4,51 +4,53 @@ import { AffiliateCaptureEffect } from "@/components/affiliate-capture-effect";
 import { HomeCatalogPanel } from "@/components/home-catalog-panel";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { getAppSettings } from "@/lib/app-settings";
 import { getHomepageCatalogData } from "@/lib/catalog-data";
-import {
-  DEFAULT_OG_IMAGE,
-  SITE_DESCRIPTION,
-  SITE_NAME,
-  absoluteUrl,
-  toSeoDescription,
-} from "@/lib/site";
+import { SITE_DESCRIPTION, absoluteResolvedUrl, toSeoDescription } from "@/lib/site";
 
-const HOME_DESCRIPTION = toSeoDescription(
-  "Jelajahi ribuan short drama sub Indo dari banyak provider dalam satu platform cepat. DramaPro menyediakan ribuan short drama terbaru dari berbagai sumber update setiap hari.",
-  SITE_DESCRIPTION,
-);
+function getHomeDescription(siteName: string) {
+  return toSeoDescription(
+    `Jelajahi ribuan short drama sub Indo dari banyak provider dalam satu platform cepat. ${siteName} menyediakan ribuan short drama terbaru dari berbagai sumber update setiap hari.`,
+    SITE_DESCRIPTION,
+  );
+}
 
-export const metadata: Metadata = {
-  title: "Nonton short drama sub Indo fresh setiap hari",
-  description: HOME_DESCRIPTION,
-  alternates: {
-    canonical: "/",
-  },
-  keywords: [
-    "nonton short drama sub indo",
-    "short drama terbaru",
-    "drama vertikal",
-    "streaming drama china",
-    "drama pendek",
-  ],
-  openGraph: {
-    title: "DramaPro - Platform short drama sub Indo",
-    description: HOME_DESCRIPTION,
-    url: "/",
-    images: [
-      {
-        url: DEFAULT_OG_IMAGE,
-        alt: "DramaPro homepage preview",
-      },
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getAppSettings();
+  const homeDescription = getHomeDescription(settings.site.name);
+
+  return {
+    title: "Nonton short drama sub Indo fresh setiap hari",
+    description: homeDescription,
+    alternates: {
+      canonical: "/",
+    },
+    keywords: [
+      "nonton short drama sub indo",
+      "short drama terbaru",
+      "drama vertikal",
+      "streaming drama china",
+      "drama pendek",
     ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "DramaPro -  Platform short drama sub Indo",
-    description: HOME_DESCRIPTION,
-    images: [DEFAULT_OG_IMAGE],
-  },
-};
+    openGraph: {
+      title: `${settings.site.name} - Platform short drama sub Indo`,
+      description: homeDescription,
+      url: "/",
+      images: [
+        {
+          url: settings.site.logoUrl,
+          alt: `${settings.site.name} homepage preview`,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${settings.site.name} - Platform short drama sub Indo`,
+      description: homeDescription,
+      images: [settings.site.logoUrl],
+    },
+  };
+}
 
 export default async function HomePage(props: PageProps<"/">) {
   const searchParams = await props.searchParams;
@@ -83,26 +85,30 @@ export default async function HomePage(props: PageProps<"/">) {
     );
   }
 
-  const catalogData = await getHomepageCatalogData();
+  const [catalogData, settings] = await Promise.all([
+    getHomepageCatalogData(),
+    getAppSettings(),
+  ]);
+  const homeDescription = getHomeDescription(settings.site.name);
   const structuredData = {
     "@context": "https://schema.org",
     "@graph": [
       {
         "@type": "WebSite",
-        name: SITE_NAME,
-        url: absoluteUrl("/"),
-        description: HOME_DESCRIPTION,
+        name: settings.site.name,
+        url: await absoluteResolvedUrl("/"),
+        description: homeDescription,
         inLanguage: "id-ID",
       },
       {
         "@type": "CollectionPage",
-        name: "Platform short drama DramaPro",
-        url: absoluteUrl("/"),
-        description: HOME_DESCRIPTION,
+        name: `Platform short drama ${settings.site.name}`,
+        url: await absoluteResolvedUrl("/"),
+        description: homeDescription,
         isPartOf: {
           "@type": "WebSite",
-          name: SITE_NAME,
-          url: absoluteUrl("/"),
+          name: settings.site.name,
+          url: await absoluteResolvedUrl("/"),
         },
       },
     ],

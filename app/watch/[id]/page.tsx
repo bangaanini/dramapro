@@ -19,11 +19,11 @@ import { SiteFooter } from "@/components/site-footer";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { getAppSettings } from "@/lib/app-settings";
 import { prisma } from "@/lib/prisma";
 import {
   DEFAULT_OG_IMAGE,
-  SITE_NAME,
-  absoluteUrl,
+  absoluteResolvedUrl,
   toSeoDescription,
 } from "@/lib/site";
 import {
@@ -54,7 +54,7 @@ export async function generateMetadata(
   props: PageProps<"/watch/[id]">,
 ): Promise<Metadata> {
   const { id } = await props.params;
-  const drama = await getDramaById(id);
+  const [drama, settings] = await Promise.all([getDramaById(id), getAppSettings()]);
 
   if (!drama) {
     return {
@@ -68,7 +68,7 @@ export async function generateMetadata(
 
   const description = toSeoDescription(
     drama.description,
-    `${drama.title} dari ${drama.providerName} dengan ${drama.episodeCount} episode di ${SITE_NAME}.`,
+    `${drama.title} dari ${drama.providerName} dengan ${drama.episodeCount} episode di ${settings.site.name}.`,
   );
   const image = normalizeDisplayImageUrl(drama.thumbUrl) || DEFAULT_OG_IMAGE;
 
@@ -104,7 +104,7 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
   const { id } = await props.params;
   const user = await getCurrentUser();
 
-  const [drama, watchHistory, favorite, vipSettings] = await Promise.all([
+  const [drama, watchHistory, favorite, vipSettings, settings] = await Promise.all([
     getDramaById(id),
     user
       ? prisma.watchHistory.findUnique({
@@ -138,6 +138,7 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
         lockFromEpisode: true,
       },
     }),
+    getAppSettings(),
   ]);
 
   if (!drama) {
@@ -147,7 +148,7 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
   const dramaThumbUrl = normalizeDisplayImageUrl(drama.thumbUrl);
   const detailDescription = toSeoDescription(
     drama.description,
-    `${drama.title} dari ${drama.providerName} dengan ${drama.episodeCount} episode di ${SITE_NAME}.`,
+    `${drama.title} dari ${drama.providerName} dengan ${drama.episodeCount} episode di ${settings.site.name}.`,
   );
   const vipLockFromEpisode = isVipActive(user?.vipExpiresAt)
     ? null
@@ -181,10 +182,10 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
   });
 
   const playHref = `/watch/${drama.id}/play?episode=${preferredInitialEpisode}`;
-  const shareUrl = absoluteUrl(`/watch/${drama.id}`);
+  const shareUrl = await absoluteResolvedUrl(`/watch/${drama.id}`);
   const telegramShareUrl =
     user?.authProvider === "telegram"
-      ? buildTelegramMiniAppStartAppLink(
+      ? await buildTelegramMiniAppStartAppLink(
           buildDramaShareStartParam({
             dramaId: drama.id,
             referralCode: user.affiliateCode ?? null,
@@ -201,13 +202,13 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
             "@type": "ListItem",
             position: 1,
             name: "Home",
-            item: absoluteUrl("/"),
+            item: await absoluteResolvedUrl("/"),
           },
           {
             "@type": "ListItem",
             position: 2,
             name: drama.title,
-            item: absoluteUrl(`/watch/${drama.id}`),
+            item: await absoluteResolvedUrl(`/watch/${drama.id}`),
           },
         ],
       },
@@ -215,8 +216,8 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
         "@type": "TVSeries",
         name: drama.title,
         description: detailDescription,
-        image: absoluteUrl(dramaThumbUrl || DEFAULT_OG_IMAGE),
-        url: absoluteUrl(`/watch/${drama.id}`),
+        image: await absoluteResolvedUrl(dramaThumbUrl || DEFAULT_OG_IMAGE),
+        url: await absoluteResolvedUrl(`/watch/${drama.id}`),
         inLanguage: "id-ID",
         numberOfEpisodes: drama.episodeCount > 0 ? drama.episodeCount : undefined,
         genre: drama.tags.length > 0 ? drama.tags : undefined,

@@ -69,6 +69,28 @@ async function requireAdminSession() {
   return admin;
 }
 
+function parseOptionalText(value: FormDataEntryValue | null) {
+  return String(value ?? "").trim();
+}
+
+function parseOptionalUrl(value: FormDataEntryValue | null, fieldLabel: string) {
+  const rawValue = parseOptionalText(value);
+
+  if (!rawValue) {
+    return "";
+  }
+
+  const normalized = rawValue.startsWith("http://") || rawValue.startsWith("https://")
+    ? rawValue
+    : `https://${rawValue}`;
+
+  try {
+    return new URL(normalized).toString();
+  } catch {
+    throw new Error(`${fieldLabel} tidak valid.`);
+  }
+}
+
 export async function saveVipSettingsAction(formData: FormData) {
   await requireAdminSession();
 
@@ -251,6 +273,118 @@ export async function saveAffiliateSettingsAction(formData: FormData) {
   revalidatePath("/admin/affiliate-settings");
   revalidatePath("/affiliate");
   redirect("/admin/affiliate-settings?saved=1");
+}
+
+export async function saveTelegramSettingsAction(formData: FormData) {
+  await requireAdminSession();
+
+  try {
+    const botToken = parseOptionalText(formData.get("botToken"));
+    const botUsername = parseOptionalText(formData.get("botUsername")).replace(/^@/, "");
+    const webhookSecret = parseOptionalText(formData.get("webhookSecret"));
+    const supportUrl = parseOptionalUrl(
+      formData.get("telegramSupportUrl"),
+      "Telegram support URL",
+    );
+    const miniAppUrl = parseOptionalUrl(
+      formData.get("telegramMiniAppUrl"),
+      "Telegram mini app URL",
+    );
+    const siteUrl = parseOptionalUrl(formData.get("siteUrl"), "Site URL");
+
+    const existing = await prisma.appSettings.findUnique({
+      where: { id: "global" },
+      select: {
+        telegramBotTokenCiphertext: true,
+        telegramWebhookSecretCiphertext: true,
+      },
+    });
+
+    let telegramBotTokenCiphertext =
+      existing?.telegramBotTokenCiphertext ?? null;
+    let telegramWebhookSecretCiphertext =
+      existing?.telegramWebhookSecretCiphertext ?? null;
+
+    if (botToken) {
+      telegramBotTokenCiphertext = encryptPaymentSecret(botToken);
+    }
+
+    if (webhookSecret) {
+      telegramWebhookSecretCiphertext = encryptPaymentSecret(webhookSecret);
+    }
+
+    await prisma.appSettings.upsert({
+      where: { id: "global" },
+      update: {
+        telegramBotUsername: botUsername,
+        telegramBotTokenCiphertext,
+        telegramWebhookSecretCiphertext,
+        telegramSupportUrl: supportUrl,
+        telegramMiniAppUrl: miniAppUrl,
+        siteUrl,
+      },
+      create: {
+        id: "global",
+        telegramBotUsername: botUsername,
+        telegramBotTokenCiphertext,
+        telegramWebhookSecretCiphertext,
+        telegramSupportUrl: supportUrl,
+        telegramMiniAppUrl: miniAppUrl,
+        siteUrl,
+      },
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Pengaturan Telegram gagal disimpan.";
+    redirect(`/admin/settings?error=${encodeURIComponent(message)}`);
+  }
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/");
+  revalidatePath("/affiliate");
+  revalidatePath("/profile");
+  redirect("/admin/settings?saved=telegram");
+}
+
+export async function saveSeoSettingsAction(formData: FormData) {
+  await requireAdminSession();
+
+  try {
+    const siteUrl = parseOptionalUrl(formData.get("siteUrl"), "URL situs");
+    const siteName = parseOptionalText(formData.get("siteName"));
+    const siteDescription = parseOptionalText(formData.get("siteDescription"));
+    const siteLogoUrl = parseOptionalUrl(formData.get("siteLogoUrl"), "Logo situs");
+
+    await prisma.appSettings.upsert({
+      where: { id: "global" },
+      update: {
+        siteUrl,
+        siteName,
+        siteDescription,
+        siteLogoUrl,
+      },
+      create: {
+        id: "global",
+        siteUrl,
+        siteName,
+        siteDescription,
+        siteLogoUrl,
+      },
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Pengaturan SEO gagal disimpan.";
+    redirect(`/admin/settings?error=${encodeURIComponent(message)}`);
+  }
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/");
+  revalidatePath("/search");
+  revalidatePath("/library");
+  revalidatePath("/affiliate");
+  revalidatePath("/profile");
+  revalidatePath("/vip");
+  redirect("/admin/settings?saved=seo");
 }
 
 export async function updateAffiliateWithdrawalStatusAction(formData: FormData) {

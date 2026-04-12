@@ -1,4 +1,18 @@
-import { getSiteUrl } from "@/lib/site";
+const FALLBACK_SITE_URL = "https://dramapro.netlify.app";
+
+function getPublicSiteUrl() {
+  const rawUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+
+  if (!rawUrl) {
+    return FALLBACK_SITE_URL;
+  }
+
+  if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+    return rawUrl;
+  }
+
+  return `https://${rawUrl}`;
+}
 
 export type UserIdentityLike = {
   id?: string;
@@ -76,7 +90,7 @@ export function resolveUserPaymentEmail(
     return email;
   }
 
-  const siteHost = new URL(getSiteUrl()).host.replace(/:\d+$/, "");
+  const siteHost = new URL(getPublicSiteUrl()).host.replace(/:\d+$/, "");
   const identity = user.telegramId?.trim() || user.id || "guest";
 
   return `telegram-${identity}@${siteHost}`;

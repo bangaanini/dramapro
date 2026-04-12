@@ -1,36 +1,33 @@
-const FALLBACK_SITE_URL = "https://dramapro.netlify.app";
+import {
+  DEFAULT_OG_IMAGE,
+  DEFAULT_SITE_DESCRIPTION,
+  DEFAULT_SITE_NAME,
+  DEFAULT_SITE_TITLE,
+  FALLBACK_SITE_URL,
+  absoluteUrlFromSiteUrl,
+  getSeoSettings,
+  normalizeSiteUrl,
+} from "@/lib/app-settings";
 
-export const SITE_NAME = "DramaPro";
-export const SITE_TITLE = "DramaPro - Nonton short drama sub Indo fresh setiap hari";
-export const SITE_DESCRIPTION =
-  "Nonton ribuan short drama dalam 1 platform. Short drama terbaru dari berbagai sumber cepat dan aman.";
-export const DEFAULT_OG_IMAGE = "/opengraph.jpg";
-
-function normalizeSiteUrl(rawUrl?: string | null) {
-  const value = rawUrl?.trim();
-
-  if (!value) {
-    return FALLBACK_SITE_URL;
-  }
-
-  if (value.startsWith("http://") || value.startsWith("https://")) {
-    return value;
-  }
-
-  return `https://${value}`;
-}
+export const SITE_NAME = DEFAULT_SITE_NAME;
+export const SITE_TITLE = DEFAULT_SITE_TITLE;
+export const SITE_DESCRIPTION = DEFAULT_SITE_DESCRIPTION;
+export { DEFAULT_OG_IMAGE };
 
 export function getSiteUrl() {
-  return normalizeSiteUrl(process.env.NEXT_PUBLIC_SITE_URL);
+  return normalizeSiteUrl(process.env.NEXT_PUBLIC_SITE_URL || FALLBACK_SITE_URL);
 }
 
 export function absoluteUrl(path = "/") {
-  if (path.startsWith("http://") || path.startsWith("https://")) {
-    return path;
-  }
+  return absoluteUrlFromSiteUrl(getSiteUrl(), path);
+}
 
-  const resolvedPath = path.startsWith("/") ? path : `/${path}`;
-  return new URL(resolvedPath, getSiteUrl()).toString();
+export async function getResolvedSiteUrl() {
+  return (await getSeoSettings()).url;
+}
+
+export async function absoluteResolvedUrl(path = "/") {
+  return absoluteUrlFromSiteUrl(await getResolvedSiteUrl(), path);
 }
 
 export function toSeoDescription(

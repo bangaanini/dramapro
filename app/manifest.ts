@@ -1,11 +1,16 @@
 import type { MetadataRoute } from "next";
 
-export default function manifest(): MetadataRoute.Manifest {
+import { getAppSettings } from "@/lib/app-settings";
+
+export const dynamic = "force-dynamic";
+
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  const settings = await getAppSettings();
+
   return {
-    name: "DramaPro",
-    short_name: "DramaPro",
-    description:
-      "Streaming aggregator short drama dengan metadata lokal, playback fresh on demand, dan pengalaman mobile-first.",
+    name: settings.site.name,
+    short_name: settings.site.name,
+    description: settings.site.description,
     start_url: "/",
     display: "standalone",
     background_color: "#120c0b",

@@ -9,6 +9,7 @@ import {
   CreditCard,
   LayoutGrid,
   Menu,
+  SlidersHorizontal,
   Settings2,
   ShieldCheck,
   Users,
@@ -55,6 +56,12 @@ const adminNavItems = [
     label: "Payment Gateway",
     description: "Atur checkout dan credential",
     icon: CreditCard,
+  },
+  {
+    href: "/admin/settings",
+    label: "Settings",
+    description: "Atur Telegram dan SEO web",
+    icon: SlidersHorizontal,
   },
   {
     href: "/admin/sync",

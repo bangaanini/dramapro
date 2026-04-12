@@ -1,8 +1,10 @@
 import type { MetadataRoute } from "next";
 
-import { absoluteUrl, getSiteUrl } from "@/lib/site";
+import { absoluteResolvedUrl, getResolvedSiteUrl } from "@/lib/site";
 
-export default function robots(): MetadataRoute.Robots {
+export const dynamic = "force-dynamic";
+
+export default async function robots(): Promise<MetadataRoute.Robots> {
   return {
     rules: [
       {
@@ -11,7 +13,7 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/admin", "/api", "/profile", "/sign-in", "/sign-up", "/vip/checkout"],
       },
     ],
-    sitemap: absoluteUrl("/sitemap.xml"),
-    host: getSiteUrl(),
+    sitemap: await absoluteResolvedUrl("/sitemap.xml"),
+    host: await getResolvedSiteUrl(),
   };
 }

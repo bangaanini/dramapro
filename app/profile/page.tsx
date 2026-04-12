@@ -27,7 +27,7 @@ export default async function ProfilePage() {
           vipStartedAt: user.vipStartedAt ? user.vipStartedAt.toISOString() : null,
           vipExpiresAt: user.vipExpiresAt ? user.vipExpiresAt.toISOString() : null,
         }}
-        supportUrl={getTelegramSupportUrl()}
+        supportUrl={await getTelegramSupportUrl()}
       />
 
       <SiteFooter />

@@ -233,6 +233,21 @@ model PaymentGatewaySettings {
   updatedAt      DateTime               @updatedAt
 }
 
+model AppSettings {
+  id                           String   @id @default("global")
+  telegramBotUsername          String   @default("")
+  telegramBotTokenCiphertext   String?
+  telegramWebhookSecretCiphertext String?
+  telegramSupportUrl           String   @default("")
+  telegramMiniAppUrl           String   @default("")
+  siteUrl                      String   @default("")
+  siteName                     String   @default("")
+  siteDescription              String   @default("")
+  siteLogoUrl                  String   @default("")
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+}
+
 model PaymentGatewayConfig {
   id                 String                 @id @default(uuid()) @db.Uuid
   provider           PaymentGatewayProvider @unique

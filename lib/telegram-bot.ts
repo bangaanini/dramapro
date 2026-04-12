@@ -1,4 +1,8 @@
-import { absoluteUrl, getSiteUrl } from "@/lib/site";
+import {
+  absoluteUrlFromSiteUrl,
+  getAppSettings,
+  getTelegramSettings,
+} from "@/lib/app-settings";
 
 type TelegramInlineKeyboardButton = {
   text: string;
@@ -30,52 +34,44 @@ type TelegramWebhookMessage = {
 
 type TelegramMiniAppTarget = "home" | "search" | "vip" | "profile" | "affiliate";
 
-function getTelegramBotToken() {
-  const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
+async function getTelegramBotToken() {
+  const token = (await getTelegramSettings()).botToken?.trim();
 
   if (!token) {
-    throw new Error("TELEGRAM_BOT_TOKEN belum diatur.");
+    throw new Error("Telegram bot token belum diatur.");
   }
 
   return token;
 }
 
-export function getTelegramSupportUrl() {
-  const direct = process.env.TELEGRAM_SUPPORT_URL?.trim();
-
-  if (direct) {
-    return direct;
-  }
-
-  const username = process.env.TELEGRAM_BOT_USERNAME?.trim().replace(/^@/, "");
-  return username ? `https://t.me/${username}` : getSiteUrl();
+export async function getTelegramSupportUrl() {
+  return (await getTelegramSettings()).supportUrl;
 }
 
-export function getTelegramMiniAppUrl(
+export async function getTelegramMiniAppUrl(
   target: TelegramMiniAppTarget,
   options?: {
     referralCode?: string | null;
   },
 ) {
-  const rawBaseUrl = process.env.TELEGRAM_MINI_APP_URL?.trim() || getSiteUrl();
-  const normalizedBaseUrl =
-    rawBaseUrl.startsWith("http://") || rawBaseUrl.startsWith("https://")
-      ? rawBaseUrl
-      : absoluteUrl(rawBaseUrl);
-  const url = new URL(normalizedBaseUrl);
+  const settings = await getTelegramSettings();
+  const url = new URL(settings.miniAppUrl);
+
   url.pathname = "/";
   url.searchParams.set("tg_target", target);
+
   if (options?.referralCode) {
     url.searchParams.set("tg_ref", options.referralCode);
   }
+
   return url.toString();
 }
 
-export function buildTelegramMiniAppStartAppLink(startParam: string) {
-  const username = process.env.TELEGRAM_BOT_USERNAME?.trim().replace(/^@/, "");
+export async function buildTelegramMiniAppStartAppLink(startParam: string) {
+  const username = (await getTelegramSettings()).botUsername?.replace(/^@/, "");
 
   if (!username) {
-    throw new Error("TELEGRAM_BOT_USERNAME belum diatur.");
+    throw new Error("Telegram bot username belum diatur.");
   }
 
   return `https://t.me/${username}?startapp=${encodeURIComponent(startParam)}`;
@@ -97,11 +93,12 @@ export function buildDramaShareStartParam(input: {
     : `drama_${dramaId}`;
 }
 
-export function buildTelegramStartMessage(firstName?: string) {
+export async function buildTelegramStartMessage(firstName?: string) {
   const safeName = firstName?.trim() || "Sobat Drama";
+  const siteName = (await getAppSettings()).site.name;
 
   return [
-    `Hai ${safeName}! Selamat datang di DramaPro!`,
+    `Hai ${safeName}! Selamat datang di ${siteName}!`,
     "",
     "Tonton ribuan short drama seru tanpa batas!",
     "",
@@ -109,21 +106,48 @@ export function buildTelegramStartMessage(firstName?: string) {
   ].join("\n");
 }
 
-export function buildTelegramStartKeyboard(referralCode?: string | null) {
+export async function buildTelegramStartKeyboard(referralCode?: string | null) {
   return {
     inline_keyboard: [
-      [{ text: "🎬 Buka", web_app: { url: getTelegramMiniAppUrl("home", { referralCode }) } }],
-      [{ text: "🔍 Cari Judul", web_app: { url: getTelegramMiniAppUrl("search", { referralCode }) } }],
-      [{ text: "💎 Beli VIP", web_app: { url: getTelegramMiniAppUrl("vip", { referralCode }) } }],
-      [{ text: "👤 Profile", web_app: { url: getTelegramMiniAppUrl("profile", { referralCode }) } }],
-      [{ text: "💬 Lapor Kendala", url: getTelegramSupportUrl() }],
-      [{ text: "💰 Cari Cuan Referral", web_app: { url: getTelegramMiniAppUrl("affiliate", { referralCode }) } }],
+      [
+        {
+          text: "🎬 Buka",
+          web_app: { url: await getTelegramMiniAppUrl("home", { referralCode }) },
+        },
+      ],
+      [
+        {
+          text: "🔍 Cari Judul",
+          web_app: { url: await getTelegramMiniAppUrl("search", { referralCode }) },
+        },
+      ],
+      [
+        {
+          text: "💎 Beli VIP",
+          web_app: { url: await getTelegramMiniAppUrl("vip", { referralCode }) },
+        },
+      ],
+      [
+        {
+          text: "👤 Profile",
+          web_app: { url: await getTelegramMiniAppUrl("profile", { referralCode }) },
+        },
+      ],
+      [{ text: "💬 Lapor Kendala", url: await getTelegramSupportUrl() }],
+      [
+        {
+          text: "💰 Cari Cuan Referral",
+          web_app: {
+            url: await getTelegramMiniAppUrl("affiliate", { referralCode }),
+          },
+        },
+      ],
     ],
   };
 }
 
 export async function sendTelegramMessage(payload: TelegramSendMessagePayload) {
-  const token = getTelegramBotToken();
+  const token = await getTelegramBotToken();
   const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
     headers: {
@@ -141,8 +165,8 @@ export async function sendTelegramMessage(payload: TelegramSendMessagePayload) {
   return response.json().catch(() => null);
 }
 
-export function isTelegramWebhookAuthorized(secretHeader: string | null) {
-  const expected = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
+export async function isTelegramWebhookAuthorized(secretHeader: string | null) {
+  const expected = (await getTelegramSettings()).webhookSecret?.trim();
 
   if (!expected) {
     return true;
@@ -169,6 +193,11 @@ export function extractStartMessage(update: TelegramWebhookMessage) {
     firstName: update.message?.from?.first_name?.trim() || undefined,
     referralCode: parseTelegramReferralCode(text),
   };
+}
+
+export async function buildTelegramWebhookUrlPreview() {
+  const settings = await getAppSettings();
+  return absoluteUrlFromSiteUrl(settings.site.url, "/api/telegram/webhook");
 }
 
 function parseTelegramReferralCode(text: string) {

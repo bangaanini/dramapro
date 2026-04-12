@@ -13,7 +13,7 @@ export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
   const secret = request.headers.get("x-telegram-bot-api-secret-token");
 
-  if (!isTelegramWebhookAuthorized(secret)) {
+  if (!(await isTelegramWebhookAuthorized(secret))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -33,8 +33,8 @@ export async function POST(request: NextRequest) {
 
   await sendTelegramMessage({
     chat_id: startPayload.chatId,
-    text: buildTelegramStartMessage(startPayload.firstName),
-    reply_markup: buildTelegramStartKeyboard(startPayload.referralCode),
+    text: await buildTelegramStartMessage(startPayload.firstName),
+    reply_markup: await buildTelegramStartKeyboard(startPayload.referralCode),
   });
 
   return NextResponse.json({ ok: true });

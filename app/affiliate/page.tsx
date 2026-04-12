@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { headers } from "next/headers";
 import {
   ArrowUpRight,
   BadgeDollarSign,
@@ -28,6 +27,7 @@ import {
   formatIdr,
   getAffiliateSettings,
 } from "@/lib/affiliate";
+import { getAppSettings, getTelegramSettings } from "@/lib/app-settings";
 import { prisma } from "@/lib/prisma";
 import { getUserSecondaryLabel } from "@/lib/user-identity";
 import { getCurrentUser } from "@/lib/user-auth";
@@ -51,10 +51,11 @@ export default async function AffiliatePage(props: PageProps<"/affiliate">) {
       ? searchParams.payoutSuccess
       : null;
 
-  const [headerStore, settings, affiliateCode, payoutProfile, totalReferrals, activeReferrals, commissionTotals, withdrawalTotals, recentWithdrawals, recentCommissions] =
+  const [appSettings, settings, telegramSettings, affiliateCode, payoutProfile, totalReferrals, activeReferrals, commissionTotals, withdrawalTotals, recentWithdrawals, recentCommissions] =
     await Promise.all([
-      headers(),
+      getAppSettings(),
       getAffiliateSettings(),
+      getTelegramSettings(),
       ensureUserAffiliateCode(user.id, user.name),
       prisma.affiliatePayoutProfile.findUnique({
         where: {
@@ -157,16 +158,11 @@ export default async function AffiliatePage(props: PageProps<"/affiliate">) {
     totalWithdrawn,
     totalReserved,
   });
-  const proto = headerStore.get("x-forwarded-proto") ?? "http";
-  const host =
-    headerStore.get("x-forwarded-host") ??
-    headerStore.get("host") ??
-    "localhost:3000";
-  const telegramBotUsername = process.env.TELEGRAM_BOT_USERNAME?.trim();
+  const telegramBotUsername = telegramSettings.botUsername?.trim();
   const referralLink =
     user.authProvider === "telegram" && telegramBotUsername
       ? buildTelegramAffiliateLink(telegramBotUsername, affiliateCode)
-      : buildAffiliateLink(`${proto}://${host}`, affiliateCode);
+      : buildAffiliateLink(appSettings.site.url, affiliateCode);
 
   return (
     <main className="route-transition-shell mx-auto flex min-h-screen w-full max-w-3xl flex-col px-3 pb-28 pt-4 sm:px-5 sm:pt-6">
