@@ -59,6 +59,50 @@ function slugifyVipPlan(value: string) {
     .slice(0, 60);
 }
 
+function parseVipPricePlanPayload(formData: FormData) {
+  const name = String(formData.get("name") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const currency = String(formData.get("currency") ?? "IDR").trim().toUpperCase() || "IDR";
+  const durationDays = parsePositiveInt(formData.get("durationDays"), 0);
+  const sortOrder = parsePositiveInt(formData.get("sortOrder"), 0);
+  const priceAmount = parsePositiveInt(formData.get("priceAmount"), 0);
+  const isActive = String(formData.get("isActive") ?? "") === "on";
+  const slug = slugifyVipPlan(String(formData.get("slug") ?? "") || name);
+
+  return {
+    name,
+    description,
+    currency,
+    durationDays,
+    sortOrder,
+    priceAmount,
+    isActive,
+    slug,
+  };
+}
+
+function validateVipPricePlanPayload(
+  payload: ReturnType<typeof parseVipPricePlanPayload>,
+) {
+  if (!payload.name) {
+    redirect("/admin/vip-pricing?error=Nama%20paket%20wajib%20diisi");
+  }
+
+  if (payload.durationDays <= 0 || payload.priceAmount <= 0) {
+    redirect("/admin/vip-pricing?error=Durasi%20dan%20harga%20harus%20lebih%20dari%200");
+  }
+
+  if (payload.priceAmount < 1000) {
+    redirect(
+      "/admin/vip-pricing?error=Harga%20minimum%20untuk%20QRIS%20Paymenku%20adalah%20Rp%201.000",
+    );
+  }
+
+  if (!payload.slug) {
+    redirect("/admin/vip-pricing?error=Slug%20paket%20tidak%20valid");
+  }
+}
+
 async function requireAdminSession() {
   const admin = await getCurrentAdmin();
 
@@ -117,42 +161,96 @@ export async function saveVipSettingsAction(formData: FormData) {
 export async function createVipPricePlanAction(formData: FormData) {
   await requireAdminSession();
 
-  const name = String(formData.get("name") ?? "").trim();
-  const description = String(formData.get("description") ?? "").trim();
-  const currency = String(formData.get("currency") ?? "IDR").trim().toUpperCase() || "IDR";
-  const durationDays = parsePositiveInt(formData.get("durationDays"), 0);
-  const sortOrder = parsePositiveInt(formData.get("sortOrder"), 0);
-  const priceAmount = parsePositiveInt(formData.get("priceAmount"), 0);
-  const isActive = String(formData.get("isActive") ?? "") === "on";
+  const payload = parseVipPricePlanPayload(formData);
+  validateVipPricePlanPayload(payload);
 
-  if (!name) {
-    redirect("/admin/vip-pricing?error=Nama%20paket%20wajib%20diisi");
+  try {
+    await prisma.vipPricePlan.create({
+      data: payload,
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      redirect("/admin/vip-pricing?error=Slug%20paket%20sudah%20dipakai");
+    }
+
+    throw error;
   }
 
-  if (durationDays <= 0 || priceAmount <= 0) {
-    redirect("/admin/vip-pricing?error=Durasi%20dan%20harga%20harus%20lebih%20dari%200");
+  revalidatePath("/admin/vip-pricing");
+  redirect("/admin/vip-pricing?saved=1");
+}
+
+export async function updateVipPricePlanAction(formData: FormData) {
+  await requireAdminSession();
+
+  const id = String(formData.get("id") ?? "").trim();
+
+  if (!id) {
+    redirect("/admin/vip-pricing?error=Plan%20tidak%20ditemukan");
   }
 
-  const slug = slugifyVipPlan(String(formData.get("slug") ?? "") || name);
+  const payload = parseVipPricePlanPayload(formData);
+  validateVipPricePlanPayload(payload);
 
-  if (!slug) {
-    redirect("/admin/vip-pricing?error=Slug%20paket%20tidak%20valid");
+  try {
+    await prisma.vipPricePlan.update({
+      where: { id },
+      data: payload,
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === "P2002") {
+        redirect("/admin/vip-pricing?error=Slug%20paket%20sudah%20dipakai");
+      }
+
+      if (error.code === "P2025") {
+        redirect("/admin/vip-pricing?error=Plan%20tidak%20ditemukan");
+      }
+    }
+
+    throw error;
   }
 
-  await prisma.vipPricePlan.create({
-    data: {
-      name,
-      slug,
-      description,
-      currency,
-      durationDays,
-      sortOrder,
-      priceAmount,
-      isActive,
+  revalidatePath("/admin/vip-pricing");
+  revalidatePath("/vip");
+  redirect("/admin/vip-pricing?saved=1");
+}
+
+export async function deleteVipPricePlanAction(formData: FormData) {
+  await requireAdminSession();
+
+  const id = String(formData.get("id") ?? "").trim();
+
+  if (!id) {
+    redirect("/admin/vip-pricing?error=Plan%20tidak%20ditemukan");
+  }
+
+  const paymentCount = await prisma.vipPayment.count({
+    where: {
+      vipPricePlanId: id,
     },
   });
 
+  if (paymentCount > 0) {
+    redirect(
+      "/admin/vip-pricing?error=Paket%20sudah%20punya%20riwayat%20transaksi.%20Nonaktifkan%20paket%20agar%20riwayat%20pembayaran%20tetap%20aman",
+    );
+  }
+
+  try {
+    await prisma.vipPricePlan.delete({
+      where: { id },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+      redirect("/admin/vip-pricing?error=Plan%20tidak%20ditemukan");
+    }
+
+    throw error;
+  }
+
   revalidatePath("/admin/vip-pricing");
+  revalidatePath("/vip");
   redirect("/admin/vip-pricing?saved=1");
 }
 

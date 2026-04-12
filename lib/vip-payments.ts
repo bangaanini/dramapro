@@ -15,6 +15,8 @@ import {
   resolveUserPaymentContactEmail,
 } from "@/lib/user-auth";
 
+const PAYMENKU_MINIMUM_QRIS_AMOUNT = 1000;
+
 function buildReferenceId() {
   return `VIP-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`;
 }
@@ -120,6 +122,14 @@ export async function createVipPaymentSession(input: {
 
   if (!plan) {
     redirect(`/vip?error=${encodeURIComponent("Paket VIP tidak ditemukan.")}&next=${encodeURIComponent(safeNext)}`);
+  }
+
+  if (plan.priceAmount < PAYMENKU_MINIMUM_QRIS_AMOUNT) {
+    redirect(
+      `/vip?error=${encodeURIComponent(
+        "Nominal paket terlalu kecil untuk QRIS Paymenku. Minimum transaksi adalah Rp 1.000.",
+      )}&next=${encodeURIComponent(safeNext)}`,
+    );
   }
 
   const referenceId = buildReferenceId();

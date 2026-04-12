@@ -74,10 +74,10 @@ async function paymenkuFetch<T>(
   const payload = text ? (JSON.parse(text) as T) : null;
 
   if (!response.ok) {
-    const detail =
-      payload && typeof payload === "object" && "message" in payload
-        ? String(payload.message)
-        : `Paymenku request failed with status ${response.status}.`;
+    const detail = extractPaymenkuErrorMessage(
+      payload,
+      `Paymenku request failed with status ${response.status}.`,
+    );
     throw new Error(detail);
   }
 
@@ -86,6 +86,36 @@ async function paymenkuFetch<T>(
   }
 
   return payload;
+}
+
+function extractPaymenkuErrorMessage(payload: unknown, fallback: string) {
+  if (!payload || typeof payload !== "object") {
+    return fallback;
+  }
+
+  const record = payload as {
+    message?: unknown;
+    errors?: Record<string, unknown>;
+  };
+  const message =
+    typeof record.message === "string" && record.message.trim()
+      ? record.message.trim()
+      : fallback;
+  const errorDetails = Object.entries(record.errors ?? {})
+    .flatMap(([field, value]) => {
+      if (Array.isArray(value)) {
+        return value.map((item) => `${field}: ${String(item)}`);
+      }
+
+      if (typeof value === "string" && value.trim()) {
+        return [`${field}: ${value.trim()}`];
+      }
+
+      return [];
+    })
+    .join(" ");
+
+  return errorDetails ? `${message}. ${errorDetails}` : message;
 }
 
 export async function getPaymenkuPaymentChannels() {

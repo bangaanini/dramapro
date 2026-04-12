@@ -224,9 +224,11 @@ export default async function AdminPaymentGatewaysPage(
                     </label>
 
                     <div className="rounded-[1.2rem] border border-white/10 bg-white/5 px-4 py-4 text-sm text-[var(--muted)]">
-                      {gateway.capability.implemented
-                        ? "Gateway ini sudah siap dipakai checkout VIP setelah credential valid disimpan."
-                        : "Gateway ini baru disiapkan untuk konfigurasi awal. Adapter API akan ditambahkan di fase berikutnya."}
+                      {gateway.provider === "paymenku"
+                        ? "Mode Paymenku mengikuti API key yang dipakai: sk_test untuk simulator dan sk_live untuk production. Config JSON mode tidak dipakai oleh adapter Paymenku."
+                        : gateway.capability.implemented
+                          ? "Gateway ini sudah siap dipakai checkout VIP setelah credential valid disimpan."
+                          : "Gateway ini baru disiapkan untuk konfigurasi awal. Adapter API akan ditambahkan di fase berikutnya."}
                     </div>
 
                     <Button type="submit" className="w-full">
