@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -38,13 +39,24 @@ export function DramaCard({
   compact = false,
   cornerLabel,
 }: DramaCardProps) {
+  const router = useRouter();
   const displayThumbUrl = normalizeDisplayImageUrl(thumbUrl);
+  const prefetchDetail = () => {
+    router.prefetch(href);
+  };
 
   if (compact) {
     return (
       <Link
         href={href}
-        onPointerDown={() => triggerSelectionHaptic()}
+        prefetch
+        onMouseEnter={prefetchDetail}
+        onFocus={prefetchDetail}
+        onTouchStart={prefetchDetail}
+        onPointerDown={() => {
+          prefetchDetail();
+          triggerSelectionHaptic();
+        }}
         className="group block"
       >
         <article className="overflow-hidden rounded-[1rem] border border-white/8 bg-[linear-gradient(180deg,rgba(34,22,20,0.96),rgba(14,10,10,0.98))] shadow-[0_14px_36px_rgba(0,0,0,0.26)] transition duration-300 active:scale-[0.985] hover:-translate-y-0.5 hover:border-accent/28">
@@ -101,7 +113,14 @@ export function DramaCard({
   return (
     <Link
       href={href}
-      onPointerDown={() => triggerSelectionHaptic()}
+      prefetch
+      onMouseEnter={prefetchDetail}
+      onFocus={prefetchDetail}
+      onTouchStart={prefetchDetail}
+      onPointerDown={() => {
+        prefetchDetail();
+        triggerSelectionHaptic();
+      }}
       className="group"
     >
       <Card className="glass-panel h-full overflow-hidden rounded-[1.6rem] border-white/8 transition duration-300 active:scale-[0.985] hover:-translate-y-1 hover:border-accent/35 hover:shadow-[0_24px_60px_rgba(0,0,0,0.42)]">

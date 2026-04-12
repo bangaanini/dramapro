@@ -238,7 +238,13 @@ export function LibraryTabs({
   );
 
   return (
-    <section className="mx-auto mt-0 w-full max-w-none px-0 pb-2">
+    <section
+      className="mx-auto mt-0 w-full max-w-none px-0 pb-2"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
+    >
       <div className="sticky top-[3.95rem] z-40 border-b border-white/7 bg-[linear-gradient(180deg,rgba(15,10,10,0.98),rgba(15,10,10,0.92)_74%,rgba(15,10,10,0.82))] px-3 pb-2 pt-2 backdrop-blur-2xl shadow-[0_10px_24px_rgba(0,0,0,0.18)] sm:top-[4.2rem]">
         <div
           className={cn(
@@ -259,16 +265,10 @@ export function LibraryTabs({
 
         <div className="relative flex items-center justify-between gap-3 px-1 pb-1">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted-foreground)]">
-              Perpustakaan
-            </p>
             <h1 className="mt-1 text-xl font-semibold tracking-tight text-white">
               Koleksi dramamu
             </h1>
           </div>
-          <p className="text-xs text-[var(--muted-foreground)]">
-            Swipe untuk pindah tab
-          </p>
         </div>
 
         <div className="relative mt-2 grid grid-cols-3 gap-1 rounded-full border border-white/8 bg-white/[0.03] p-1">
@@ -303,11 +303,7 @@ export function LibraryTabs({
 
       <div
         ref={viewportRef}
-        className="overflow-hidden"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onTouchCancel={handleTouchEnd}
+        className="min-h-[calc(100vh-8.8rem)] overflow-hidden"
       >
         <div
           className={cn(
