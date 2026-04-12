@@ -1,12 +1,8 @@
-import Link from "next/link";
-import QRCode from "qrcode";
-import { ChevronLeft } from "lucide-react";
-import { notFound, redirect } from "next/navigation";
 
+import QRCode from "qrcode";
+import { notFound, redirect } from "next/navigation";
 import { SiteFooter } from "@/components/site-footer";
-import { SiteHeader } from "@/components/site-header";
 import { VipCheckoutPanel } from "@/components/vip-checkout-panel";
-import { buttonVariants } from "@/components/ui/button";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, resolveSafeRedirectPath } from "@/lib/user-auth";
 import { syncVipPaymentStatus } from "@/lib/vip-payments";
@@ -58,17 +54,7 @@ export default async function VipCheckoutDetailPage(
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-6 sm:px-6 lg:px-8">
-      <SiteHeader current="account" />
 
-      <div className="mt-6 flex items-center gap-3">
-        <Link
-          href={`/vip?next=${encodeURIComponent(next)}`}
-          className={buttonVariants({ variant: "ghost", size: "sm" })}
-        >
-          <ChevronLeft className="mr-2 size-4" />
-          Kembali ke VIP
-        </Link>
-      </div>
 
       <VipCheckoutPanel
         nextHref={next}

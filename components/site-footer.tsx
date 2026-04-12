@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { Heart, History, Home, Search, UserRound } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 
+import { triggerSelectionHaptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
@@ -44,6 +45,7 @@ export function SiteFooter() {
   const pathname = usePathname();
   const router = useRouter();
   const currentKey = resolveCurrentKey(pathname);
+  const touchHapticLockRef = useRef(false);
 
   useEffect(() => {
     for (const item of NAV_ITEMS) {
@@ -55,6 +57,14 @@ export function SiteFooter() {
 
   function prefetchRoute(href: string) {
     router.prefetch(href);
+  }
+
+  function handleNavigationPress() {
+    touchHapticLockRef.current = true;
+    triggerSelectionHaptic();
+    window.setTimeout(() => {
+      touchHapticLockRef.current = false;
+    }, 420);
   }
 
   const navMarkup = (
@@ -70,8 +80,18 @@ export function SiteFooter() {
               href={item.href}
               prefetch
               onMouseEnter={() => prefetchRoute(item.href)}
-              onTouchStart={() => prefetchRoute(item.href)}
+              onTouchStart={() => {
+                prefetchRoute(item.href);
+                handleNavigationPress();
+              }}
               onFocus={() => prefetchRoute(item.href)}
+              onClick={() => {
+                if (touchHapticLockRef.current) {
+                  return;
+                }
+
+                triggerSelectionHaptic();
+              }}
               className={cn(
                 "relative flex min-w-0 flex-1 flex-col items-center justify-center gap-2 text-center transition",
                 item.prominent ? "pb-0" : "pt-1",

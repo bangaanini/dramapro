@@ -5,6 +5,12 @@ export type TelegramBackButton = {
   offClick?: (callback: () => void) => void;
 };
 
+export type TelegramHapticFeedback = {
+  impactOccurred?: (style?: "light" | "medium" | "heavy" | "rigid" | "soft") => void;
+  notificationOccurred?: (type?: "error" | "success" | "warning") => void;
+  selectionChanged?: () => void;
+};
+
 export type TelegramHomeScreenStatus =
   | "unsupported"
   | "unknown"
@@ -39,6 +45,7 @@ export type TelegramWebApp = {
     eventType: "homeScreenAdded" | "homeScreenChecked" | "homeScreenFailed",
     eventHandler: (payload?: TelegramHomeScreenEventPayload) => void,
   ) => void;
+  HapticFeedback?: TelegramHapticFeedback;
   BackButton?: TelegramBackButton;
 };
 

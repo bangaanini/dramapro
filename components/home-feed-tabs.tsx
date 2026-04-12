@@ -12,6 +12,7 @@ import { LoaderCircle } from "lucide-react";
 
 import { DramaCard } from "@/components/drama-card";
 import { Card, CardContent } from "@/components/ui/card";
+import { triggerImpactHaptic, triggerSelectionHaptic } from "@/lib/haptics";
 import { safeSessionStorage } from "@/lib/safe-session-storage";
 import { cn } from "@/lib/utils";
 
@@ -113,6 +114,7 @@ export function HomeFeedTabs({
   const [activeTab, setActiveTab] = useState<FeedTabKey>("new");
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isSwipeDragging, setIsSwipeDragging] = useState(false);
+  const [edgePulse, setEdgePulse] = useState<"left" | "right" | null>(null);
   const [tabMetrics, setTabMetrics] = useState<
     Partial<Record<FeedTabKey, { width: number; left: number }>>
   >({});
@@ -233,6 +235,12 @@ export function HomeFeedTabs({
   const setActiveTabWithBounds = useCallback(
     (index: number) => {
       const boundedIndex = Math.min(Math.max(index, 0), tabs.length - 1);
+      const nextKey = tabs[boundedIndex]?.key ?? tabs[0].key;
+
+      if (nextKey !== activeTab) {
+        triggerSelectionHaptic();
+      }
+
       if (typeof window !== "undefined") {
         scrollPositionsRef.current[activeTab] = window.scrollY;
         safeSessionStorage.setJSON(
@@ -240,7 +248,7 @@ export function HomeFeedTabs({
           scrollPositionsRef.current,
         );
       }
-      setActiveTab(tabs[boundedIndex]?.key ?? tabs[0].key);
+      setActiveTab(nextKey);
     },
     [activeTab, tabs],
   );
@@ -423,6 +431,20 @@ export function HomeFeedTabs({
   }, [activeTab]);
 
   useEffect(() => {
+    if (!edgePulse) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setEdgePulse(null);
+    }, 240);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [edgePulse]);
+
+  useEffect(() => {
     const neighborTabs = [tabs[activeTabIndex - 1], tabs[activeTabIndex + 1]].filter(
       Boolean,
     ) as FeedTabConfig[];
@@ -594,6 +616,12 @@ export function HomeFeedTabs({
       setActiveTabWithBounds(activeTabIndex + 1);
     } else if (gesture.deltaX >= threshold && activeTabIndex > 0) {
       setActiveTabWithBounds(activeTabIndex - 1);
+    } else if (gesture.deltaX <= -threshold && activeTabIndex >= tabs.length - 1) {
+      setEdgePulse("right");
+      triggerImpactHaptic("light");
+    } else if (gesture.deltaX >= threshold && activeTabIndex <= 0) {
+      setEdgePulse("left");
+      triggerImpactHaptic("light");
     }
 
     setSwipeOffset(0);
@@ -634,6 +662,22 @@ export function HomeFeedTabs({
     <section className="mx-auto mt-0 w-full max-w-7xl space-y-4 px-3 pb-2 sm:px-4 lg:px-6">
       <div className="sticky top-[3.9rem] z-40 -mx-3 border-b border-white/7 bg-[linear-gradient(180deg,rgba(15,10,10,0.98),rgba(15,10,10,0.9)_72%,rgba(15,10,10,0.78))] px-3 pb-2 pt-2 backdrop-blur-2xl shadow-[0_10px_24px_rgba(0,0,0,0.18)] sm:top-[4.2rem] sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6">
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-b from-transparent to-[rgba(15,10,10,0.42)]" />
+        <div
+          className={cn(
+            "pointer-events-none absolute inset-y-0 left-0 w-8 transition-opacity duration-200",
+            edgePulse === "left"
+              ? "bg-[radial-gradient(circle_at_left,rgba(255,142,61,0.32),transparent_72%)] opacity-100"
+              : "opacity-0",
+          )}
+        />
+        <div
+          className={cn(
+            "pointer-events-none absolute inset-y-0 right-0 w-8 transition-opacity duration-200",
+            edgePulse === "right"
+              ? "bg-[radial-gradient(circle_at_right,rgba(255,142,61,0.32),transparent_72%)] opacity-100"
+              : "opacity-0",
+          )}
+        />
         <div className="relative flex items-center justify-between gap-3">
           <div
             ref={tabListRef}
