@@ -28,7 +28,7 @@ export default async function LibraryPage(props: PageProps<"/library">) {
         : "collection";
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-none px-0 py-0">
+    <main className="route-transition-shell mx-auto min-h-screen w-full max-w-none px-0 py-0">
       <SiteHeader current="account" />
       <LibraryTabs
         key={requestedTab}

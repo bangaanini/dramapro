@@ -595,16 +595,10 @@ export function HomeFeedTabs({
         />
         <div className="relative flex items-center justify-between gap-3 px-1 pb-1">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted-foreground)]">
-              Beranda
-            </p>
             <h1 className="mt-1 text-xl font-semibold tracking-tight text-white">
-              Temukan drama berikutnya
+              Temukan drama favoritmu
             </h1>
           </div>
-          <p className="text-xs text-[var(--muted-foreground)]">
-            Swipe untuk pindah tab
-          </p>
         </div>
 
         <div className="relative mt-2 grid grid-cols-3 gap-1 rounded-full border border-white/8 bg-white/[0.03] p-1">

@@ -123,7 +123,7 @@ export default async function WatchPlayerPage(
       : watchHistory?.lastPositionSeconds ?? 0;
 
   return (
-    <main className="min-h-screen bg-black">
+    <main className="route-transition-shell min-h-screen bg-black">
       <VideoPlayer
         internalDramaId={drama.id}
         title={drama.title}

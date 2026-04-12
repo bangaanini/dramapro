@@ -169,7 +169,7 @@ export default async function AffiliatePage(props: PageProps<"/affiliate">) {
       : buildAffiliateLink(`${proto}://${host}`, affiliateCode);
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-3 pb-28 pt-4 sm:px-5 sm:pt-6">
+    <main className="route-transition-shell mx-auto flex min-h-screen w-full max-w-3xl flex-col px-3 pb-28 pt-4 sm:px-5 sm:pt-6">
       <section className="space-y-4">
         <div className="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(255,145,46,0.2),transparent_42%),linear-gradient(180deg,rgba(63,34,20,0.98),rgba(24,17,18,0.98))] p-4 shadow-[0_32px_80px_rgba(0,0,0,0.34)]">
           <div className="flex items-start justify-between gap-3">

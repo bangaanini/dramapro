@@ -1,5 +1,5 @@
 import { CatalogPageLoadingShell } from "@/components/app-loading-shells";
 
-export default function AppLoading() {
+export default function SearchLoading() {
   return <CatalogPageLoadingShell />;
 }

@@ -117,7 +117,6 @@ function isStandaloneDisplayMode() {
 
 export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
   const [profileData, setProfileData] = useState<ProfileResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [installPromptEvent, setInstallPromptEvent] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalling, setIsInstalling] = useState(false);
@@ -134,7 +133,6 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
 
     if (cachedProfile) {
       setProfileData(cachedProfile);
-      setIsLoading(false);
     }
 
     async function loadProfile() {
@@ -160,9 +158,7 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
           setProfileData(null);
         }
       } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        // profile shell already handles the transition state
       }
     }
 
@@ -276,8 +272,6 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
   }, [actionMessage]);
 
   const displayUser = profileData?.user ?? user;
-  const favoritesCount = profileData?.favoritesCount ?? 0;
-  const historyCount = profileData?.historyCount ?? 0;
   const vipExpiresAt = displayUser.vipExpiresAt
     ? new Date(displayUser.vipExpiresAt)
     : null;
@@ -424,26 +418,6 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
             <Badge className="border-white/12 bg-black/22 px-3 py-1.5 text-white">
               {displayUser.authProvider === "telegram" ? "Telegram login" : "Akun web"}
             </Badge>
-            <Badge className="border-white/12 bg-black/22 px-3 py-1.5 text-white">
-              {isLoading ? (
-                <span className="inline-flex items-center gap-2">
-                  <LoaderCircle className="size-3.5 animate-spin" />
-                  Memuat favorit
-                </span>
-              ) : (
-                `${favoritesCount} favorit`
-              )}
-            </Badge>
-            <Badge className="border-white/12 bg-black/22 px-3 py-1.5 text-white">
-              {isLoading ? (
-                <span className="inline-flex items-center gap-2">
-                  <LoaderCircle className="size-3.5 animate-spin" />
-                  Memuat riwayat
-                </span>
-              ) : (
-                `${historyCount} riwayat`
-              )}
-            </Badge>
           </div>
 
           <div className="mt-4 rounded-[1.6rem] border border-white/10 bg-black/18 p-4">
@@ -583,7 +557,7 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
                   <div>
                     <p className="font-medium text-white">Bantuan</p>
                     <p className="text-sm text-[var(--muted-foreground)]">
-                      Hubungi support Telegram jika ada kendala akun atau playback.
+                      Hubungi support Telegram jika ada kendala akun atau aplikasi.
                     </p>
                   </div>
                 </div>
