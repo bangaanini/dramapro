@@ -73,13 +73,13 @@ type BeforeInstallPromptEvent = Event & {
 
 const profileMenuItems = [
   {
-    href: "/history",
+    href: "/library?tab=history",
     label: "Riwayat Tontonan",
     description: "Lihat episode terakhir yang kamu putar.",
     icon: History,
   },
   {
-    href: "/favorites",
+    href: "/library?tab=favorites",
     label: "Daftar Favorit",
     description: "Semua drama yang kamu simpan.",
     icon: Star,

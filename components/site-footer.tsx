@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { Heart, History, Home, Search, UserRound } from "lucide-react";
+import { BookOpen, Home, Megaphone, Search, UserRound } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { triggerSelectionHaptic } from "@/lib/haptics";
@@ -11,9 +11,9 @@ import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/search", label: "Cari", icon: Search, key: "search", prominent: false },
-  { href: "/favorites", label: "Favorit", icon: Heart, key: "favorites", prominent: false },
+  { href: "/library", label: "Perpustakaan", icon: BookOpen, key: "library", prominent: false },
   { href: "/", label: "HOME", icon: Home, key: "home", prominent: true },
-  { href: "/history", label: "Riwayat", icon: History, key: "history", prominent: false },
+  { href: "/affiliate", label: "Affiliate", icon: Megaphone, key: "affiliate", prominent: false },
   { href: "/profile", label: "Profil", icon: UserRound, key: "profile", prominent: false },
 ] as const;
 
@@ -26,15 +26,19 @@ function resolveCurrentKey(pathname: string) {
     return "search";
   }
 
-  if (pathname.startsWith("/favorites")) {
-    return "favorites";
+  if (
+    pathname.startsWith("/library") ||
+    pathname.startsWith("/favorites") ||
+    pathname.startsWith("/history")
+  ) {
+    return "library";
   }
 
-  if (pathname.startsWith("/history")) {
-    return "history";
+  if (pathname.startsWith("/affiliate")) {
+    return "affiliate";
   }
 
-  if (pathname.startsWith("/profile") || pathname.startsWith("/library")) {
+  if (pathname.startsWith("/profile")) {
     return "profile";
   }
 
