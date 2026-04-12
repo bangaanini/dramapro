@@ -3,21 +3,19 @@ import {
   BadgeCheck,
   Crown,
   Gem,
-  Lock,
   ShieldCheck,
 } from "lucide-react";
 
 import { createVipCheckoutAction } from "@/app/vip/actions";
 import { FormSubmitButton } from "@/components/form-submit-button";
 import { SiteFooter } from "@/components/site-footer";
-import { SiteHeader } from "@/components/site-header";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, resolveSafeRedirectPath } from "@/lib/user-auth";
 import { cn } from "@/lib/utils";
-import { getVipLockStartEpisode, isVipActive } from "@/lib/vip";
+import { isVipActive } from "@/lib/vip";
 
 export const dynamic = "force-dynamic";
 
@@ -30,21 +28,11 @@ export default async function VipPage(props: PageProps<"/vip">) {
   );
   const user = await getCurrentUser();
 
-  const [plans, vipSettings] = await Promise.all([
-    prisma.vipPricePlan.findMany({
-      where: { isActive: true },
-      orderBy: [{ sortOrder: "asc" }, { durationDays: "asc" }, { priceAmount: "asc" }],
-    }),
-    prisma.vipSettings.findUnique({
-      where: { id: "global" },
-      select: {
-        isEnabled: true,
-        lockFromEpisode: true,
-      },
-    }),
-  ]);
+  const plans = await prisma.vipPricePlan.findMany({
+    where: { isActive: true },
+    orderBy: [{ sortOrder: "asc" }, { durationDays: "asc" }, { priceAmount: "asc" }],
+  });
 
-  const vipLockFromEpisode = getVipLockStartEpisode(vipSettings);
   const userHasVip = isVipActive(user?.vipExpiresAt);
   const featuredPlan =
     plans.length > 0
@@ -59,7 +47,6 @@ export default async function VipPage(props: PageProps<"/vip">) {
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
-      <SiteHeader current="account" />
 
       <section className="relative mt-4 overflow-hidden rounded-[2.4rem] border border-amber-400/10 bg-[linear-gradient(180deg,#17110b_0%,#120d09_55%,#0f0a08_100%)] px-5 py-8 sm:px-8 sm:py-10">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,178,42,0.14),transparent_34%)]" />
@@ -91,11 +78,6 @@ export default async function VipPage(props: PageProps<"/vip">) {
                       dateStyle: "medium",
                     }).format(user.vipExpiresAt)
                   : "-"}
-              </div>
-            ) : vipLockFromEpisode ? (
-              <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-500/10 px-4 py-2 text-sm text-amber-100">
-                <Lock className="size-4 text-amber-300" />
-                Episode premium terkunci mulai EP.{vipLockFromEpisode}
               </div>
             ) : null}
           </div>
@@ -157,7 +139,6 @@ export default async function VipPage(props: PageProps<"/vip">) {
                       "Buka semua episode premium",
                       "Akses lebih cepat ke konten VIP",
                       "Kualitas stream terbaik",
-                      "Checkout QRIS langsung otomatis",
                     ].map((feature) => (
                       <div
                         key={feature}
@@ -218,92 +199,12 @@ export default async function VipPage(props: PageProps<"/vip">) {
               <h2 className="text-2xl font-semibold text-white">
                 Admin belum menambahkan paket VIP
               </h2>
-              <p className="mx-auto max-w-xl text-sm leading-7 text-[var(--muted)]">
-                Halaman upgrade sudah siap. Setelah paket ditambahkan dari dashboard
-                admin, daftar harga VIP akan otomatis muncul di sini.
-              </p>
             </CardContent>
           </Card>
         )}
       </section>
 
-      <section className="mt-8 grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
-        <Card className="glass-panel rounded-[2rem] border-white/10">
-          <CardContent className="space-y-4 p-6">
-            <div>
-              <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-foreground)]">
-                Kenapa VIP
-              </p>
-              <h2 className="mt-2 text-2xl font-semibold text-white">
-                Akses episode premium tanpa batas
-              </h2>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <FeatureCard
-                title="Episode premium"
-                description="Konten yang dikunci admin mulai episode tertentu akan terbuka."
-              />
-              <FeatureCard
-                title="Lebih nyaman"
-                description="Siap untuk kualitas terbaik dan flow checkout yang lebih mulus."
-              />
-              <FeatureCard
-                title="Dipakai lintas drama"
-                description="Satu akun VIP akan jadi fondasi akses global di katalog."
-              />
-              <FeatureCard
-                title="Siap payment gateway"
-                description="Master pricing sudah dibangun agar mudah disambungkan ke checkout."
-              />
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card className="glass-panel rounded-[2rem] border-white/10">
-          <CardContent className="space-y-5 p-6">
-            <div>
-              <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-foreground)]">
-                Langkah berikut
-              </p>
-              <h2 className="mt-2 text-2xl font-semibold text-white">
-                Siapkan akunmu
-              </h2>
-            </div>
-
-            <div className="space-y-3 text-sm leading-6 text-[var(--muted)]">
-              <p>1. Masuk atau buat akun terlebih dahulu.</p>
-              <p>2. Klik paket VIP yang paling cocok.</p>
-              <p>3. QRIS akan langsung tampil dan status pembayaran dipantau otomatis.</p>
-            </div>
-
-            <div className="space-y-3">
-              {user ? (
-                <div className="rounded-[1.4rem] border border-white/10 bg-white/5 px-4 py-4 text-sm text-white/72">
-                  Akunmu sudah siap untuk checkout VIP.
-                </div>
-              ) : (
-                <>
-                  <Link
-                    href={`/sign-up?next=${encodeURIComponent(next)}`}
-                    className={cn(buttonVariants({ size: "lg" }), "h-12 w-full rounded-2xl")}
-                  >
-                    Buat akun untuk VIP
-                  </Link>
-                  <Link
-                    href={`/sign-in?next=${encodeURIComponent(next)}`}
-                    className={cn(
-                      buttonVariants({ variant: "secondary", size: "lg" }),
-                      "h-12 w-full rounded-2xl",
-                    )}
-                  >
-                    Sudah punya akun? Masuk
-                  </Link>
-                </>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </section>
 
       <SiteFooter />
     </main>
@@ -316,19 +217,4 @@ function formatIdr(amount: number, currency: string) {
     currency,
     maximumFractionDigits: 0,
   }).format(amount);
-}
-
-function FeatureCard({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="rounded-[1.4rem] border border-white/10 bg-white/5 p-4">
-      <p className="font-semibold text-white">{title}</p>
-      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{description}</p>
-    </div>
-  );
 }

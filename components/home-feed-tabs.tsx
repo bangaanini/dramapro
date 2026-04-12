@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 
 import { DramaCard } from "@/components/drama-card";
@@ -103,18 +103,28 @@ export function HomeFeedTabs({
   popularTotal,
 }: HomeFeedTabsProps) {
   const [activeTab, setActiveTab] = useState<FeedTabKey>("new");
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const [isSwipeDragging, setIsSwipeDragging] = useState(false);
   const [feeds, setFeeds] = useState<Record<FeedTabKey, FeedState>>({
     home: createInitialFeedState(homeEntries, homeTotal),
     new: createInitialFeedState(newEntries, newTotal),
     popular: createInitialFeedState(popularEntries, popularTotal),
   });
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const sentinelRefs = useRef<Partial<Record<FeedTabKey, HTMLDivElement | null>>>({});
   const feedsRef = useRef(feeds);
   const inFlightRef = useRef<Record<FeedTabKey, boolean>>({
     home: false,
     new: false,
     popular: false,
   });
+  const swipeGestureRef = useRef<{
+    startX: number;
+    startY: number;
+    deltaX: number;
+    deltaY: number;
+    isHorizontal: boolean;
+  } | null>(null);
 
   useEffect(() => {
     feedsRef.current = feeds;
@@ -183,6 +193,15 @@ export function HomeFeedTabs({
     tabs.find((tab) => tab.key === activeTab) ??
     tabs[0];
   const currentFeed = feeds[currentTab.key];
+  const activeTabIndex = tabs.findIndex((tab) => tab.key === activeTab);
+
+  const setActiveTabWithBounds = useCallback(
+    (index: number) => {
+      const boundedIndex = Math.min(Math.max(index, 0), tabs.length - 1);
+      setActiveTab(tabs[boundedIndex]?.key ?? tabs[0].key);
+    },
+    [tabs],
+  );
 
   const loadMore = useCallback(async (tabKey: FeedTabKey) => {
     const currentFeedState = feedsRef.current[tabKey];
@@ -265,7 +284,7 @@ export function HomeFeedTabs({
   }, []);
 
   useEffect(() => {
-    const sentinel = sentinelRef.current;
+    const sentinel = sentinelRefs.current[currentTab.key];
 
     if (!sentinel || !currentFeed.hasMore || currentFeed.isLoading) {
       return;
@@ -293,6 +312,86 @@ export function HomeFeedTabs({
       observer.disconnect();
     };
   }, [currentFeed.hasMore, currentFeed.isLoading, currentTab.key, loadMore]);
+
+  const handleTouchStart = useCallback((event: TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches[0];
+
+    if (!touch) {
+      return;
+    }
+
+    swipeGestureRef.current = {
+      startX: touch.clientX,
+      startY: touch.clientY,
+      deltaX: 0,
+      deltaY: 0,
+      isHorizontal: false,
+    };
+    setSwipeOffset(0);
+  }, []);
+
+  const handleTouchMove = useCallback((event: TouchEvent<HTMLDivElement>) => {
+    const gesture = swipeGestureRef.current;
+    const touch = event.touches[0];
+
+    if (!gesture || !touch) {
+      return;
+    }
+
+    gesture.deltaX = touch.clientX - gesture.startX;
+    gesture.deltaY = touch.clientY - gesture.startY;
+
+    if (!gesture.isHorizontal) {
+      if (Math.abs(gesture.deltaX) < 14) {
+        return;
+      }
+
+      if (Math.abs(gesture.deltaX) <= Math.abs(gesture.deltaY)) {
+        swipeGestureRef.current = null;
+        setSwipeOffset(0);
+        setIsSwipeDragging(false);
+        return;
+      }
+
+      gesture.isHorizontal = true;
+      setIsSwipeDragging(true);
+    }
+
+    const maxOffset = viewportRef.current
+      ? viewportRef.current.clientWidth * 0.24
+      : 120;
+    const nextOffset = Math.max(
+      -maxOffset,
+      Math.min(maxOffset, gesture.deltaX),
+    );
+
+    setSwipeOffset(nextOffset);
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    const gesture = swipeGestureRef.current;
+    swipeGestureRef.current = null;
+
+    if (!gesture?.isHorizontal) {
+      setSwipeOffset(0);
+      setIsSwipeDragging(false);
+      return;
+    }
+
+    const viewportWidth = viewportRef.current?.clientWidth ?? 1;
+    const threshold = Math.min(92, viewportWidth * 0.18);
+
+    if (gesture.deltaX <= -threshold && activeTabIndex < tabs.length - 1) {
+      setActiveTabWithBounds(activeTabIndex + 1);
+    } else if (gesture.deltaX >= threshold && activeTabIndex > 0) {
+      setActiveTabWithBounds(activeTabIndex - 1);
+    }
+
+    setSwipeOffset(0);
+    setIsSwipeDragging(false);
+  }, [activeTabIndex, setActiveTabWithBounds, tabs.length]);
+
+  const panelTransform = `translate3d(calc(${-activeTabIndex * 100}% + ${swipeOffset}px), 0, 0)`;
 
   return (
     <section className="mx-auto mt-0 w-full max-w-7xl space-y-4 px-3 pb-2 sm:px-4 lg:px-6">
@@ -336,23 +435,57 @@ export function HomeFeedTabs({
         </Card>
       ) : (
         <>
-          <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 sm:gap-3 lg:grid-cols-5 xl:grid-cols-6">
-            {currentFeed.entries.map((entry) => (
-              <DramaCard
-                key={`${currentTab.key}-${entry.id}`}
-                href={entry.href}
-                title={entry.title}
-                thumbUrl={entry.thumbUrl}
-                providerName={entry.providerName}
-                episodeCount={entry.episodeCount}
-                compact
-                hideCta
-                cornerLabel={currentTab.badgeLabel}
-              />
-            ))}
-          </div>
+          <div
+            ref={viewportRef}
+            className="overflow-hidden rounded-[1.35rem]"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchEnd}
+            style={{ touchAction: "pan-y" }}
+          >
+            <div
+              className={cn(
+                "flex will-change-transform",
+                isSwipeDragging
+                  ? "transition-none"
+                  : "transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+              )}
+              style={{ transform: panelTransform }}
+            >
+              {tabs.map((tab) => {
+                const feed = feeds[tab.key];
 
-          <div ref={sentinelRef} className="h-1 w-full" aria-hidden="true" />
+                return (
+                  <div key={tab.key} className="min-w-full">
+                    <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 sm:gap-3 lg:grid-cols-5 xl:grid-cols-6">
+                      {feed.entries.map((entry) => (
+                        <DramaCard
+                          key={`${tab.key}-${entry.id}`}
+                          href={entry.href}
+                          title={entry.title}
+                          thumbUrl={entry.thumbUrl}
+                          providerName={entry.providerName}
+                          episodeCount={entry.episodeCount}
+                          compact
+                          hideCta
+                          cornerLabel={tab.badgeLabel}
+                        />
+                      ))}
+                    </div>
+
+                    <div
+                      ref={(node) => {
+                        sentinelRefs.current[tab.key] = node;
+                      }}
+                      className="h-1 w-full"
+                      aria-hidden="true"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
           {currentFeed.isLoading ? (
             <div className="flex items-center justify-center gap-2 py-2 text-sm text-[var(--muted-foreground)]">
