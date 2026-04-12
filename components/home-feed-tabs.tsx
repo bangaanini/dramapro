@@ -1,6 +1,13 @@
 "use client";
 
-import { type TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type TouchEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { LoaderCircle } from "lucide-react";
 
 import { DramaCard } from "@/components/drama-card";
@@ -105,12 +112,23 @@ export function HomeFeedTabs({
   const [activeTab, setActiveTab] = useState<FeedTabKey>("new");
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isSwipeDragging, setIsSwipeDragging] = useState(false);
+  const [indicatorStyle, setIndicatorStyle] = useState<{
+    width: number;
+    left: number;
+    opacity: number;
+  }>({
+    width: 0,
+    left: 0,
+    opacity: 0,
+  });
   const [feeds, setFeeds] = useState<Record<FeedTabKey, FeedState>>({
     home: createInitialFeedState(homeEntries, homeTotal),
     new: createInitialFeedState(newEntries, newTotal),
     popular: createInitialFeedState(popularEntries, popularTotal),
   });
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const tabListRef = useRef<HTMLDivElement | null>(null);
+  const tabButtonRefs = useRef<Partial<Record<FeedTabKey, HTMLButtonElement | null>>>({});
   const sentinelRefs = useRef<Partial<Record<FeedTabKey, HTMLDivElement | null>>>({});
   const feedsRef = useRef(feeds);
   const inFlightRef = useRef<Record<FeedTabKey, boolean>>({
@@ -284,6 +302,97 @@ export function HomeFeedTabs({
   }, []);
 
   useEffect(() => {
+    const activeButton = tabButtonRefs.current[activeTab];
+    const tabList = tabListRef.current;
+
+    if (!activeButton || !tabList) {
+      return;
+    }
+
+    const tabListRect = tabList.getBoundingClientRect();
+    const activeRect = activeButton.getBoundingClientRect();
+
+    setIndicatorStyle({
+      width: activeRect.width,
+      left: activeRect.left - tabListRect.left + tabList.scrollLeft,
+      opacity: 1,
+    });
+
+    activeButton.scrollIntoView({
+      inline: "center",
+      block: "nearest",
+      behavior: isSwipeDragging ? "auto" : "smooth",
+    });
+  }, [activeTab, isSwipeDragging]);
+
+  useEffect(() => {
+    const neighborTabs = [tabs[activeTabIndex - 1], tabs[activeTabIndex + 1]].filter(
+      Boolean,
+    ) as FeedTabConfig[];
+
+    if (neighborTabs.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    const useIdleCallback = "requestIdleCallback" in window;
+    const idleHandle = useIdleCallback
+      ? window.requestIdleCallback(() => {
+            if (cancelled) {
+              return;
+            }
+
+            for (const tab of neighborTabs) {
+              const feed = feedsRef.current[tab.key];
+
+              if (
+                feed.entries.length > FEED_PAGE_SIZE ||
+                !feed.hasMore ||
+                feed.isLoading ||
+                inFlightRef.current[tab.key]
+              ) {
+                continue;
+              }
+
+              void loadMore(tab.key);
+            }
+          }, { timeout: 1200 })
+      : window.setTimeout(() => {
+          if (cancelled) {
+            return;
+          }
+
+          for (const tab of neighborTabs) {
+            const feed = feedsRef.current[tab.key];
+
+            if (
+              feed.entries.length > FEED_PAGE_SIZE ||
+              !feed.hasMore ||
+              feed.isLoading ||
+              inFlightRef.current[tab.key]
+            ) {
+              continue;
+            }
+
+            void loadMore(tab.key);
+          }
+        }, 420);
+
+    return () => {
+      cancelled = true;
+
+      if (useIdleCallback && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(idleHandle);
+        return;
+      }
+
+      if (typeof idleHandle === "number") {
+        window.clearTimeout(idleHandle);
+      }
+    };
+  }, [activeTabIndex, loadMore, tabs]);
+
+  useEffect(() => {
     const sentinel = sentinelRefs.current[currentTab.key];
 
     if (!sentinel || !currentFeed.hasMore || currentFeed.isLoading) {
@@ -358,15 +467,18 @@ export function HomeFeedTabs({
     }
 
     const maxOffset = viewportRef.current
-      ? viewportRef.current.clientWidth * 0.24
+      ? viewportRef.current.clientWidth * 0.32
       : 120;
+    const isEdgeSwipe =
+      (activeTabIndex === 0 && gesture.deltaX > 0) ||
+      (activeTabIndex === tabs.length - 1 && gesture.deltaX < 0);
     const nextOffset = Math.max(
       -maxOffset,
-      Math.min(maxOffset, gesture.deltaX),
+      Math.min(maxOffset, isEdgeSwipe ? gesture.deltaX * 0.35 : gesture.deltaX * 0.9),
     );
 
     setSwipeOffset(nextOffset);
-  }, []);
+  }, [activeTabIndex, tabs.length]);
 
   const handleTouchEnd = useCallback(() => {
     const gesture = swipeGestureRef.current;
@@ -379,7 +491,7 @@ export function HomeFeedTabs({
     }
 
     const viewportWidth = viewportRef.current?.clientWidth ?? 1;
-    const threshold = Math.min(92, viewportWidth * 0.18);
+    const threshold = Math.min(82, viewportWidth * 0.14);
 
     if (gesture.deltaX <= -threshold && activeTabIndex < tabs.length - 1) {
       setActiveTabWithBounds(activeTabIndex + 1);
@@ -392,18 +504,26 @@ export function HomeFeedTabs({
   }, [activeTabIndex, setActiveTabWithBounds, tabs.length]);
 
   const panelTransform = `translate3d(calc(${-activeTabIndex * 100}% + ${swipeOffset}px), 0, 0)`;
+  const canSwipePrev = activeTabIndex > 0;
+  const canSwipeNext = activeTabIndex < tabs.length - 1;
 
   return (
     <section className="mx-auto mt-0 w-full max-w-7xl space-y-4 px-3 pb-2 sm:px-4 lg:px-6">
       <div className="sticky top-[3.9rem] z-40 -mx-3 border-b border-white/7 bg-[linear-gradient(180deg,rgba(15,10,10,0.98),rgba(15,10,10,0.9)_72%,rgba(15,10,10,0.78))] px-3 pb-2 pt-2 backdrop-blur-2xl shadow-[0_10px_24px_rgba(0,0,0,0.18)] sm:top-[4.2rem] sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6">
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-b from-transparent to-[rgba(15,10,10,0.42)]" />
         <div className="relative flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-4 overflow-x-auto">
-            {tabs.map((tab) => (
+          <div
+            ref={tabListRef}
+            className="relative flex min-w-0 items-center gap-4 overflow-x-auto scrollbar-none"
+          >
+            {tabs.map((tab, index) => (
               <button
                 key={tab.key}
+                ref={(node) => {
+                  tabButtonRefs.current[tab.key] = node;
+                }}
                 type="button"
-                onClick={() => setActiveTab(tab.key)}
+                onClick={() => setActiveTabWithBounds(index)}
                 className={cn(
                   "relative shrink-0 pb-2 text-sm font-semibold transition",
                   activeTab === tab.key
@@ -412,17 +532,38 @@ export function HomeFeedTabs({
                 )}
               >
                 {tab.label}
-                <span
-                  className={cn(
-                    "absolute inset-x-0 -bottom-0.5 h-0.5 rounded-full bg-white shadow-[0_0_14px_rgba(255,255,255,0.45)] transition",
-                    activeTab === tab.key ? "opacity-100" : "opacity-0",
-                  )}
-                />
               </button>
             ))}
+            <span
+              className="pointer-events-none absolute -bottom-0.5 h-0.5 rounded-full bg-[linear-gradient(90deg,rgba(255,180,87,0.95),rgba(255,122,69,1))] shadow-[0_0_18px_rgba(255,160,70,0.5)] transition-[left,width,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+              style={{
+                width: `${indicatorStyle.width}px`,
+                left: `${indicatorStyle.left}px`,
+                opacity: indicatorStyle.opacity,
+              }}
+            />
           </div>
           <span className="shrink-0 text-[11px] text-[var(--muted-foreground)]">
             {currentFeed.total} judul
+          </span>
+        </div>
+
+        <div className="relative mt-2 flex items-center justify-center gap-1.5">
+          {tabs.map((tab) => (
+            <span
+              key={tab.key}
+              className={cn(
+                "block h-1.5 rounded-full transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                activeTab === tab.key
+                  ? "w-6 bg-[linear-gradient(90deg,#ffb457,#ff7a45)] shadow-[0_0_12px_rgba(255,145,73,0.35)]"
+                  : "w-1.5 bg-white/18",
+              )}
+            />
+          ))}
+          <span className="sr-only">
+            {canSwipePrev || canSwipeNext
+              ? "Swipe kanan kiri untuk berpindah tab"
+              : "Tab aktif"}
           </span>
         </div>
       </div>
@@ -449,7 +590,7 @@ export function HomeFeedTabs({
                 "flex will-change-transform",
                 isSwipeDragging
                   ? "transition-none"
-                  : "transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                  : "transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]",
               )}
               style={{ transform: panelTransform }}
             >
