@@ -80,9 +80,21 @@ async function createAffiliateCommissionForPaidPayment(
       },
     },
   });
+  const affiliateOwner = await tx.user.findUnique({
+    where: {
+      id: payment.user.referredById,
+    },
+    select: {
+      affiliateCommissionOverrideRate: true,
+    },
+  });
 
   const tier = getAffiliateTier(activeReferrals, settings);
-  const commissionAmount = Math.floor(payment.amount * (tier.rate / 100));
+  const commissionRate =
+    typeof affiliateOwner?.affiliateCommissionOverrideRate === "number"
+      ? Math.min(Math.max(affiliateOwner.affiliateCommissionOverrideRate, 0), 100)
+      : tier.rate;
+  const commissionAmount = Math.floor(payment.amount * (commissionRate / 100));
 
   if (commissionAmount <= 0) {
     return;
@@ -94,7 +106,7 @@ async function createAffiliateCommissionForPaidPayment(
       referredUserId: payment.userId,
       vipPaymentId: payment.id,
       baseAmount: payment.amount,
-      commissionRate: tier.rate,
+      commissionRate,
       amount: commissionAmount,
       description: `Komisi dari transaksi VIP ${payment.referenceId}`,
     },

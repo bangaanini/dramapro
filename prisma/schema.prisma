@@ -129,6 +129,7 @@ model User {
   vipStartedAt               DateTime?
   vipExpiresAt               DateTime?
   affiliateCode              String?               @unique
+  affiliateCommissionOverrideRate Int?
   referredById               String?               @db.Uuid
   referredBy                 User?                 @relation("AffiliateReferrals", fields: [referredById], references: [id], onDelete: SetNull)
   referrals                  User[]                @relation("AffiliateReferrals")

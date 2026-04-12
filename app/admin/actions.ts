@@ -901,3 +901,53 @@ export async function deleteUserAction(formData: FormData) {
   revalidatePath("/profile");
   redirect("/admin/users?saved=1");
 }
+
+export async function updateUserAffiliateCommissionOverrideAction(formData: FormData) {
+  await requireAdminSession();
+
+  const userId = String(formData.get("userId") ?? "").trim();
+  const rawRate = String(formData.get("affiliateCommissionOverrideRate") ?? "").trim();
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/users").trim();
+  const safeRedirectTo = redirectTo.startsWith("/admin/users")
+    ? redirectTo
+    : "/admin/users";
+
+  if (!userId) {
+    redirect(`${safeRedirectTo}${safeRedirectTo.includes("?") ? "&" : "?"}error=User%20tidak%20ditemukan`);
+  }
+
+  let affiliateCommissionOverrideRate: number | null = null;
+
+  if (rawRate) {
+    const parsedRate = Number.parseInt(rawRate, 10);
+
+    if (!Number.isFinite(parsedRate) || parsedRate < 0 || parsedRate > 100) {
+      redirect(
+        `${safeRedirectTo}${safeRedirectTo.includes("?") ? "&" : "?"}error=Komisi%20khusus%20harus%20antara%200%20sampai%20100`,
+      );
+    }
+
+    affiliateCommissionOverrideRate = parsedRate;
+  }
+
+  try {
+    await prisma.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        affiliateCommissionOverrideRate,
+      },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+      redirect(`${safeRedirectTo}${safeRedirectTo.includes("?") ? "&" : "?"}error=User%20tidak%20ditemukan`);
+    }
+
+    throw error;
+  }
+
+  revalidatePath("/admin/users");
+  revalidatePath("/affiliate");
+  redirect(`${safeRedirectTo}${safeRedirectTo.includes("?") ? "&" : "?"}saved=commission`);
+}
