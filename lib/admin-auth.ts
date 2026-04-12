@@ -102,6 +102,39 @@ export async function authenticateAdmin(email: string, password: string) {
   return admin;
 }
 
+export async function changeAdminPassword(input: {
+  adminUserId: string;
+  currentPassword: string;
+  nextPassword: string;
+}) {
+  const admin = await prisma.adminUser.findUnique({
+    where: {
+      id: input.adminUserId,
+    },
+    select: {
+      id: true,
+      passwordHash: true,
+    },
+  });
+
+  if (!admin) {
+    throw new Error("Admin tidak ditemukan.");
+  }
+
+  if (!verifyPassword(input.currentPassword, admin.passwordHash)) {
+    throw new Error("Password saat ini tidak sesuai.");
+  }
+
+  await prisma.adminUser.update({
+    where: {
+      id: admin.id,
+    },
+    data: {
+      passwordHash: hashPassword(input.nextPassword),
+    },
+  });
+}
+
 export async function createAdminSession(adminUserId: string) {
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);

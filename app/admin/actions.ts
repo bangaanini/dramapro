@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { Prisma } from "@/app/generated/prisma/client";
 import {
   authenticateAdmin,
+  changeAdminPassword,
   createAdminSession,
   getCurrentAdmin,
   deleteCurrentAdminSession,
@@ -38,6 +39,40 @@ export async function loginAdminAction(formData: FormData) {
 export async function logoutAdminAction() {
   await deleteCurrentAdminSession();
   redirect("/admin/login");
+}
+
+export async function changeAdminPasswordAction(formData: FormData) {
+  const admin = await requireAdminSession();
+  const currentPassword = String(formData.get("currentPassword") ?? "");
+  const nextPassword = String(formData.get("nextPassword") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
+
+  if (!currentPassword || !nextPassword || !confirmPassword) {
+    redirect("/admin/password?error=Semua%20field%20password%20wajib%20diisi");
+  }
+
+  if (nextPassword.length < 8) {
+    redirect("/admin/password?error=Password%20baru%20minimal%208%20karakter");
+  }
+
+  if (nextPassword !== confirmPassword) {
+    redirect("/admin/password?error=Konfirmasi%20password%20tidak%20sama");
+  }
+
+  try {
+    await changeAdminPassword({
+      adminUserId: admin.id,
+      currentPassword,
+      nextPassword,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Password admin gagal diperbarui.";
+    redirect(`/admin/password?error=${encodeURIComponent(message)}`);
+  }
+
+  revalidatePath("/admin/password");
+  redirect("/admin/password?saved=1");
 }
 
 function parsePositiveInt(value: FormDataEntryValue | null, fallback = 0) {

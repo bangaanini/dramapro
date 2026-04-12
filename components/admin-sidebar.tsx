@@ -7,6 +7,7 @@ import {
   BadgePercent,
   Crown,
   CreditCard,
+  KeyRound,
   LayoutGrid,
   Menu,
   SlidersHorizontal,
@@ -62,6 +63,12 @@ const adminNavItems = [
     label: "Settings",
     description: "Atur Telegram dan SEO web",
     icon: SlidersHorizontal,
+  },
+  {
+    href: "/admin/password",
+    label: "Password Admin",
+    description: "Ubah password dashboard",
+    icon: KeyRound,
   },
   {
     href: "/admin/sync",
