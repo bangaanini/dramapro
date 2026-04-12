@@ -16,6 +16,7 @@ import {
   getPaymentGatewayDefinition,
   isPaymentGatewayProvider,
 } from "@/lib/payment-gateways";
+import { resolvePaymenkuEnabledChannelCodes } from "@/lib/paymenku";
 import { prisma } from "@/lib/prisma";
 import { normalizeTelegramBotUsername } from "@/lib/telegram-partner-bots";
 
@@ -754,6 +755,10 @@ export async function savePaymentGatewayConfigAction(formData: FormData) {
   const clientKey = String(formData.get("clientKey") ?? "").trim();
   const secret = String(formData.get("secret") ?? "").trim();
   const configJsonRaw = String(formData.get("configJson") ?? "").trim();
+  const enabledChannels = formData
+    .getAll("enabledChannels")
+    .map((value) => String(value).trim().toLowerCase())
+    .filter(Boolean);
 
   let configJson: Prisma.InputJsonValue | typeof Prisma.DbNull = Prisma.DbNull;
 
@@ -763,6 +768,20 @@ export async function savePaymentGatewayConfigAction(formData: FormData) {
     } catch {
       redirect("/admin/payment-gateways?error=Config%20JSON%20tidak%20valid");
     }
+  }
+
+  if (provider === "paymenku") {
+    const baseConfig =
+      configJson !== Prisma.DbNull && configJson && typeof configJson === "object"
+        ? { ...(configJson as Record<string, unknown>) }
+        : {};
+
+    configJson = {
+      ...baseConfig,
+      enabledChannels: resolvePaymenkuEnabledChannelCodes({
+        enabledChannels,
+      }),
+    } satisfies Prisma.InputJsonValue;
   }
 
   const existing = await prisma.paymentGatewayConfig.findUnique({

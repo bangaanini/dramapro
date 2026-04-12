@@ -4,11 +4,15 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { DEFAULT_AFFILIATE_SETTINGS, getAffiliateTier } from "@/lib/affiliate";
-import { PAYMENKU_PRIMARY_CHANNELS } from "@/lib/paymenku";
+import {
+  getPaymenkuChannelGroup,
+  resolvePaymenkuEnabledChannelCodes,
+} from "@/lib/paymenku";
 import {
   checkGatewayTransactionStatus,
   createActiveGatewayTransaction,
 } from "@/lib/payment-gateway-service";
+import { getActivePaymentGateway } from "@/lib/payment-gateways";
 import { prisma } from "@/lib/prisma";
 import {
   getCurrentUser,
@@ -17,6 +21,7 @@ import {
 } from "@/lib/user-auth";
 
 const PAYMENKU_MINIMUM_QRIS_AMOUNT = 1000;
+const PAYMENKU_MINIMUM_VA_AMOUNT = 20000;
 
 function buildReferenceId() {
   return `VIP-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`;
@@ -114,6 +119,7 @@ export async function createVipPaymentSession(input: {
   const safeNext = resolveSafeRedirectPath(input.next);
   const user = await requireSignedInVipUser(`/vip?next=${safeNext}`);
   const channelCode = String(input.channelCode).trim().toLowerCase();
+  const activeGateway = await getActivePaymentGateway();
 
   const plan = await prisma.vipPricePlan.findFirst({
     where: {
@@ -126,7 +132,12 @@ export async function createVipPaymentSession(input: {
     redirect(`/vip?error=${encodeURIComponent("Paket VIP tidak ditemukan.")}&next=${encodeURIComponent(safeNext)}`);
   }
 
-  if (!PAYMENKU_PRIMARY_CHANNELS.some((channel) => channel.code === channelCode)) {
+  const enabledChannelCodes =
+    activeGateway.provider === "paymenku"
+      ? resolvePaymenkuEnabledChannelCodes(activeGateway.configJson)
+      : [activeGateway.defaultChannelCode];
+
+  if (!enabledChannelCodes.includes(channelCode)) {
     redirect(
       `/vip?error=${encodeURIComponent("Metode pembayaran tidak tersedia.")}&next=${encodeURIComponent(safeNext)}`,
     );
@@ -136,6 +147,17 @@ export async function createVipPaymentSession(input: {
     redirect(
       `/vip?error=${encodeURIComponent(
         "Nominal paket terlalu kecil untuk checkout Paymenku. Minimum transaksi adalah Rp 1.000.",
+      )}&next=${encodeURIComponent(safeNext)}`,
+    );
+  }
+
+  if (
+    getPaymenkuChannelGroup(channelCode) === "va" &&
+    plan.priceAmount < PAYMENKU_MINIMUM_VA_AMOUNT
+  ) {
+    redirect(
+      `/vip?error=${encodeURIComponent(
+        "Minimal pembayaran dengan Virtual Account adalah Rp 20.000.",
       )}&next=${encodeURIComponent(safeNext)}`,
     );
   }

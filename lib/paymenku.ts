@@ -83,6 +83,10 @@ export const PAYMENKU_PRIMARY_CHANNELS: PaymenkuChannelDefinition[] = [
   },
 ];
 
+export type PaymenkuGatewayConfig = {
+  enabledChannels?: string[];
+};
+
 export type PaymenkuPaymentChannel = {
   code: string;
   name: string;
@@ -364,4 +368,35 @@ export function extractPaymenkuPaymentDetails(
     qrString: info?.qr_string ?? null,
     expiresAt: info?.expiration_date ? new Date(info.expiration_date) : null,
   };
+}
+
+export function resolvePaymenkuEnabledChannelCodes(configJson: unknown) {
+  const rawEnabledChannels =
+    configJson &&
+    typeof configJson === "object" &&
+    "enabledChannels" in configJson &&
+    Array.isArray((configJson as PaymenkuGatewayConfig).enabledChannels)
+      ? (configJson as PaymenkuGatewayConfig).enabledChannels
+      : null;
+
+  const normalized = (rawEnabledChannels ?? PAYMENKU_PRIMARY_CHANNELS.map((channel) => channel.code))
+    .map((value) => String(value).trim().toLowerCase())
+    .filter((value, index, array) => value && array.indexOf(value) === index)
+    .filter((value) =>
+      PAYMENKU_PRIMARY_CHANNELS.some((channel) => channel.code === value),
+    );
+
+  if (normalized.length === 0) {
+    return PAYMENKU_PRIMARY_CHANNELS.map((channel) => channel.code);
+  }
+
+  return normalized;
+}
+
+export function getPaymenkuCheckoutChannels(configJson: unknown) {
+  const enabledChannelCodes = resolvePaymenkuEnabledChannelCodes(configJson);
+
+  return PAYMENKU_PRIMARY_CHANNELS.filter((channel) =>
+    enabledChannelCodes.includes(channel.code),
+  );
 }

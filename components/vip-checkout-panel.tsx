@@ -4,7 +4,6 @@ import Link from "next/link";
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "qrcode";
 import {
-  Building2,
   Copy,
   CheckCircle2,
   Clock3,
@@ -383,7 +382,14 @@ export function VipCheckoutPanel({
                       {amountLabel}
                     </p>
                     <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-amber-400/18 bg-amber-500/10 px-3 py-1 text-sm text-amber-200">
-                      <Building2 className="size-4" />
+                      <span
+                        className={cn(
+                          "inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-[11px] font-semibold",
+                          getBankBadgeTone(payment.bankName ?? payment.channelName),
+                        )}
+                      >
+                        {getBankInitials(payment.bankName ?? payment.channelName)}
+                      </span>
                       {payment.bankName ?? payment.channelName}
                     </div>
                   </div>
@@ -657,6 +663,56 @@ function getVirtualAccountSteps(bankName?: string | null) {
     ];
   }
 
+  if (bank.includes("BSI")) {
+    return [
+      "Buka aplikasi BYOND/BSI Mobile atau ATM BSI.",
+      "Pilih menu Bayar atau Transfer Virtual Account.",
+      "Masukkan nomor VA di atas.",
+      "Periksa total pembayaran lalu lanjutkan.",
+      "Selesaikan transaksi dengan PIN atau otorisasi perangkat.",
+    ];
+  }
+
+  if (bank.includes("CIMB")) {
+    return [
+      "Buka aplikasi OCTO Mobile / OCTO Clicks atau ATM CIMB.",
+      "Pilih menu Transfer atau Pembayaran Virtual Account.",
+      "Masukkan nomor VA yang tertera.",
+      "Verifikasi nama merchant dan nominal pembayaran.",
+      "Konfirmasi pembayaran sampai status berhasil.",
+    ];
+  }
+
+  if (bank.includes("PERMATA")) {
+    return [
+      "Buka aplikasi PermataMobile X atau ATM Permata.",
+      "Pilih menu Pembayaran atau Virtual Account.",
+      "Masukkan nomor VA di atas.",
+      "Periksa detail transaksi lalu tekan lanjut.",
+      "Masukkan PIN untuk menyelesaikan pembayaran.",
+    ];
+  }
+
+  if (bank.includes("DANAMON")) {
+    return [
+      "Buka aplikasi D-Bank PRO atau ATM Danamon.",
+      "Masuk ke menu Transfer / Bayar Virtual Account.",
+      "Masukkan nomor virtual account di atas.",
+      "Cek detail pembayaran dan pastikan nominal benar.",
+      "Konfirmasi transaksi hingga berhasil.",
+    ];
+  }
+
+  if (bank.includes("BJB")) {
+    return [
+      "Buka Digi by bank bjb atau ATM bank bjb.",
+      "Pilih menu Pembayaran atau Virtual Account.",
+      "Masukkan nomor VA yang tampil di halaman ini.",
+      "Periksa nominal lalu konfirmasi pembayaran.",
+      "Tunggu status VIP aktif otomatis setelah verifikasi.",
+    ];
+  }
+
   return [
     "Buka aplikasi mobile banking atau ATM sesuai bank pilihanmu.",
     "Masuk ke menu Transfer atau Virtual Account.",
@@ -664,4 +720,53 @@ function getVirtualAccountSteps(bankName?: string | null) {
     "Periksa nominal transfer lalu konfirmasi pembayaran.",
     "Status VIP akan aktif otomatis setelah pembayaran terverifikasi.",
   ];
+}
+
+function getBankInitials(bankName: string) {
+  const normalized = bankName
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 4)
+    .toUpperCase();
+
+  return normalized || "BANK";
+}
+
+function getBankBadgeTone(bankName: string) {
+  const normalized = bankName.toUpperCase();
+
+  if (normalized.includes("BNI")) {
+    return "bg-orange-500/20 text-orange-100 border border-orange-400/25";
+  }
+
+  if (normalized.includes("BRI")) {
+    return "bg-sky-500/20 text-sky-100 border border-sky-400/25";
+  }
+
+  if (normalized.includes("MANDIRI")) {
+    return "bg-yellow-500/20 text-yellow-100 border border-yellow-400/25";
+  }
+
+  if (normalized.includes("BSI")) {
+    return "bg-emerald-500/20 text-emerald-100 border border-emerald-400/25";
+  }
+
+  if (normalized.includes("CIMB")) {
+    return "bg-red-500/20 text-red-100 border border-red-400/25";
+  }
+
+  if (normalized.includes("PERMATA")) {
+    return "bg-violet-500/20 text-violet-100 border border-violet-400/25";
+  }
+
+  if (normalized.includes("DANAMON")) {
+    return "bg-amber-500/20 text-amber-100 border border-amber-400/25";
+  }
+
+  if (normalized.includes("BJB")) {
+    return "bg-blue-500/20 text-blue-100 border border-blue-400/25";
+  }
+
+  return "bg-white/10 text-white border border-white/12";
 }

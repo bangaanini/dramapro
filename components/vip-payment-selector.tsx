@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Building2,
   CheckCircle2,
   ChevronDown,
+  Info,
   QrCode,
+  X,
 } from "lucide-react";
 
 import { createVipCheckoutAction } from "@/app/vip/actions";
@@ -47,6 +49,7 @@ export function VipPaymentSelector({
   initialPlanId,
   channels,
 }: VipPaymentSelectorProps) {
+  const MINIMUM_VA_AMOUNT = 20000;
   const vaChannels = useMemo(
     () => channels.filter((channel) => channel.group === "va"),
     [channels],
@@ -60,11 +63,33 @@ export function VipPaymentSelector({
   const [selectedPlanId, setSelectedPlanId] = useState(selectedDefaultPlanId);
   const [selectedChannelCode, setSelectedChannelCode] = useState("qris");
   const [expandedGroup, setExpandedGroup] = useState<"va" | "qris">("qris");
+  const [toast, setToast] = useState<string | null>(null);
 
   const selectedPlan =
     plans.find((plan) => plan.id === selectedPlanId) ?? plans[0] ?? null;
+  const isVaAllowed = (selectedPlan?.priceAmount ?? 0) >= MINIMUM_VA_AMOUNT;
+  const effectiveSelectedChannelCode =
+    !isVaAllowed && selectedChannelCode !== "qris"
+      ? "qris"
+      : selectedChannelCode;
   const selectedChannel =
-    channels.find((channel) => channel.code === selectedChannelCode) ?? channels[0] ?? null;
+    channels.find((channel) => channel.code === effectiveSelectedChannelCode) ??
+    channels[0] ??
+    null;
+
+  useEffect(() => {
+    if (!toast) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setToast(null);
+    }, 2400);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [toast]);
 
   if (!selectedPlan || !selectedChannel) {
     return null;
@@ -74,6 +99,11 @@ export function VipPaymentSelector({
     selectedChannel.group === "va"
       ? `Bayar dengan ${selectedChannel.shortName ?? selectedChannel.name}`
       : "Bayar dengan QRIS";
+
+  function showVaMinimumNotice() {
+    triggerSelectionHaptic();
+    setToast("Minimal pembayaran dengan VA adalah Rp 20.000.");
+  }
 
   return (
     <div className="space-y-5">
@@ -165,108 +195,154 @@ export function VipPaymentSelector({
           <div className="space-y-3">
             <p className="text-sm font-medium text-white">Pilih metode pembayaran</p>
 
-            <button
-              type="button"
-              onPointerDown={() => triggerSelectionHaptic()}
-              onClick={() => {
-                setExpandedGroup((current) => (current === "va" ? "qris" : "va"));
-                if (expandedGroup !== "va" && vaChannels[0]) {
-                  setSelectedChannelCode((current) =>
-                    current === "qris" ? vaChannels[0].code : current,
-                  );
-                }
-              }}
-              className={cn(
-                "w-full rounded-[1.5rem] border px-4 py-4 text-left transition",
-                expandedGroup === "va" || selectedChannel.group === "va"
-                  ? "border-amber-400/40 bg-amber-500/10"
-                  : "border-white/10 bg-white/5",
-              )}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex gap-3">
-                  <span className="mt-0.5 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/6 text-white">
-                    <Building2 className="size-5" />
-                  </span>
-                  <div>
-                    <p className="font-medium text-white">Transfer Bank</p>
-                    <p className="text-sm text-white/55">
-                      BNI, BRI, Mandiri, BSI, CIMB, Permata, Danamon, BJB
-                    </p>
-                  </div>
-                </div>
+            {vaChannels.length > 0 ? (
+              <button
+                type="button"
+                onPointerDown={() => {
+                  if (!isVaAllowed) {
+                    return;
+                  }
 
-                <div className="flex items-center gap-3">
-                  <span
-                    className={cn(
-                      "inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px]",
-                      selectedChannel.group === "va"
-                        ? "border-amber-300 bg-amber-300 text-[#392100]"
-                        : "border-white/25 text-transparent",
-                    )}
-                  >
-                    •
-                  </span>
-                  <ChevronDown
-                    className={cn(
-                      "size-4 text-white/50 transition-transform",
-                      expandedGroup === "va" && "rotate-180",
-                    )}
-                  />
-                </div>
-              </div>
+                  triggerSelectionHaptic();
+                }}
+                onClick={() => {
+                  if (!isVaAllowed) {
+                    showVaMinimumNotice();
+                    return;
+                  }
 
-              <div
+                  setExpandedGroup((current) => (current === "va" ? "qris" : "va"));
+                  if (expandedGroup !== "va" && vaChannels[0]) {
+                    setSelectedChannelCode((current) =>
+                      current === "qris" ? vaChannels[0].code : current,
+                    );
+                  }
+                }}
                 className={cn(
-                  "grid transition-[grid-template-rows,opacity] duration-300",
-                  expandedGroup === "va" ? "mt-4 grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+                  "w-full rounded-[1.5rem] border px-4 py-4 text-left transition",
+                  expandedGroup === "va" || selectedChannel.group === "va"
+                    ? "border-amber-400/40 bg-amber-500/10"
+                    : "border-white/10 bg-white/5",
+                  !isVaAllowed && "cursor-not-allowed border-white/8 bg-white/4 opacity-60",
                 )}
+                aria-disabled={!isVaAllowed}
               >
-                <div className="overflow-hidden">
-                  <div className="space-y-2 border-t border-white/8 pt-3">
-                    {vaChannels.map((channel) => {
-                      const isSelected = selectedChannelCode === channel.code;
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex gap-3">
+                    <span className="mt-0.5 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/6 text-white">
+                      <Building2 className="size-5" />
+                    </span>
+                    <div>
+                      <p className="font-medium text-white">Transfer Bank</p>
+                      <p className="text-sm text-white/55">
+                        BNI, BRI, Mandiri, BSI, CIMB, Permata, Danamon, BJB
+                      </p>
+                      {!isVaAllowed ? (
+                        <p className="mt-1 text-xs text-amber-200/90">
+                          Aktif mulai nominal Rp 20.000
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
 
-                      return (
-                        <button
-                          key={channel.code}
-                          type="button"
-                          onPointerDown={() => triggerSelectionHaptic()}
-                          onClick={() => {
-                            setSelectedChannelCode(channel.code);
-                            setExpandedGroup("va");
-                          }}
-                          className={cn(
-                            "flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition",
-                            isSelected
-                              ? "border-amber-400/40 bg-white/7 text-white"
-                              : "border-white/8 bg-black/10 text-white/72",
-                          )}
-                        >
-                          <span className="text-sm font-medium">
-                            Bank {channel.bankName ?? channel.shortName ?? channel.name}
-                          </span>
-                          <span
-                            className={cn(
-                              "inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px]",
-                              isSelected
-                                ? "border-amber-300 bg-amber-300 text-[#392100]"
-                                : "border-white/25 text-transparent",
-                            )}
-                          >
-                            •
-                          </span>
-                        </button>
-                      );
-                    })}
-
-                    <p className="pt-2 text-center text-xs text-white/35">
-                      Bank tidak tersedia? Gunakan QRIS
-                    </p>
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={cn(
+                        "inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px]",
+                        selectedChannel.group === "va"
+                          ? "border-amber-300 bg-amber-300 text-[#392100]"
+                          : "border-white/25 text-transparent",
+                      )}
+                    >
+                      •
+                    </span>
+                    <ChevronDown
+                      className={cn(
+                        "size-4 text-white/50 transition-transform",
+                        expandedGroup === "va" && "rotate-180",
+                      )}
+                    />
                   </div>
                 </div>
-              </div>
-            </button>
+
+                <div
+                  className={cn(
+                    "grid transition-[grid-template-rows,opacity] duration-300",
+                    expandedGroup === "va" ? "mt-4 grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+                  )}
+                >
+                  <div className="overflow-hidden">
+                    <div className="space-y-2 border-t border-white/8 pt-3">
+                      {vaChannels.map((channel) => {
+                        const isSelected =
+                          effectiveSelectedChannelCode === channel.code;
+
+                        return (
+                          <button
+                            key={channel.code}
+                            type="button"
+                            onPointerDown={() => {
+                              if (!isVaAllowed) {
+                                return;
+                              }
+
+                              triggerSelectionHaptic();
+                            }}
+                            onClick={() => {
+                              if (!isVaAllowed) {
+                                showVaMinimumNotice();
+                                return;
+                              }
+
+                              setSelectedChannelCode(channel.code);
+                              setExpandedGroup("va");
+                            }}
+                            className={cn(
+                              "flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition",
+                              isSelected
+                                ? "border-amber-400/40 bg-white/7 text-white"
+                                : "border-white/8 bg-black/10 text-white/72",
+                              !isVaAllowed && "cursor-not-allowed opacity-60",
+                            )}
+                            aria-disabled={!isVaAllowed}
+                          >
+                            <span className="flex items-center gap-3">
+                              <span
+                                className={cn(
+                                  "inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-[11px] font-semibold",
+                                  getBankBadgeTone(channel.bankName ?? channel.shortName ?? channel.name),
+                                )}
+                              >
+                                {channel.shortName ?? getBankInitials(channel.bankName ?? channel.name)}
+                              </span>
+                              <span className="text-sm font-medium">
+                                Bank {channel.bankName ?? channel.shortName ?? channel.name}
+                              </span>
+                            </span>
+                            <span
+                              className={cn(
+                                "inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px]",
+                                isSelected
+                                  ? "border-amber-300 bg-amber-300 text-[#392100]"
+                                  : "border-white/25 text-transparent",
+                              )}
+                            >
+                              •
+                            </span>
+                          </button>
+                        );
+                      })}
+
+                      <p className="pt-2 text-center text-xs text-white/35">
+                        {isVaAllowed
+                          ? "Bank tidak tersedia? Gunakan QRIS"
+                          : "Nominal di bawah Rp 20.000, gunakan QRIS"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </button>
+            ) : null}
 
             <button
               type="button"
@@ -277,7 +353,7 @@ export function VipPaymentSelector({
               }}
               className={cn(
                 "flex w-full items-start justify-between gap-3 rounded-[1.5rem] border px-4 py-4 text-left transition",
-                selectedChannelCode === "qris"
+                effectiveSelectedChannelCode === "qris"
                   ? "border-amber-400/40 bg-amber-500/10"
                   : "border-white/10 bg-white/5",
               )}
@@ -296,7 +372,7 @@ export function VipPaymentSelector({
               <span
                 className={cn(
                   "inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px]",
-                  selectedChannelCode === "qris"
+                  effectiveSelectedChannelCode === "qris"
                     ? "border-amber-300 bg-amber-300 text-[#392100]"
                     : "border-white/25 text-transparent",
                 )}
@@ -314,7 +390,11 @@ export function VipPaymentSelector({
 
       <form action={createVipCheckoutAction} className="pb-28 sm:pb-0">
         <input type="hidden" name="planId" value={selectedPlan.id} />
-        <input type="hidden" name="channelCode" value={selectedChannel.code} />
+        <input
+          type="hidden"
+          name="channelCode"
+          value={effectiveSelectedChannelCode}
+        />
         <input type="hidden" name="next" value={next} />
 
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[rgba(7,5,4,0.92)] px-4 pb-[calc(env(safe-area-inset-bottom)+0.9rem)] pt-4 backdrop-blur-2xl sm:static sm:border-none sm:bg-transparent sm:px-0 sm:pb-0 sm:pt-0 sm:backdrop-blur-none">
@@ -340,6 +420,25 @@ export function VipPaymentSelector({
           </div>
         </div>
       </form>
+
+      {toast ? (
+        <div className="pointer-events-none fixed inset-x-0 bottom-28 z-[95] flex justify-center px-4 sm:bottom-8">
+          <div className="pointer-events-auto flex w-full max-w-sm items-center gap-3 rounded-[1.35rem] border border-amber-400/20 bg-[rgba(39,21,7,0.94)] px-4 py-3 text-sm text-amber-50 shadow-[0_18px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-200">
+              <Info className="size-4" />
+            </span>
+            <span className="flex-1 leading-6">{toast}</span>
+            <button
+              type="button"
+              onClick={() => setToast(null)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-amber-50/70 transition hover:bg-white/5 hover:text-white"
+              aria-label="Tutup notifikasi"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -350,4 +449,53 @@ function formatIdr(amount: number, currency: string) {
     currency,
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+function getBankInitials(bankName: string) {
+  const normalized = bankName
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 4)
+    .toUpperCase();
+
+  return normalized || "BANK";
+}
+
+function getBankBadgeTone(bankName: string) {
+  const normalized = bankName.toUpperCase();
+
+  if (normalized.includes("BNI")) {
+    return "bg-orange-500/20 text-orange-100 border border-orange-400/25";
+  }
+
+  if (normalized.includes("BRI")) {
+    return "bg-sky-500/20 text-sky-100 border border-sky-400/25";
+  }
+
+  if (normalized.includes("MANDIRI")) {
+    return "bg-yellow-500/20 text-yellow-100 border border-yellow-400/25";
+  }
+
+  if (normalized.includes("BSI")) {
+    return "bg-emerald-500/20 text-emerald-100 border border-emerald-400/25";
+  }
+
+  if (normalized.includes("CIMB")) {
+    return "bg-red-500/20 text-red-100 border border-red-400/25";
+  }
+
+  if (normalized.includes("PERMATA")) {
+    return "bg-violet-500/20 text-violet-100 border border-violet-400/25";
+  }
+
+  if (normalized.includes("DANAMON")) {
+    return "bg-amber-500/20 text-amber-100 border border-amber-400/25";
+  }
+
+  if (normalized.includes("BJB")) {
+    return "bg-blue-500/20 text-blue-100 border border-blue-400/25";
+  }
+
+  return "bg-white/10 text-white border border-white/12";
 }

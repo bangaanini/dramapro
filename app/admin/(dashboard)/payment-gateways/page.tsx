@@ -8,6 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { listPaymentGatewayConfigs } from "@/lib/payment-gateways";
+import {
+  PAYMENKU_PRIMARY_CHANNELS,
+  resolvePaymenkuEnabledChannelCodes,
+} from "@/lib/paymenku";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -81,6 +85,10 @@ export default async function AdminPaymentGatewaysPage(
       <div className="grid gap-6">
         {gateways.map((gateway) => {
           const isActive = settings?.activeProvider === gateway.provider;
+          const enabledChannelCodes =
+            gateway.provider === "paymenku"
+              ? resolvePaymenkuEnabledChannelCodes(gateway.configJson)
+              : [];
 
           return (
             <Card key={gateway.provider} className="glass-panel rounded-[2rem] border-white/10">
@@ -205,6 +213,44 @@ export default async function AdminPaymentGatewaysPage(
                         className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition placeholder:text-[var(--muted-foreground)] focus:border-accent/60 focus:ring-2 focus:ring-[var(--ring)]"
                       />
                     </label>
+
+                    {gateway.provider === "paymenku" ? (
+                      <div className="space-y-3 rounded-[1.4rem] border border-white/10 bg-black/20 p-4">
+                        <div>
+                          <p className="text-sm font-medium text-white">
+                            Channel checkout aktif
+                          </p>
+                          <p className="mt-1 text-xs leading-6 text-[var(--muted-foreground)]">
+                            Admin bisa menyalakan atau mematikan QRIS dan virtual account yang ingin ditampilkan di halaman VIP.
+                          </p>
+                        </div>
+
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {PAYMENKU_PRIMARY_CHANNELS.map((channel) => (
+                            <label
+                              key={channel.code}
+                              className="flex items-start gap-3 rounded-[1.1rem] border border-white/10 bg-white/5 px-4 py-3"
+                            >
+                              <input
+                                name="enabledChannels"
+                                type="checkbox"
+                                value={channel.code}
+                                defaultChecked={enabledChannelCodes.includes(channel.code)}
+                                className="mt-0.5 size-4 accent-[var(--accent)]"
+                              />
+                              <div>
+                                <p className="text-sm font-medium text-white">
+                                  {channel.name}
+                                </p>
+                                <p className="text-xs text-[var(--muted-foreground)]">
+                                  Code: {channel.code}
+                                </p>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="space-y-4 rounded-[1.6rem] border border-white/10 bg-black/20 p-4">

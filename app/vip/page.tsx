@@ -4,11 +4,11 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-import { SiteFooter } from "@/components/site-footer";
 import { VipPaymentSelector } from "@/components/vip-payment-selector";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { PAYMENKU_PRIMARY_CHANNELS } from "@/lib/paymenku";
+import { getPaymenkuCheckoutChannels, PAYMENKU_PRIMARY_CHANNELS } from "@/lib/paymenku";
+import { getActivePaymentGateway } from "@/lib/payment-gateways";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, resolveSafeRedirectPath } from "@/lib/user-auth";
 import { isVipActive } from "@/lib/vip";
@@ -23,6 +23,11 @@ export default async function VipPage(props: PageProps<"/vip">) {
     typeof searchParams.next === "string" ? searchParams.next : "/vip",
   );
   const user = await getCurrentUser();
+  const activeGateway = await getActivePaymentGateway().catch(() => null);
+  const availableChannels =
+    activeGateway?.provider === "paymenku"
+      ? getPaymenkuCheckoutChannels(activeGateway.configJson)
+      : PAYMENKU_PRIMARY_CHANNELS;
 
   const plans = await prisma.vipPricePlan.findMany({
     where: { isActive: true },
@@ -89,7 +94,7 @@ export default async function VipPage(props: PageProps<"/vip">) {
             }))}
             next={next}
             userHasVip={userHasVip}
-            channels={PAYMENKU_PRIMARY_CHANNELS}
+            channels={availableChannels}
           />
         ) : (
           <Card className="glass-panel col-span-full rounded-[2rem] border-white/10">
@@ -105,7 +110,6 @@ export default async function VipPage(props: PageProps<"/vip">) {
           </Card>
         )}
       </section>
-      <SiteFooter />
     </main>
   );
 }

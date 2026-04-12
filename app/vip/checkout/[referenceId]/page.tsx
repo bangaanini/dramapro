@@ -1,7 +1,6 @@
 
 import QRCode from "qrcode";
 import { notFound, redirect } from "next/navigation";
-import { SiteFooter } from "@/components/site-footer";
 import { VipCheckoutPanel } from "@/components/vip-checkout-panel";
 import { extractPaymenkuPaymentDetails } from "@/lib/paymenku";
 import { prisma } from "@/lib/prisma";
@@ -86,8 +85,6 @@ export default async function VipCheckoutDetailPage(
           vaNumber: paymenkuDetails.vaNumber,
         }}
       />
-
-      <SiteFooter />
     </main>
   );
 }
