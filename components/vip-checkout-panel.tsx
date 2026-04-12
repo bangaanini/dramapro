@@ -58,7 +58,7 @@ const STATUS_COPY: Record<
   pending: {
     title: "Menunggu pembayaran",
     description:
-      "QRIS langsung aktif. Setelah pembayaran berhasil, status VIP akan diperbarui otomatis tanpa refresh manual.",
+      "Scan QRIS di bawah",
     tone: "border-amber-400/20 bg-amber-500/10 text-amber-100",
   },
   paid: {
@@ -70,7 +70,7 @@ const STATUS_COPY: Record<
   failed: {
     title: "Pembayaran gagal",
     description:
-      "Gateway tidak mengonfirmasi pembayaran. Kamu bisa membuat transaksi baru dari halaman VIP.",
+      "Kamu bisa membuat transaksi baru dari halaman VIP.",
     tone: "border-red-400/20 bg-red-500/10 text-red-100",
   },
   expired: {
@@ -291,7 +291,7 @@ export function VipCheckoutPanel({
                 <p className="text-sm leading-7">{statusCopy.description}</p>
                 {payment.status === "pending" ? (
                   <p className="text-xs uppercase tracking-[0.16em] text-white/70">
-                    Polling otomatis aktif setiap 5 detik
+                    ...
                   </p>
                 ) : null}
               </div>
@@ -311,7 +311,7 @@ export function VipCheckoutPanel({
                 </div>
               ) : (
                 <div className="rounded-[1.6rem] border border-white/10 bg-white/5 p-5 text-sm text-[var(--muted)]">
-                  QRIS sedang disiapkan dari gateway. Jika belum muncul, gunakan
+                  QRIS sedang disiapkan.Jika belum muncul, gunakan
                   tombol buka pembayaran atau tunggu beberapa detik.
                 </div>
               )}
@@ -372,7 +372,7 @@ export function VipCheckoutPanel({
                   className={buttonVariants({ variant: "secondary", size: "sm" })}
                 >
                   <ExternalLink className="mr-2 size-4" />
-                  Buka gateway
+                  Buka pembayaran
                 </Link>
               ) : null}
             </div>
@@ -424,13 +424,7 @@ export function VipCheckoutPanel({
             </div>
           ) : null}
 
-          <div className="rounded-[1.4rem] border border-amber-400/20 bg-amber-500/10 p-4 text-sm leading-7 text-amber-100/88">
-            {payment.status === "pending"
-              ? "Halaman ini memantau status pembayaran otomatis. Begitu gateway mengonfirmasi transaksi berhasil, akses VIP akunmu akan aktif tanpa perlu refresh manual."
-              : payment.status === "paid"
-                ? "Pembayaran sudah dikonfirmasi dan status akun telah diperbarui. Kamu bisa langsung lanjut menonton episode premium."
-                : "Jika status pembayaran belum berhasil, kamu bisa kembali ke halaman VIP untuk membuat transaksi baru."}
-          </div>
+
         </CardContent>
       </Card>
     </section>

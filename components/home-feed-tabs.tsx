@@ -60,6 +60,7 @@ type HomeFeedTabsProps = {
 
 const FEED_PAGE_SIZE = 18;
 const HOME_FEED_CACHE_KEY = "dramapro.home-feed-tabs.v3";
+const HOME_FEED_SCROLL_CACHE_KEY = "dramapro.home-feed-tabs.scroll.v1";
 const HOME_FEED_CACHE_TTL_MS = 1000 * 60 * 10;
 
 type CachedHomeFeedTabsState = {
@@ -112,15 +113,9 @@ export function HomeFeedTabs({
   const [activeTab, setActiveTab] = useState<FeedTabKey>("new");
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isSwipeDragging, setIsSwipeDragging] = useState(false);
-  const [indicatorStyle, setIndicatorStyle] = useState<{
-    width: number;
-    left: number;
-    opacity: number;
-  }>({
-    width: 0,
-    left: 0,
-    opacity: 0,
-  });
+  const [tabMetrics, setTabMetrics] = useState<
+    Partial<Record<FeedTabKey, { width: number; left: number }>>
+  >({});
   const [feeds, setFeeds] = useState<Record<FeedTabKey, FeedState>>({
     home: createInitialFeedState(homeEntries, homeTotal),
     new: createInitialFeedState(newEntries, newTotal),
@@ -131,6 +126,11 @@ export function HomeFeedTabs({
   const tabButtonRefs = useRef<Partial<Record<FeedTabKey, HTMLButtonElement | null>>>({});
   const sentinelRefs = useRef<Partial<Record<FeedTabKey, HTMLDivElement | null>>>({});
   const feedsRef = useRef(feeds);
+  const scrollPositionsRef = useRef<Record<FeedTabKey, number>>({
+    home: 0,
+    new: 0,
+    popular: 0,
+  });
   const inFlightRef = useRef<Record<FeedTabKey, boolean>>({
     home: false,
     new: false,
@@ -167,6 +167,23 @@ export function HomeFeedTabs({
       new: { ...cachedState.feeds.new, isLoading: false },
       popular: { ...cachedState.feeds.popular, isLoading: false },
     });
+  }, []);
+
+  useEffect(() => {
+    const cachedScrollPositions =
+      safeSessionStorage.getJSON<Record<FeedTabKey, number>>(
+        HOME_FEED_SCROLL_CACHE_KEY,
+      );
+
+    if (!cachedScrollPositions) {
+      return;
+    }
+
+    scrollPositionsRef.current = {
+      home: cachedScrollPositions.home ?? 0,
+      new: cachedScrollPositions.new ?? 0,
+      popular: cachedScrollPositions.popular ?? 0,
+    };
   }, []);
 
   useEffect(() => {
@@ -216,9 +233,16 @@ export function HomeFeedTabs({
   const setActiveTabWithBounds = useCallback(
     (index: number) => {
       const boundedIndex = Math.min(Math.max(index, 0), tabs.length - 1);
+      if (typeof window !== "undefined") {
+        scrollPositionsRef.current[activeTab] = window.scrollY;
+        safeSessionStorage.setJSON(
+          HOME_FEED_SCROLL_CACHE_KEY,
+          scrollPositionsRef.current,
+        );
+      }
       setActiveTab(tabs[boundedIndex]?.key ?? tabs[0].key);
     },
-    [tabs],
+    [activeTab, tabs],
   );
 
   const loadMore = useCallback(async (tabKey: FeedTabKey) => {
@@ -302,21 +326,50 @@ export function HomeFeedTabs({
   }, []);
 
   useEffect(() => {
-    const activeButton = tabButtonRefs.current[activeTab];
     const tabList = tabListRef.current;
 
-    if (!activeButton || !tabList) {
+    if (!tabList) {
       return;
     }
 
-    const tabListRect = tabList.getBoundingClientRect();
-    const activeRect = activeButton.getBoundingClientRect();
+    const measure = () => {
+      const tabListRect = tabList.getBoundingClientRect();
+      const nextMetrics: Partial<Record<FeedTabKey, { width: number; left: number }>> =
+        {};
 
-    setIndicatorStyle({
-      width: activeRect.width,
-      left: activeRect.left - tabListRect.left + tabList.scrollLeft,
-      opacity: 1,
-    });
+      for (const tab of tabs) {
+        const button = tabButtonRefs.current[tab.key];
+
+        if (!button) {
+          continue;
+        }
+
+        const rect = button.getBoundingClientRect();
+        nextMetrics[tab.key] = {
+          width: rect.width,
+          left: rect.left - tabListRect.left + tabList.scrollLeft,
+        };
+      }
+
+      setTabMetrics(nextMetrics);
+    };
+
+    measure();
+
+    const resizeObserver = new ResizeObserver(measure);
+    resizeObserver.observe(tabList);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [tabs]);
+
+  useEffect(() => {
+    const activeButton = tabButtonRefs.current[activeTab];
+
+    if (!activeButton) {
+      return;
+    }
 
     activeButton.scrollIntoView({
       inline: "center",
@@ -324,6 +377,50 @@ export function HomeFeedTabs({
       behavior: isSwipeDragging ? "auto" : "smooth",
     });
   }, [activeTab, isSwipeDragging]);
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      window.scrollTo({
+        top: scrollPositionsRef.current[activeTab] ?? 0,
+        behavior: "auto",
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [activeTab]);
+
+  useEffect(() => {
+    let ticking = false;
+
+    const persistScroll = () => {
+      safeSessionStorage.setJSON(
+        HOME_FEED_SCROLL_CACHE_KEY,
+        scrollPositionsRef.current,
+      );
+    };
+
+    const handleScroll = () => {
+      scrollPositionsRef.current[activeTab] = window.scrollY;
+
+      if (ticking) {
+        return;
+      }
+
+      ticking = true;
+      window.requestAnimationFrame(() => {
+        ticking = false;
+        persistScroll();
+      });
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, [activeTab]);
 
   useEffect(() => {
     const neighborTabs = [tabs[activeTabIndex - 1], tabs[activeTabIndex + 1]].filter(
@@ -503,9 +600,35 @@ export function HomeFeedTabs({
     setIsSwipeDragging(false);
   }, [activeTabIndex, setActiveTabWithBounds, tabs.length]);
 
+  const viewportWidth = viewportRef.current?.clientWidth ?? 1;
+  const swipeProgress = Math.max(-1, Math.min(1, swipeOffset / viewportWidth));
   const panelTransform = `translate3d(calc(${-activeTabIndex * 100}% + ${swipeOffset}px), 0, 0)`;
   const canSwipePrev = activeTabIndex > 0;
   const canSwipeNext = activeTabIndex < tabs.length - 1;
+  const activeMetric = tabMetrics[activeTab];
+  const neighborTab =
+    swipeProgress < 0
+      ? tabs[activeTabIndex + 1]
+      : swipeProgress > 0
+        ? tabs[activeTabIndex - 1]
+        : null;
+  const neighborMetric = neighborTab ? tabMetrics[neighborTab.key] : null;
+  const interpolationProgress = Math.min(1, Math.abs(swipeProgress) * 1.2);
+  const computedIndicator = activeMetric
+    ? {
+        width:
+          neighborMetric && isSwipeDragging
+            ? activeMetric.width +
+              (neighborMetric.width - activeMetric.width) * interpolationProgress
+            : activeMetric.width,
+        left:
+          neighborMetric && isSwipeDragging
+            ? activeMetric.left +
+              (neighborMetric.left - activeMetric.left) * interpolationProgress
+            : activeMetric.left,
+        opacity: 1,
+      }
+    : { width: 0, left: 0, opacity: 0 };
 
   return (
     <section className="mx-auto mt-0 w-full max-w-7xl space-y-4 px-3 pb-2 sm:px-4 lg:px-6">
@@ -537,9 +660,9 @@ export function HomeFeedTabs({
             <span
               className="pointer-events-none absolute -bottom-0.5 h-0.5 rounded-full bg-[linear-gradient(90deg,rgba(255,180,87,0.95),rgba(255,122,69,1))] shadow-[0_0_18px_rgba(255,160,70,0.5)] transition-[left,width,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
               style={{
-                width: `${indicatorStyle.width}px`,
-                left: `${indicatorStyle.left}px`,
-                opacity: indicatorStyle.opacity,
+                width: `${computedIndicator.width}px`,
+                left: `${computedIndicator.left}px`,
+                opacity: computedIndicator.opacity,
               }}
             />
           </div>
@@ -596,10 +719,29 @@ export function HomeFeedTabs({
             >
               {tabs.map((tab) => {
                 const feed = feeds[tab.key];
+                const tabIndex = tabs.findIndex((item) => item.key === tab.key);
+                const distance = tabIndex - activeTabIndex;
+                const depthShift =
+                  isSwipeDragging || swipeOffset !== 0
+                    ? -swipeOffset * (distance === 0 ? 0.12 : 0.06)
+                    : 0;
+                const panelScale =
+                  distance === 0 ? 1 : 0.992 - Math.min(Math.abs(distance), 2) * 0.002;
+                const panelOpacity = distance === 0 ? 1 : 0.92;
 
                 return (
                   <div key={tab.key} className="min-w-full">
-                    <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 sm:gap-3 lg:grid-cols-5 xl:grid-cols-6">
+                    <div
+                      className={cn(
+                        "transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                        isSwipeDragging && "transition-none",
+                      )}
+                      style={{
+                        transform: `translate3d(${depthShift}px,0,0) scale(${panelScale})`,
+                        opacity: panelOpacity,
+                      }}
+                    >
+                      <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 sm:gap-3 lg:grid-cols-5 xl:grid-cols-6">
                       {feed.entries.map((entry) => (
                         <DramaCard
                           key={`${tab.key}-${entry.id}`}
@@ -613,6 +755,7 @@ export function HomeFeedTabs({
                           cornerLabel={tab.badgeLabel}
                         />
                       ))}
+                      </div>
                     </div>
 
                     <div
