@@ -24,6 +24,7 @@ import type {
   TelegramHomeScreenStatus,
 } from "@/lib/telegram-web-app";
 import "@/lib/telegram-web-app";
+import { supportsTelegramHomeScreen } from "@/lib/telegram-web-app";
 import {
   getUserAvatarUrl,
   getUserInitials,
@@ -209,13 +210,11 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
   useEffect(() => {
     const telegramWebApp = window.Telegram?.WebApp;
 
-    if (!telegramWebApp) {
+    if (!telegramWebApp || !supportsTelegramHomeScreen(telegramWebApp)) {
       return;
     }
 
-    if (telegramWebApp.addToHomeScreen) {
-      setHasInstallSurface(true);
-    }
+    setHasInstallSurface(true);
 
     const handleHomeScreenAdded = () => {
       setHomeScreenStatus("added");
@@ -243,12 +242,16 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
       }
     };
 
-    telegramWebApp.onEvent?.("homeScreenAdded", handleHomeScreenAdded);
-    telegramWebApp.onEvent?.("homeScreenChecked", handleHomeScreenChecked);
-    telegramWebApp.onEvent?.("homeScreenFailed", handleHomeScreenFailed);
-    telegramWebApp.checkHomeScreenStatus?.((status) => {
-      setHomeScreenStatus(status);
-    });
+    try {
+      telegramWebApp.onEvent?.("homeScreenAdded", handleHomeScreenAdded);
+      telegramWebApp.onEvent?.("homeScreenChecked", handleHomeScreenChecked);
+      telegramWebApp.onEvent?.("homeScreenFailed", handleHomeScreenFailed);
+      telegramWebApp.checkHomeScreenStatus?.((status) => {
+        setHomeScreenStatus(status);
+      });
+    } catch {
+      setHomeScreenStatus("unsupported");
+    }
 
     return () => {
       telegramWebApp.offEvent?.("homeScreenAdded", handleHomeScreenAdded);
@@ -309,25 +312,33 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
     try {
       const telegramWebApp = window.Telegram?.WebApp;
 
-      if (telegramWebApp?.addToHomeScreen) {
-        telegramWebApp.checkHomeScreenStatus?.((status) => {
-          if (status === "added") {
-            setHomeScreenStatus("added");
-            setActionMessage("Shortcut DramaPro sudah ada di layar utama.");
-          }
-        });
-
-        telegramWebApp.addToHomeScreen();
-        setActionMessage("Telegram sedang membuka pilihan add to homescreen.");
-        window.setTimeout(() => {
+      if (telegramWebApp && supportsTelegramHomeScreen(telegramWebApp)) {
+        try {
           telegramWebApp.checkHomeScreenStatus?.((status) => {
-            setHomeScreenStatus(status);
-
             if (status === "added") {
+              setHomeScreenStatus("added");
               setActionMessage("Shortcut DramaPro sudah ada di layar utama.");
             }
           });
-        }, 900);
+
+          telegramWebApp.addToHomeScreen?.();
+          setActionMessage("Telegram sedang membuka pilihan add to homescreen.");
+          window.setTimeout(() => {
+            try {
+              telegramWebApp.checkHomeScreenStatus?.((status) => {
+                setHomeScreenStatus(status);
+
+                if (status === "added") {
+                  setActionMessage("Shortcut DramaPro sudah ada di layar utama.");
+                }
+              });
+            } catch {
+              setHomeScreenStatus("unsupported");
+            }
+          }, 900);
+        } catch {
+          setHomeScreenStatus("unsupported");
+        }
         return;
       }
 

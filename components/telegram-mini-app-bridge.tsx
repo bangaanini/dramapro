@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { safeSessionStorage } from "@/lib/safe-session-storage";
 import "@/lib/telegram-web-app";
+import { supportsTelegramBackButton } from "@/lib/telegram-web-app";
 
 const TELEGRAM_SESSION_CACHE_KEY = "dramapro.telegram.session.v1";
 const TELEGRAM_REF_CAPTURE_PREFIX = "dramapro.telegram.ref.";
@@ -64,15 +65,20 @@ export function TelegramMiniAppBridge() {
       return;
     }
 
-    webApp.ready?.();
-    webApp.expand?.();
-    webApp.setHeaderColor?.("#120c0b");
-    webApp.setBackgroundColor?.("#120c0b");
-
     const initData = webApp.initData?.trim();
 
     if (!initData) {
       return;
+    }
+
+    webApp.ready?.();
+    webApp.expand?.();
+
+    try {
+      webApp.setHeaderColor?.("#120c0b");
+      webApp.setBackgroundColor?.("#120c0b");
+    } catch {
+      // Ignore unsupported Telegram methods outside newer Mini App runtimes.
     }
 
     const cached =
@@ -162,7 +168,7 @@ export function TelegramMiniAppBridge() {
     const webApp = window.Telegram?.WebApp;
     const backButton = webApp?.BackButton;
 
-    if (!webApp || !backButton) {
+    if (!webApp || !backButton || !supportsTelegramBackButton(webApp)) {
       return;
     }
 
