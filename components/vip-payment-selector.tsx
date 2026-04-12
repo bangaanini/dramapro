@@ -140,7 +140,7 @@ export function VipPaymentSelector({
                       <p className="text-xs font-medium uppercase tracking-[0.22em] text-white/45">
                         {plan.name}
                       </p>
-                      <p className="mt-3 text-4xl font-semibold tracking-tight text-white">
+                      <p className="mt-3 text-2xl font-semibold tracking-tight text-white">
                         {formatIdr(plan.priceAmount, plan.currency)}
                       </p>
                     </div>

@@ -137,7 +137,7 @@ export default async function VipPage(props: PageProps<"/vip">) {
                 <Crown className="mr-2 size-3.5" />
                 Paket VIP belum tersedia
               </Badge>
-              <h2 className="text-2xl font-semibold text-white">
+              <h2 className="text-xl font-semibold text-white">
                 Admin belum menambahkan paket VIP
               </h2>
             </CardContent>
