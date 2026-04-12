@@ -12,6 +12,7 @@ import { notFound } from "next/navigation";
 
 import { DramaDetailShareButton } from "@/components/drama-detail-share-button";
 import { EpisodeGridLink } from "@/components/episode-grid-link";
+import { FavoriteDramaButton } from "@/components/favorite-drama-button";
 import { PlayDramaButton } from "@/components/play-drama-button";
 import { SiteFooter } from "@/components/site-footer";
 
@@ -103,7 +104,7 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
   const { id } = await props.params;
   const user = await getCurrentUser();
 
-  const [drama, watchHistory, vipSettings] = await Promise.all([
+  const [drama, watchHistory, favorite, vipSettings] = await Promise.all([
     getDramaById(id),
     user
       ? prisma.watchHistory.findUnique({
@@ -117,6 +118,17 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
             episodeIndex: true,
             lastPositionSeconds: true,
           },
+        })
+      : Promise.resolve(null),
+    user
+      ? prisma.favoriteDrama.findUnique({
+          where: {
+            userId_dramaId: {
+              userId: user.id,
+              dramaId: id,
+            },
+          },
+          select: { id: true },
         })
       : Promise.resolve(null),
     prisma.vipSettings.findUnique({
@@ -271,6 +283,13 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
                     title={drama.title}
                     shareUrl={shareUrl}
                     telegramShareUrl={telegramShareUrl}
+                  />
+                  <FavoriteDramaButton
+                    dramaId={drama.id}
+                    redirectTo={`/watch/${drama.id}`}
+                    isFavorite={Boolean(favorite)}
+                    size="lg"
+                    className="h-12 rounded-full px-5"
                   />
                   <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-4 py-2 text-sm text-white/75 backdrop-blur">
                     <Clapperboard className="size-4 text-accent" />

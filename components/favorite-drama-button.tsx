@@ -2,19 +2,24 @@ import Link from "next/link";
 import { Heart } from "lucide-react";
 
 import { toggleFavoriteDramaAction } from "@/app/drama/actions";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants, type ButtonProps } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { getCurrentUser } from "@/lib/user-auth";
 
 type FavoriteDramaButtonProps = {
   dramaId: string;
   redirectTo: string;
   isFavorite: boolean;
+  size?: ButtonProps["size"];
+  className?: string;
 };
 
 export async function FavoriteDramaButton({
   dramaId,
   redirectTo,
   isFavorite,
+  size = "sm",
+  className,
 }: FavoriteDramaButtonProps) {
   const user = await getCurrentUser();
 
@@ -22,7 +27,10 @@ export async function FavoriteDramaButton({
     return (
       <Link
         href={`/sign-in?next=${encodeURIComponent(redirectTo)}`}
-        className={buttonVariants({ variant: "secondary", size: "sm" })}
+        className={cn(
+          buttonVariants({ variant: "secondary", size }),
+          className,
+        )}
       >
         <Heart className="mr-2 size-4" />
         Sign in untuk favorit
@@ -36,10 +44,13 @@ export async function FavoriteDramaButton({
       <input type="hidden" name="redirectTo" value={redirectTo} />
       <button
         type="submit"
-        className={buttonVariants({
-          variant: isFavorite ? "default" : "secondary",
-          size: "sm",
-        })}
+        className={cn(
+          buttonVariants({
+            variant: isFavorite ? "default" : "secondary",
+            size,
+          }),
+          className,
+        )}
       >
         <Heart className={`mr-2 size-4 ${isFavorite ? "fill-current" : ""}`} />
         {isFavorite ? "Tersimpan di favorit" : "Simpan ke favorit"}

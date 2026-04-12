@@ -8,12 +8,9 @@ import {
   Crown,
   Download,
   Gem,
-  History,
-  Megaphone,
   KeyRound,
   LogOut,
   LoaderCircle,
-  Star,
   UserRound,
 } from "lucide-react";
 
@@ -73,28 +70,10 @@ type BeforeInstallPromptEvent = Event & {
 
 const profileMenuItems = [
   {
-    href: "/library?tab=history",
-    label: "Riwayat Tontonan",
-    description: "Lihat episode terakhir yang kamu putar.",
-    icon: History,
-  },
-  {
-    href: "/library?tab=favorites",
-    label: "Daftar Favorit",
-    description: "Semua drama yang kamu simpan.",
-    icon: Star,
-  },
-  {
     href: "/profile/password",
     label: "Ganti Password",
     description: "Perbarui password akun dengan aman.",
     icon: KeyRound,
-  },
-  {
-    href: "/affiliate",
-    label: "Program Affiliate",
-    description: "Bagikan link referral dan pantau komisi.",
-    icon: Megaphone,
   },
   {
     href: "/profile/payout-settings",

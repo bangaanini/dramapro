@@ -1,82 +1,61 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { History, LoaderCircle } from "lucide-react";
+import { Bookmark, LoaderCircle } from "lucide-react";
 
 import { DramaCard } from "@/components/drama-card";
 import { Card, CardContent } from "@/components/ui/card";
 import { safeSessionStorage } from "@/lib/safe-session-storage";
 
-type HistoryEntry = {
+type SavedEpisodeEntry = {
   id: string;
-  episodeIndex: number;
-  lastPositionSeconds: number;
   updatedAt: string;
+  savedCount: number;
+  lastEpisodeIndex: number;
   drama: {
     id: string;
     title: string;
     thumbUrl: string;
     providerName: string;
     episodeCount: number;
-    tags: string[];
   };
 };
 
-type HistoryResponse = {
-  entries: HistoryEntry[];
+type SavedEpisodesResponse = {
+  entries: SavedEpisodeEntry[];
 };
 
-type HistoryListProps = {
+type SavedEpisodesGridProps = {
   userId: string;
 };
 
-function formatHistoryMeta(entry: HistoryEntry) {
-  const relativeDate = new Intl.RelativeTimeFormat("id-ID", {
-    numeric: "auto",
-  });
-  const minutesAgo = Math.round(
-    (Date.now() - new Date(entry.updatedAt).getTime()) / 60000,
-  );
-
-  let relativeLabel = "Baru saja";
-
-  if (minutesAgo >= 1440) {
-    relativeLabel = relativeDate.format(-Math.round(minutesAgo / 1440), "day");
-  } else if (minutesAgo >= 60) {
-    relativeLabel = relativeDate.format(-Math.round(minutesAgo / 60), "hour");
-  } else if (minutesAgo >= 1) {
-    relativeLabel = relativeDate.format(-minutesAgo, "minute");
-  }
-
-  return `EP.${entry.episodeIndex} • ${relativeLabel}`;
-}
-
-export function HistoryList({ userId }: HistoryListProps) {
-  const [entries, setEntries] = useState<HistoryEntry[]>([]);
+export function SavedEpisodesGrid({ userId }: SavedEpisodesGridProps) {
+  const [entries, setEntries] = useState<SavedEpisodeEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
-    const cacheKey = `dramapro.me.history.${userId}`;
-    const cachedPayload = safeSessionStorage.getJSON<HistoryResponse>(cacheKey);
+    const cacheKey = `dramapro.me.saved-episodes.${userId}`;
+    const cachedPayload =
+      safeSessionStorage.getJSON<SavedEpisodesResponse>(cacheKey);
 
     if (cachedPayload) {
       setEntries(cachedPayload.entries);
       setIsLoading(false);
     }
 
-    async function loadHistory() {
+    async function loadSavedEpisodes() {
       try {
-        const response = await fetch("/api/me/history", {
+        const response = await fetch("/api/me/saved-episodes", {
           cache: "no-store",
         });
 
         if (!response.ok) {
-          throw new Error("Gagal memuat riwayat tontonan.");
+          throw new Error("Gagal memuat episode tersimpan.");
         }
 
-        const payload = (await response.json()) as HistoryResponse;
+        const payload = (await response.json()) as SavedEpisodesResponse;
 
         if (!isMounted) {
           return;
@@ -94,7 +73,7 @@ export function HistoryList({ userId }: HistoryListProps) {
           setError(
             loadError instanceof Error
               ? loadError.message
-              : "Gagal memuat riwayat tontonan.",
+              : "Gagal memuat episode tersimpan.",
           );
         }
       } finally {
@@ -104,7 +83,7 @@ export function HistoryList({ userId }: HistoryListProps) {
       }
     }
 
-    void loadHistory();
+    void loadSavedEpisodes();
 
     return () => {
       isMounted = false;
@@ -119,9 +98,11 @@ export function HistoryList({ userId }: HistoryListProps) {
             <LoaderCircle className="size-7 animate-spin text-accent" />
           </div>
           <div className="space-y-2">
-            <h2 className="text-xl font-semibold text-white">Memuat riwayat</h2>
+            <h2 className="text-xl font-semibold text-white">
+              Memuat episode tersimpan
+            </h2>
             <p className="max-w-md text-sm text-[var(--muted)]">
-              Riwayat tontonanmu sedang disiapkan.
+              Episode yang kamu simpan sedang disiapkan.
             </p>
           </div>
         </CardContent>
@@ -134,11 +115,11 @@ export function HistoryList({ userId }: HistoryListProps) {
       <Card className="glass-panel rounded-[1.8rem]">
         <CardContent className="flex min-h-52 flex-col items-center justify-center gap-3 p-8 text-center">
           <div className="rounded-full border border-white/10 bg-white/5 p-4">
-            <History className="size-7 text-accent" />
+            <Bookmark className="size-7 text-accent" />
           </div>
           <div className="space-y-2">
             <h2 className="text-xl font-semibold text-white">
-              Riwayat belum bisa dimuat
+              Episode tersimpan belum bisa dimuat
             </h2>
             <p className="max-w-md text-sm text-[var(--muted)]">{error}</p>
           </div>
@@ -152,14 +133,15 @@ export function HistoryList({ userId }: HistoryListProps) {
       <Card className="glass-panel rounded-[1.8rem]">
         <CardContent className="flex min-h-52 flex-col items-center justify-center gap-3 p-8 text-center">
           <div className="rounded-full border border-white/10 bg-white/5 p-4">
-            <History className="size-7 text-accent" />
+            <Bookmark className="size-7 text-accent" />
           </div>
           <div className="space-y-2">
             <h2 className="text-xl font-semibold text-white">
-              Belum ada riwayat tontonan
+              Belum ada episode tersimpan
             </h2>
             <p className="max-w-md text-sm text-[var(--muted)]">
-              Setelah kamu menonton beberapa detik, progres akan muncul di sini.
+              Gunakan tombol simpan di player untuk menaruh episode favoritmu di
+              tab ini.
             </p>
           </div>
         </CardContent>
@@ -172,15 +154,15 @@ export function HistoryList({ userId }: HistoryListProps) {
       {entries.map((entry) => (
         <DramaCard
           key={entry.id}
-          href={`/watch/${entry.drama.id}`}
+          href={`/watch/${entry.drama.id}/play?episode=${entry.lastEpisodeIndex}`}
           title={entry.drama.title}
           thumbUrl={entry.drama.thumbUrl}
           providerName={entry.drama.providerName}
           episodeCount={entry.drama.episodeCount}
           compact
           hideCta
-          cornerLabel="Riwayat"
-          extraMeta={formatHistoryMeta(entry)}
+          cornerLabel="Tersimpan"
+          extraMeta={`${entry.savedCount} episode tersimpan`}
         />
       ))}
     </div>

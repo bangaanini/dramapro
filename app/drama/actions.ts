@@ -9,7 +9,7 @@ import { getCurrentUser, resolveSafeRedirectPath } from "@/lib/user-auth";
 export async function toggleFavoriteDramaAction(formData: FormData) {
   const dramaId = String(formData.get("dramaId") ?? "").trim();
   const redirectTo = resolveSafeRedirectPath(
-    String(formData.get("redirectTo") ?? "/library"),
+    String(formData.get("redirectTo") ?? "/library?tab=collection"),
   );
 
   if (!dramaId) {

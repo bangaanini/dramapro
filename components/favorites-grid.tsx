@@ -3,9 +3,7 @@
 import { useEffect, useState } from "react";
 import { Heart, LoaderCircle } from "lucide-react";
 
-import { toggleFavoriteDramaAction } from "@/app/drama/actions";
 import { DramaCard } from "@/components/drama-card";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { safeSessionStorage } from "@/lib/safe-session-storage";
 
@@ -148,27 +146,22 @@ export function FavoritesGrid({ userId }: FavoritesGridProps) {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+    <div className="grid grid-cols-3 gap-2.5 pb-6 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
       {entries.map((entry) => (
-        <div key={entry.id} className="space-y-3">
-          <DramaCard
-            href={`/watch/${entry.drama.id}`}
-            title={entry.drama.title}
-            thumbUrl={entry.drama.thumbUrl}
-            providerName={entry.drama.providerName}
-            episodeCount={entry.drama.episodeCount}
-            extraMeta={`Disimpan ${new Intl.DateTimeFormat("id-ID", {
-              dateStyle: "medium",
-            }).format(new Date(entry.createdAt))}`}
-          />
-          <form action={toggleFavoriteDramaAction}>
-            <input type="hidden" name="dramaId" value={entry.drama.id} />
-            <input type="hidden" name="redirectTo" value="/favorites" />
-            <Button type="submit" variant="ghost" size="sm" className="w-full">
-              Hapus dari favorit
-            </Button>
-          </form>
-        </div>
+        <DramaCard
+          key={entry.id}
+          href={`/watch/${entry.drama.id}`}
+          title={entry.drama.title}
+          thumbUrl={entry.drama.thumbUrl}
+          providerName={entry.drama.providerName}
+          episodeCount={entry.drama.episodeCount}
+          compact
+          hideCta
+          cornerLabel="Koleksi"
+          extraMeta={new Intl.DateTimeFormat("id-ID", {
+            dateStyle: "medium",
+          }).format(new Date(entry.createdAt))}
+        />
       ))}
     </div>
   );

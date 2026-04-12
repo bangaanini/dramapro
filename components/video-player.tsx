@@ -14,11 +14,11 @@ import videojs from "video.js";
 import type Player from "video.js/dist/types/player";
 import {
   AlertCircle,
+  Bookmark,
   ChevronsLeft,
   ChevronsRight,
   CheckCircle2,
   Crown,
-  Heart,
   Lock,
   ListVideo,
   LoaderCircle,
@@ -75,7 +75,7 @@ type VideoPlayerProps = {
   watchValue: string;
   immersive?: boolean;
   vipLockFromEpisode: number | null;
-  initialIsFavorite: boolean;
+  initialSavedEpisodes: number[];
   isSignedIn: boolean;
   initialEpisode?: number;
   initialPositionSeconds?: number;
@@ -93,7 +93,7 @@ export function VideoPlayer({
   watchValue,
   immersive = false,
   vipLockFromEpisode,
-  initialIsFavorite,
+  initialSavedEpisodes,
   isSignedIn,
   initialEpisode = 1,
   initialPositionSeconds = 0,
@@ -117,7 +117,7 @@ export function VideoPlayer({
     zone: "left" | "center" | "right";
   } | null>(null);
   const hasAttemptedAutoFullscreenRef = useRef(false);
-  const favoriteRequestRef = useRef(false);
+  const saveEpisodeRequestRef = useRef(false);
   const attemptedSourceUrlsRef = useRef<Set<string>>(new Set());
   const initialResumeRef = useRef({
     episodeIndex: initialEpisode,
@@ -142,8 +142,8 @@ export function VideoPlayer({
   const [isChromeVisible, setIsChromeVisible] = useState(true);
   const [isEpisodeSheetOpen, setIsEpisodeSheetOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isFavorite, setIsFavorite] = useState(initialIsFavorite);
-  const [isFavoritePending, setIsFavoritePending] = useState(false);
+  const [savedEpisodeIndices, setSavedEpisodeIndices] = useState(initialSavedEpisodes);
+  const [isSavePending, setIsSavePending] = useState(false);
   const [seekNotice, setSeekNotice] = useState<string | null>(null);
   const [toast, setToast] = useState<PlayerToast | null>(null);
   const [currentTimeSeconds, setCurrentTimeSeconds] = useState(0);
@@ -159,11 +159,16 @@ export function VideoPlayer({
     selectedEpisode,
     vipLockFromEpisode,
   );
+  const isEpisodeSaved = savedEpisodeIndices.includes(selectedEpisode);
   const vipLockMessage = vipLockFromEpisode
     ? hasUnlockedEpisodes
       ? `Episode VIP terkunci mulai EP.${vipLockFromEpisode}.`
       : `Semua episode sedang terkunci mulai EP.${vipLockFromEpisode}.`
     : null;
+
+  useEffect(() => {
+    setSavedEpisodeIndices(initialSavedEpisodes);
+  }, [initialSavedEpisodes]);
 
   useEffect(() => {
     if (!videoElementRef.current || playerRef.current) {
@@ -1080,14 +1085,14 @@ export function VideoPlayer({
     );
   }
 
-  async function handleFavoriteToggle() {
-    if (isFavoritePending || favoriteRequestRef.current) {
+  async function handleEpisodeSaveToggle() {
+    if (isSavePending || saveEpisodeRequestRef.current) {
       return;
     }
 
     if (!isSignedIn) {
       setToast({
-        message: "Masuk dulu untuk menyimpan favorit.",
+        message: "Masuk dulu untuk menyimpan episode.",
         tone: "info",
       });
       router.push(
@@ -1098,11 +1103,11 @@ export function VideoPlayer({
       return;
     }
 
-    favoriteRequestRef.current = true;
-    setIsFavoritePending(true);
+    saveEpisodeRequestRef.current = true;
+    setIsSavePending(true);
 
     try {
-      const response = await fetch("/api/me/favorites", {
+      const response = await fetch("/api/me/saved-episodes", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1110,39 +1115,50 @@ export function VideoPlayer({
         credentials: "same-origin",
         body: JSON.stringify({
           dramaId: internalDramaId,
+          episodeIndex: selectedEpisode,
         }),
       });
 
       const payload = (await response.json().catch(() => null)) as
-        | { isFavorite?: boolean; message?: string; error?: string }
+        | { isSaved?: boolean; message?: string; error?: string }
         | null;
 
       if (!response.ok) {
-        throw new Error(payload?.error || "Gagal menyimpan favorit.");
+        throw new Error(payload?.error || "Gagal menyimpan episode.");
       }
 
-      const nextFavorite = Boolean(payload?.isFavorite);
-      setIsFavorite(nextFavorite);
+      const nextSaved = Boolean(payload?.isSaved);
+      setSavedEpisodeIndices((current) => {
+        if (nextSaved) {
+          if (current.includes(selectedEpisode)) {
+            return current;
+          }
+
+          return [...current, selectedEpisode].sort((left, right) => left - right);
+        }
+
+        return current.filter((episode) => episode !== selectedEpisode);
+      });
       setToast({
         message:
           payload?.message ||
-          (nextFavorite
-            ? "Drama disimpan ke favorit."
-            : "Drama dihapus dari favorit."),
+          (nextSaved
+            ? `EP.${selectedEpisode} disimpan.`
+            : `EP.${selectedEpisode} dihapus dari tersimpan.`),
         tone: "success",
       });
       router.refresh();
-    } catch (favoriteError) {
+    } catch (saveError) {
       setToast({
         message:
-          favoriteError instanceof Error
-            ? favoriteError.message
-            : "Gagal menyimpan favorit.",
+          saveError instanceof Error
+            ? saveError.message
+            : "Gagal menyimpan episode.",
         tone: "error",
       });
     } finally {
-      favoriteRequestRef.current = false;
-      setIsFavoritePending(false);
+      saveEpisodeRequestRef.current = false;
+      setIsSavePending(false);
     }
   }
 
@@ -1328,16 +1344,18 @@ export function VideoPlayer({
               )}
             >
               <PlayerAction
-                label={isFavorite ? "Favorit" : "Simpan"}
-                onClick={handleFavoriteToggle}
-                hapticStyle={isFavorite ? "selection" : "impact"}
-                disabled={isFavoritePending}
-                active={isFavorite}
+                label={isEpisodeSaved ? "Tersimpan" : "Simpan"}
+                onClick={handleEpisodeSaveToggle}
+                hapticStyle={isEpisodeSaved ? "selection" : "impact"}
+                disabled={isSavePending}
+                active={isEpisodeSaved}
                 icon={
-                  isFavoritePending ? (
+                  isSavePending ? (
                     <LoaderCircle className="size-4 animate-spin" />
                   ) : (
-                    <Heart className={cn("size-4", isFavorite && "fill-current")} />
+                    <Bookmark
+                      className={cn("size-4", isEpisodeSaved && "fill-current")}
+                    />
                   )
                 }
               />

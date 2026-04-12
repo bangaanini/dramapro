@@ -86,6 +86,11 @@ export function DramaCard({
               <p className="text-[11px] text-white/78">
                 {episodeCount > 0 ? `${episodeCount} eps` : "Episode belum tersedia"}
               </p>
+              {extraMeta ? (
+                <p className="line-clamp-1 text-[10px] text-white/68">
+                  {extraMeta}
+                </p>
+              ) : null}
             </div>
           </div>
         </article>

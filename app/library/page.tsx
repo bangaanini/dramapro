@@ -17,9 +17,15 @@ export default async function LibraryPage(props: PageProps<"/library">) {
   const searchParams = await props.searchParams;
   const hasExplicitTab =
     typeof searchParams.tab === "string" &&
-    (searchParams.tab === "favorites" || searchParams.tab === "history");
-  const requestedTab: "favorites" | "history" =
-    hasExplicitTab && searchParams.tab === "history" ? "history" : "favorites";
+    (searchParams.tab === "collection" ||
+      searchParams.tab === "history" ||
+      searchParams.tab === "saved");
+  const requestedTab: "collection" | "history" | "saved" =
+    hasExplicitTab && searchParams.tab === "history"
+      ? "history"
+      : hasExplicitTab && searchParams.tab === "saved"
+        ? "saved"
+        : "collection";
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-none px-0 py-0">

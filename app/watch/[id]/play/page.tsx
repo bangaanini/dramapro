@@ -68,19 +68,19 @@ export default async function WatchPlayerPage(
   const searchParams = await props.searchParams;
   const user = await getCurrentUser();
 
-  const [drama, favorite, watchHistory, vipSettings] = await Promise.all([
+  const [drama, savedEpisodes, watchHistory, vipSettings] = await Promise.all([
     getDramaById(id),
     user
-      ? prisma.favoriteDrama.findUnique({
+      ? prisma.savedEpisode.findMany({
           where: {
-            userId_dramaId: {
-              userId: user.id,
-              dramaId: id,
-            },
+            userId: user.id,
+            dramaId: id,
           },
-          select: { id: true },
+          select: {
+            episodeIndex: true,
+          },
         })
-      : Promise.resolve(null),
+      : Promise.resolve([]),
     user
       ? prisma.watchHistory.findUnique({
           where: {
@@ -131,7 +131,7 @@ export default async function WatchPlayerPage(
         watchValue={drama.watchValue}
         immersive
         vipLockFromEpisode={vipLockFromEpisode}
-        initialIsFavorite={Boolean(favorite)}
+        initialSavedEpisodes={savedEpisodes.map((entry) => entry.episodeIndex)}
         isSignedIn={Boolean(user)}
         initialEpisode={preferredInitialEpisode}
         initialPositionSeconds={initialPositionSeconds}

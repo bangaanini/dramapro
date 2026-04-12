@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     where: { userId: user.id },
     include: { drama: true },
     orderBy: { createdAt: "desc" },
-    take: 48,
+    take: 120,
   });
 
   return NextResponse.json({
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    revalidatePath("/favorites");
+    revalidatePath("/library");
     revalidatePath("/profile");
     revalidatePath(`/watch/${dramaId}`);
 
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  revalidatePath("/favorites");
+  revalidatePath("/library");
   revalidatePath("/profile");
   revalidatePath(`/watch/${dramaId}`);
 

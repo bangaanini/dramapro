@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     where: { userId: user.id },
     include: { drama: true },
     orderBy: { updatedAt: "desc" },
-    take: 60,
+    take: 120,
   });
 
   return NextResponse.json({
@@ -28,7 +28,9 @@ export async function GET(request: NextRequest) {
       drama: {
         id: entry.drama.id,
         title: entry.drama.title,
+        thumbUrl: entry.drama.thumbUrl,
         providerName: entry.drama.providerName,
+        episodeCount: entry.drama.episodeCount,
         tags: entry.drama.tags,
       },
     })),

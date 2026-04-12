@@ -1,15 +1,16 @@
 "use client";
 
 import { type TouchEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Heart, History } from "lucide-react";
+import { Bookmark, Heart, History } from "lucide-react";
 
 import { FavoritesGrid } from "@/components/favorites-grid";
 import { HistoryList } from "@/components/history-list";
+import { SavedEpisodesGrid } from "@/components/saved-episodes-grid";
 import { triggerImpactHaptic, triggerSelectionHaptic } from "@/lib/haptics";
 import { safeSessionStorage } from "@/lib/safe-session-storage";
 import { cn } from "@/lib/utils";
 
-type LibraryTabKey = "favorites" | "history";
+type LibraryTabKey = "collection" | "history" | "saved";
 
 type LibraryTabsProps = {
   userId: string;
@@ -17,26 +18,29 @@ type LibraryTabsProps = {
   honorInitialTab?: boolean;
 };
 
-const LIBRARY_TAB_CACHE_KEY = "dramapro.library.active-tab.v1";
+const LIBRARY_TAB_CACHE_KEY = "dramapro.library.active-tab.v2";
 
 const TAB_CONFIG = [
   {
-    key: "favorites" as const,
-    label: "Favorit",
-    badgeLabel: "Tersimpan",
+    key: "collection" as const,
+    label: "Koleksiku",
     icon: Heart,
   },
   {
     key: "history" as const,
     label: "Riwayat",
-    badgeLabel: "Terakhir diputar",
     icon: History,
+  },
+  {
+    key: "saved" as const,
+    label: "Tersimpan",
+    icon: Bookmark,
   },
 ] as const;
 
 export function LibraryTabs({
   userId,
-  initialTab = "favorites",
+  initialTab = "collection",
   honorInitialTab = false,
 }: LibraryTabsProps) {
   const initialResolvedTab = (() => {
@@ -46,7 +50,7 @@ export function LibraryTabs({
 
     const cachedTab = safeSessionStorage.getItem(LIBRARY_TAB_CACHE_KEY);
 
-    if (cachedTab === "favorites" || cachedTab === "history") {
+    if (cachedTab === "collection" || cachedTab === "history" || cachedTab === "saved") {
       return cachedTab;
     }
 
@@ -55,8 +59,9 @@ export function LibraryTabs({
 
   const [activeTab, setActiveTab] = useState<LibraryTabKey>(initialResolvedTab);
   const [mountedTabs, setMountedTabs] = useState<Record<LibraryTabKey, boolean>>({
-    favorites: initialResolvedTab === "favorites",
+    collection: initialResolvedTab === "collection",
     history: initialResolvedTab === "history",
+    saved: initialResolvedTab === "saved",
   });
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isSwipeDragging, setIsSwipeDragging] = useState(false);
@@ -193,7 +198,6 @@ export function LibraryTabs({
       return;
     }
 
-    const viewportWidth = viewportRef.current?.clientWidth ?? 1;
     const threshold = Math.min(82, viewportWidth * 0.14);
 
     if (gesture.deltaX <= -threshold && activeTabIndex < TAB_CONFIG.length - 1) {
@@ -218,21 +222,24 @@ export function LibraryTabs({
   const panels = useMemo(
     () => [
       {
-        key: "favorites" as const,
-        render: mountedTabs.favorites ? <FavoritesGrid userId={userId} /> : null,
+        key: "collection" as const,
+        render: mountedTabs.collection ? <FavoritesGrid userId={userId} /> : null,
       },
       {
         key: "history" as const,
         render: mountedTabs.history ? <HistoryList userId={userId} /> : null,
+      },
+      {
+        key: "saved" as const,
+        render: mountedTabs.saved ? <SavedEpisodesGrid userId={userId} /> : null,
       },
     ],
     [mountedTabs, userId],
   );
 
   return (
-    <section className="mx-auto mt-0 w-full max-w-7xl px-0 pb-2">
-      <div className="sticky top-[3.9rem] z-40 border-b border-white/7 bg-[linear-gradient(180deg,rgba(15,10,10,0.98),rgba(15,10,10,0.9)_72%,rgba(15,10,10,0.78))] px-3 pb-2 pt-3 backdrop-blur-2xl shadow-[0_10px_24px_rgba(0,0,0,0.18)] sm:top-[4.2rem] sm:px-4">
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-b from-transparent to-[rgba(15,10,10,0.42)]" />
+    <section className="mx-auto mt-0 w-full max-w-none px-0 pb-2">
+      <div className="sticky top-[3.95rem] z-40 border-b border-white/7 bg-[linear-gradient(180deg,rgba(15,10,10,0.98),rgba(15,10,10,0.92)_74%,rgba(15,10,10,0.82))] px-3 pb-2 pt-2 backdrop-blur-2xl shadow-[0_10px_24px_rgba(0,0,0,0.18)] sm:top-[4.2rem]">
         <div
           className={cn(
             "pointer-events-none absolute inset-y-0 left-0 w-8 transition-opacity duration-200",
@@ -250,113 +257,72 @@ export function LibraryTabs({
           )}
         />
 
-        <div className="relative space-y-3">
-          <div className="flex items-center justify-between gap-3 px-1">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted-foreground)]">
-                Perpustakaan
-              </p>
-              <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white">
-                Simpanan dan progresmu
-              </h1>
-            </div>
+        <div className="relative flex items-center justify-between gap-3 px-1 pb-1">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted-foreground)]">
+              Perpustakaan
+            </p>
+            <h1 className="mt-1 text-xl font-semibold tracking-tight text-white">
+              Koleksi dramamu
+            </h1>
           </div>
+          <p className="text-xs text-[var(--muted-foreground)]">
+            Swipe untuk pindah tab
+          </p>
+        </div>
 
-          <div className="flex items-center gap-5 overflow-x-auto px-1 scrollbar-none">
-            {TAB_CONFIG.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.key;
+        <div className="relative mt-2 grid grid-cols-3 gap-1 rounded-full border border-white/8 bg-white/[0.03] p-1">
+          <div
+            className="pointer-events-none absolute inset-y-1 left-1 rounded-full bg-[linear-gradient(135deg,rgba(255,140,64,0.92),rgba(255,95,31,0.88))] shadow-[0_16px_30px_rgba(255,122,69,0.24)] transition-transform duration-300 ease-out"
+            style={{
+              width: "calc((100% - 0.5rem) / 3)",
+              transform: `translateX(calc(${activeTabIndex * 100}% + ${swipeProgress * 16}px))`,
+            }}
+          />
+          {TAB_CONFIG.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.key;
 
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onPointerDown={() => triggerSelectionHaptic()}
-                  onClick={() => switchToTab(tab.key)}
-                  className={cn(
-                    "relative shrink-0 pb-2 text-left transition",
-                    isActive ? "text-white" : "text-white/48 hover:text-white/75",
-                  )}
-                >
-                  <span className="flex items-center gap-2 text-sm font-semibold">
-                    <Icon className="size-4" />
-                    {tab.label}
-                  </span>
-                  <span className="mt-1 block text-[11px] text-white/45">
-                    {tab.badgeLabel}
-                  </span>
-                  <span
-                    className={cn(
-                      "absolute inset-x-0 -bottom-0.5 h-0.5 rounded-full bg-[linear-gradient(90deg,#ffb457,#ff7a45)] shadow-[0_0_18px_rgba(255,160,70,0.5)] transition",
-                      isActive ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center justify-center gap-1.5">
-            {TAB_CONFIG.map((tab) => (
-              <span
+            return (
+              <button
                 key={tab.key}
+                type="button"
+                onClick={() => switchToTab(tab.key)}
                 className={cn(
-                  "block h-1.5 rounded-full transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                  activeTab === tab.key
-                    ? "w-6 bg-[linear-gradient(90deg,#ffb457,#ff7a45)] shadow-[0_0_12px_rgba(255,145,73,0.35)]"
-                    : "w-1.5 bg-white/18",
+                  "relative z-10 inline-flex items-center justify-center gap-2 rounded-full px-3 py-2.5 text-sm font-medium transition",
+                  isActive ? "text-white" : "text-white/66",
                 )}
-              />
-            ))}
-          </div>
+              >
+                <Icon className="size-4" />
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       <div
         ref={viewportRef}
-        className="overflow-hidden px-3 pt-4 sm:px-4"
+        className="overflow-hidden"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onTouchCancel={handleTouchEnd}
-        style={{ touchAction: "pan-y" }}
       >
         <div
           className={cn(
             "flex will-change-transform",
             isSwipeDragging
               ? "transition-none"
-              : "transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]",
+              : "transition-transform duration-350 ease-[cubic-bezier(0.22,1,0.36,1)]",
           )}
           style={{ transform: panelTransform }}
         >
-          {panels.map((panel, index) => {
-            const distance = index - activeTabIndex;
-            const depthShift =
-              isSwipeDragging || swipeOffset !== 0
-                ? -swipeOffset * (distance === 0 ? 0.12 : 0.06)
-                : 0;
-            const panelScale =
-              distance === 0 ? 1 : 0.992 - Math.min(Math.abs(distance), 2) * 0.002;
-            const panelOpacity = distance === 0 ? 1 : 0.92 - Math.abs(swipeProgress) * 0.04;
-
-            return (
-              <div key={panel.key} className="min-w-full">
-                <div
-                  className={cn(
-                    "transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]",
-                    isSwipeDragging && "transition-none",
-                  )}
-                  style={{
-                    transform: `translate3d(${depthShift}px,0,0) scale(${panelScale})`,
-                    opacity: panelOpacity,
-                  }}
-                >
-                  {panel.render}
-                </div>
-              </div>
-            );
-          })}
+          {panels.map((panel) => (
+            <div key={panel.key} className="min-w-full px-2 pb-24 pt-3 sm:px-4">
+              {panel.render}
+            </div>
+          ))}
         </div>
       </div>
     </section>
