@@ -4,11 +4,9 @@ import {
   ArrowUpRight,
   BadgeDollarSign,
   CircleDollarSign,
-  Crown,
   Gem,
   Gift,
   Landmark,
-  ShieldCheck,
   Sparkles,
   Users,
   WalletCards,
@@ -29,7 +27,6 @@ import {
   ensureUserAffiliateCode,
   formatIdr,
   getAffiliateSettings,
-  getAffiliateTier,
 } from "@/lib/affiliate";
 import { prisma } from "@/lib/prisma";
 import { getUserSecondaryLabel } from "@/lib/user-identity";
@@ -160,9 +157,6 @@ export default async function AffiliatePage(props: PageProps<"/affiliate">) {
     totalWithdrawn,
     totalReserved,
   });
-  const tier = getAffiliateTier(activeReferrals, settings);
-  const nextTier = getNextAffiliateTier(activeReferrals, settings);
-
   const proto = headerStore.get("x-forwarded-proto") ?? "http";
   const host =
     headerStore.get("x-forwarded-host") ??
@@ -177,7 +171,7 @@ export default async function AffiliatePage(props: PageProps<"/affiliate">) {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-3 pb-28 pt-4 sm:px-5 sm:pt-6">
       <section className="space-y-4">
-        <div className="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(119,89,255,0.32),transparent_42%),linear-gradient(180deg,rgba(58,34,74,0.98),rgba(24,17,26,0.98))] p-4 shadow-[0_32px_80px_rgba(0,0,0,0.34)]">
+        <div className="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(255,145,46,0.2),transparent_42%),linear-gradient(180deg,rgba(63,34,20,0.98),rgba(24,17,18,0.98))] p-4 shadow-[0_32px_80px_rgba(0,0,0,0.34)]">
           <div className="flex items-start justify-between gap-3">
             <div>
               <Badge className="border-white/10 bg-white/8 text-white">
@@ -187,17 +181,11 @@ export default async function AffiliatePage(props: PageProps<"/affiliate">) {
                 Referral DramaPro
               </h1>
               <p className="mt-2 max-w-md text-sm leading-6 text-white/70">
-                Bagikan link affiliate kamu, pantau referral aktif, lalu tarik komisi
-                langsung ke rekening payout default.
+                Bagikan link affiliate kamu untuk mendapatkan komisi.
               </p>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-right">
-              <p className="text-[10px] uppercase tracking-[0.24em] text-white/45">
-                Level aktif
-              </p>
-              <p className="mt-1 text-sm font-semibold text-white">{tier.level}</p>
-            </div>
+
           </div>
 
           {!settings.isEnabled ? (
@@ -229,7 +217,7 @@ export default async function AffiliatePage(props: PageProps<"/affiliate">) {
           ) : null}
 
           <div className="mt-4 grid gap-3 sm:grid-cols-[1.45fr_0.95fr]">
-            <div className="rounded-[1.7rem] border border-white/10 bg-[linear-gradient(180deg,rgba(84,102,255,0.95),rgba(102,68,255,0.88))] p-4 text-white shadow-[0_24px_60px_rgba(72,76,255,0.28)]">
+            <div className="rounded-[1.7rem] border border-amber-300/10 bg-[linear-gradient(180deg,rgba(255,146,52,0.95),rgba(230,103,28,0.88))] p-4 text-white shadow-[0_24px_60px_rgba(255,126,46,0.2)]">
               <div className="flex items-center justify-between gap-3">
                 <div className="rounded-2xl border border-white/15 bg-white/10 p-2.5">
                   <BadgeDollarSign className="size-5" />
@@ -251,6 +239,8 @@ export default async function AffiliatePage(props: PageProps<"/affiliate">) {
               </div>
             </div>
 
+            <AffiliateLinkCard link={referralLink} />
+
             <div className="space-y-3">
               <CompactInfoCard
                 icon={Users}
@@ -266,41 +256,7 @@ export default async function AffiliatePage(props: PageProps<"/affiliate">) {
               />
             </div>
           </div>
-
-          <div className="mt-4 rounded-[1.6rem] border border-white/10 bg-black/18 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs uppercase tracking-[0.22em] text-white/45">
-                  Progress level
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <Badge className="border-amber-400/20 bg-amber-500/12 text-amber-100">
-                    <Crown className="mr-1.5 size-3.5" />
-                    {tier.level}
-                  </Badge>
-                  <span className="text-sm text-white/72">
-                    Komisi {tier.rate}% per transaksi VIP berhasil
-                  </span>
-                </div>
-              </div>
-
-              {nextTier ? (
-                <div className="rounded-2xl border border-white/10 bg-white/6 px-3 py-2 text-right">
-                  <p className="text-xs text-white/48">Menuju {nextTier.level}</p>
-                  <p className="mt-1 text-sm font-medium text-white">
-                    {Math.max(0, nextTier.minReferrals - activeReferrals)} referral lagi
-                  </p>
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-100">
-                  Level tertinggi aktif
-                </div>
-              )}
-            </div>
-          </div>
         </div>
-
-        <AffiliateLinkCard link={referralLink} />
 
         <Card className="soft-panel rounded-[1.8rem] border-white/10">
           <CardContent className="space-y-4 p-4">
@@ -493,7 +449,7 @@ export default async function AffiliatePage(props: PageProps<"/affiliate">) {
                   key={item.step}
                   className="flex gap-3 rounded-[1.4rem] border border-white/8 bg-black/16 p-3"
                 >
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(180deg,#8262ff,#5f4bff)] text-sm font-semibold text-white">
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(180deg,#ffb548,#ff7a1a)] text-sm font-semibold text-white shadow-[0_12px_24px_rgba(255,126,46,0.18)]">
                     {item.step}
                   </div>
                   <div>
@@ -511,23 +467,7 @@ export default async function AffiliatePage(props: PageProps<"/affiliate">) {
         <Card className="soft-panel rounded-[1.8rem] border-white/10">
           <CardContent className="space-y-4 p-4">
             <div>
-              <p className="text-lg font-semibold text-white">Keuntungan & aturan</p>
-              <p className="text-sm text-[var(--muted-foreground)]">
-                Ringkasan benefit dan aturan utama program affiliate DramaPro.
-              </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <BenefitCard
-                icon={Gem}
-                title="Komisi bertingkat"
-                description={`Bronze ${settings.bronzeCommissionRate}% • Silver ${settings.silverCommissionRate}% • Gold ${settings.goldCommissionRate}% • Platinum ${settings.platinumCommissionRate}%`}
-              />
-              <BenefitCard
-                icon={ShieldCheck}
-                title="Tracking aman"
-                description={`Cookie referral aktif hingga ${settings.cookieTtlDays} hari, termasuk alur web dan Mini App Telegram.`}
-              />
+              <p className="text-lg font-semibold text-white">Aturan</p>
             </div>
 
             <div className="space-y-3">
@@ -672,26 +612,6 @@ function ActivityRow({
   );
 }
 
-function BenefitCard({
-  icon: Icon,
-  title,
-  description,
-}: {
-  icon: typeof Gem;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="rounded-[1.4rem] border border-white/8 bg-black/16 p-4">
-      <div className="flex size-10 items-center justify-center rounded-2xl border border-white/10 bg-white/6 text-white">
-        <Icon className="size-4.5" />
-      </div>
-      <p className="mt-3 font-medium text-white">{title}</p>
-      <p className="mt-1 text-sm leading-6 text-white/58">{description}</p>
-    </div>
-  );
-}
-
 function FaqDisclosure({
   title,
   content,
@@ -708,36 +628,6 @@ function FaqDisclosure({
       <p className="pt-3 text-sm leading-6 text-white/60">{content}</p>
     </details>
   );
-}
-
-function getNextAffiliateTier(
-  activeReferrals: number,
-  settings: Awaited<ReturnType<typeof getAffiliateSettings>>,
-) {
-  const orderedTiers = [
-    {
-      level: "Bronze",
-      minReferrals: settings.bronzeMinActiveReferrals,
-      rate: settings.bronzeCommissionRate,
-    },
-    {
-      level: "Silver",
-      minReferrals: settings.silverMinActiveReferrals,
-      rate: settings.silverCommissionRate,
-    },
-    {
-      level: "Gold",
-      minReferrals: settings.goldMinActiveReferrals,
-      rate: settings.goldCommissionRate,
-    },
-    {
-      level: "Platinum",
-      minReferrals: settings.platinumMinActiveReferrals,
-      rate: settings.platinumCommissionRate,
-    },
-  ];
-
-  return orderedTiers.find((tier) => activeReferrals < tier.minReferrals) ?? null;
 }
 
 function maskAccountNumber(value: string) {

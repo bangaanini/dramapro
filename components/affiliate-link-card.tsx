@@ -62,12 +62,12 @@ export function AffiliateLinkCard({ link }: { link: string }) {
   }
 
   return (
-    <section className="rounded-[1.9rem] border border-white/10 bg-[linear-gradient(180deg,rgba(47,31,57,0.96),rgba(24,18,28,0.96))] p-4 shadow-[0_28px_64px_rgba(0,0,0,0.28)]">
+    <section className="rounded-[1.9rem] border border-white/10 bg-[linear-gradient(180deg,rgba(59,34,20,0.96),rgba(24,18,18,0.96))] p-4 shadow-[0_28px_64px_rgba(0,0,0,0.28)]">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-lg font-semibold text-white">Link Referral Anda</p>
           <p className="mt-1 text-sm leading-6 text-white/60">
-            Bagikan link ini untuk mendapatkan komisi dari pembelian VIP user referral.
+            Bagikan link ini untuk mendapatkan komisi 25% dari pembelian VIP user referral.
           </p>
         </div>
         <div className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs text-white/72">
@@ -97,7 +97,7 @@ export function AffiliateLinkCard({ link }: { link: string }) {
           onClick={() => {
             void handleShare();
           }}
-          className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(180deg,#7b6cff,#6355ff)] px-4 text-sm font-medium text-white shadow-[0_18px_40px_rgba(103,90,255,0.28)] transition hover:brightness-105"
+          className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(180deg,#ffb548,#ff7a1a)] px-4 text-sm font-medium text-white shadow-[0_18px_40px_rgba(255,126,46,0.24)] transition hover:brightness-105"
         >
           {isSharing ? (
             <LoaderCircle className="size-4 animate-spin" />
