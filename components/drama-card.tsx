@@ -8,8 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { triggerSelectionHaptic } from "@/lib/haptics";
+import { SITE_BADGE_LABEL } from "@/lib/site-brand";
 import {
-  formatProviderName,
   normalizeDisplayImageUrl,
   shouldBypassImageOptimization,
 } from "@/lib/utils";
@@ -31,7 +31,6 @@ export function DramaCard({
   href,
   title,
   thumbUrl,
-  providerName,
   episodeCount,
   ctaLabel = "Lihat detail",
   extraMeta,
@@ -87,7 +86,7 @@ export function DramaCard({
                 <span />
               )}
               <Badge className="border-white/10 bg-black/50 px-2 py-0.5 text-[9px] text-white backdrop-blur">
-                {formatProviderName(providerName)}
+                {SITE_BADGE_LABEL}
               </Badge>
             </div>
 
@@ -142,7 +141,7 @@ export function DramaCard({
           <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
           <div className="absolute left-3 top-3">
             <Badge className="border-white/10 bg-black/45 text-white backdrop-blur">
-              {formatProviderName(providerName)}
+              {SITE_BADGE_LABEL}
             </Badge>
           </div>
         </div>

@@ -256,7 +256,7 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
                     <Sparkles className="mr-1.5 size-3.5" />
                     Detail drama
                   </Badge>
-                  <Badge variant="secondary">{drama.providerName}</Badge>
+                  <Badge variant="secondary">{settings.site.name}</Badge>
                 </div>
 
                 <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-white drop-shadow-[0_8px_24px_rgba(0,0,0,0.55)] sm:text-4xl">

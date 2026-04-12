@@ -12,7 +12,6 @@ import { DramaCard } from "@/components/drama-card";
 import { Badge } from "@/components/ui/badge";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { formatProviderName } from "@/lib/utils";
 
 type SearchResult = {
   id: string;
@@ -173,7 +172,7 @@ export function SearchPanel() {
                   <div className="flex flex-wrap gap-2">
                     {selectedProvider ? (
                       <Badge className="border-white/10 bg-black/35 text-white">
-                        Provider: {formatProviderName(selectedProvider)}
+                        Filter sumber aktif
                       </Badge>
                     ) : null}
                     {selectedTag ? (

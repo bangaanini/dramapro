@@ -5,9 +5,9 @@ import { Flame, PlayCircle, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import type { HomeFeedEntry } from "@/lib/catalog-data";
+import { SITE_BADGE_LABEL } from "@/lib/site-brand";
 import {
   cn,
-  formatProviderName,
   normalizeDisplayImageUrl,
   shouldBypassImageOptimization,
 } from "@/lib/utils";
@@ -25,7 +25,7 @@ export function HomeHeroBanner({ items }: HomeHeroBannerProps) {
   const featuredThumbUrl = normalizeDisplayImageUrl(featuredItem.thumbUrl);
   const synopsis =
     featuredItem.description.trim() ||
-    "Drama paling ramai lintas provider dengan episode lengkap dan siap kamu putar sekarang.";
+    "Drama pilihan yang siap kamu tonton sekarang di Layar Drama.";
 
   return (
     <section className="relative mt-4 overflow-hidden rounded-[1.7rem] border border-white/8 bg-black/30 sm:mt-6 sm:rounded-[2.2rem]">
@@ -54,13 +54,13 @@ export function HomeHeroBanner({ items }: HomeHeroBannerProps) {
                 Drama pilihan hari ini
               </Badge>
               <Badge className="border-white/10 bg-black/30 text-white backdrop-blur">
-                {formatProviderName(featuredItem.providerName)}
+                {SITE_BADGE_LABEL}
               </Badge>
             </div>
 
             <div className="space-y-3">
               <p className="text-xs font-medium uppercase tracking-[0.28em] text-white/55">
-                Peringkat #1 lintas provider
+                Pilihan unggulan hari ini
               </p>
               <h2 className="max-w-2xl text-2xl font-semibold tracking-tight text-white sm:text-4xl lg:text-5xl">
                 {featuredItem.title}
@@ -122,7 +122,7 @@ export function HomeHeroBanner({ items }: HomeHeroBannerProps) {
                         {item.title}
                       </h3>
                       <p className="text-xs text-white/62">
-                        {formatProviderName(item.providerName)} •{" "}
+                        {SITE_BADGE_LABEL} •{" "}
                         {item.watchValue
                           ? `${item.watchValue} tayangan`
                           : item.episodeCount > 0
@@ -131,7 +131,7 @@ export function HomeHeroBanner({ items }: HomeHeroBannerProps) {
                       </p>
                       <p className="line-clamp-2 text-xs leading-5 text-white/48">
                         {item.description.trim() ||
-                          "Drama populer yang sedang naik di katalog lintas provider."}
+                          "Drama populer yang sedang naik di katalog Layar Drama."}
                       </p>
                     </div>
                   </div>
