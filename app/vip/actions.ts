@@ -16,6 +16,7 @@ function isNextRedirect(error: unknown) {
 
 export async function createVipCheckoutAction(formData: FormData) {
   const planId = String(formData.get("planId") ?? "").trim();
+  const channelCode = String(formData.get("channelCode") ?? "qris").trim().toLowerCase();
   const next = String(formData.get("next") ?? "/vip");
 
   if (!planId) {
@@ -27,7 +28,7 @@ export async function createVipCheckoutAction(formData: FormData) {
   try {
     session = await createVipPaymentSession({
       planId,
-      channelCode: "qris",
+      channelCode,
       next,
     });
   } catch (error) {

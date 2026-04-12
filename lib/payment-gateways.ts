@@ -47,6 +47,9 @@ export type CreatePaymentTransactionResult = {
   providerPayload: object;
   channelCode: string;
   channelName: string;
+  channelGroup?: "qris" | "va" | "ewallet" | "other";
+  bankName?: string | null;
+  vaNumber?: string | null;
 };
 
 export type CheckPaymentStatusResult = {
@@ -58,6 +61,9 @@ export type CheckPaymentStatusResult = {
   qrString: string | null;
   expiresAt: Date | null;
   providerPayload: object;
+  channelGroup?: "qris" | "va" | "ewallet" | "other";
+  bankName?: string | null;
+  vaNumber?: string | null;
 };
 
 export type PaymentGatewayRuntimeConfig = {

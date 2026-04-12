@@ -1,5 +1,88 @@
 const PAYMENKU_API_BASE = "https://paymenku.com/api/v1";
 
+export const PAYMENKU_CHANNEL_GROUPS = {
+  qris: "qris",
+  va: "va",
+  ewallet: "ewallet",
+  other: "other",
+} as const;
+
+export type PaymenkuChannelGroup =
+  (typeof PAYMENKU_CHANNEL_GROUPS)[keyof typeof PAYMENKU_CHANNEL_GROUPS];
+
+export type PaymenkuChannelDefinition = {
+  code: string;
+  name: string;
+  group: PaymenkuChannelGroup;
+  bankName?: string;
+  shortName?: string;
+};
+
+export const PAYMENKU_PRIMARY_CHANNELS: PaymenkuChannelDefinition[] = [
+  {
+    code: "qris",
+    name: "QRIS",
+    group: PAYMENKU_CHANNEL_GROUPS.qris,
+    shortName: "QRIS",
+  },
+  {
+    code: "bni_va",
+    name: "BNI Virtual Account",
+    group: PAYMENKU_CHANNEL_GROUPS.va,
+    bankName: "BNI",
+    shortName: "BNI",
+  },
+  {
+    code: "bri_va",
+    name: "BRI Virtual Account",
+    group: PAYMENKU_CHANNEL_GROUPS.va,
+    bankName: "BRI",
+    shortName: "BRI",
+  },
+  {
+    code: "mandiri_va",
+    name: "Mandiri Virtual Account",
+    group: PAYMENKU_CHANNEL_GROUPS.va,
+    bankName: "Mandiri",
+    shortName: "Mandiri",
+  },
+  {
+    code: "bsi_va",
+    name: "BSI Virtual Account",
+    group: PAYMENKU_CHANNEL_GROUPS.va,
+    bankName: "BSI",
+    shortName: "BSI",
+  },
+  {
+    code: "cimb_va",
+    name: "CIMB Virtual Account",
+    group: PAYMENKU_CHANNEL_GROUPS.va,
+    bankName: "CIMB Niaga",
+    shortName: "CIMB",
+  },
+  {
+    code: "permata_va",
+    name: "Permata Virtual Account",
+    group: PAYMENKU_CHANNEL_GROUPS.va,
+    bankName: "Permata",
+    shortName: "Permata",
+  },
+  {
+    code: "danamon_va",
+    name: "Danamon Virtual Account",
+    group: PAYMENKU_CHANNEL_GROUPS.va,
+    bankName: "Danamon",
+    shortName: "Danamon",
+  },
+  {
+    code: "bjb_va",
+    name: "BJB Virtual Account",
+    group: PAYMENKU_CHANNEL_GROUPS.va,
+    bankName: "BJB",
+    shortName: "BJB",
+  },
+];
+
 export type PaymenkuPaymentChannel = {
   code: string;
   name: string;
@@ -30,6 +113,8 @@ export type PaymenkuCreateTransactionResponse = {
       transaction_status?: string;
       qr_url?: string;
       qr_string?: string;
+      bank?: string;
+      va_number?: string;
       expiration_date?: string;
     };
   };
@@ -49,6 +134,8 @@ export type PaymenkuStatusResponse = {
       transaction_status?: string;
       qr_url?: string;
       qr_string?: string;
+      bank?: string;
+      va_number?: string;
       expiration_date?: string;
     };
   };
@@ -227,4 +314,54 @@ export function parsePaymenkuAmount(value: string | number | null | undefined) {
 
   const parsed = Number.parseFloat(normalized);
   return Number.isFinite(parsed) ? Math.round(parsed) : null;
+}
+
+export function getPaymenkuChannelDefinition(channelCode: string | null | undefined) {
+  const normalized = String(channelCode ?? "").trim().toLowerCase();
+
+  if (!normalized) {
+    return null;
+  }
+
+  return (
+    PAYMENKU_PRIMARY_CHANNELS.find((channel) => channel.code === normalized) ?? null
+  );
+}
+
+export function getPaymenkuChannelDisplayName(channelCode: string | null | undefined) {
+  const definition = getPaymenkuChannelDefinition(channelCode);
+  const fallback = String(channelCode ?? "").trim().toUpperCase();
+  return definition?.name ?? (fallback || "Paymenku");
+}
+
+export function getPaymenkuChannelGroup(channelCode: string | null | undefined) {
+  return getPaymenkuChannelDefinition(channelCode)?.group ?? PAYMENKU_CHANNEL_GROUPS.other;
+}
+
+export function extractPaymenkuPaymentDetails(
+  payload: PaymenkuCreateTransactionResponse | PaymenkuStatusResponse | null | undefined,
+  channelCode?: string | null,
+) {
+  const info = payload?.data?.payment_info;
+  const definition = getPaymenkuChannelDefinition(channelCode);
+  const bankName = String(info?.bank ?? definition?.bankName ?? "").trim() || null;
+  const vaNumber = String(info?.va_number ?? "").trim() || null;
+  const group = vaNumber
+    ? PAYMENKU_CHANNEL_GROUPS.va
+    : info?.qr_url || info?.qr_string
+      ? PAYMENKU_CHANNEL_GROUPS.qris
+      : getPaymenkuChannelGroup(channelCode);
+
+  return {
+    group,
+    channelName:
+      bankName && group === PAYMENKU_CHANNEL_GROUPS.va
+        ? `${bankName} Virtual Account`
+        : getPaymenkuChannelDisplayName(channelCode),
+    bankName,
+    vaNumber,
+    qrUrl: info?.qr_url ?? null,
+    qrString: info?.qr_string ?? null,
+    expiresAt: info?.expiration_date ? new Date(info.expiration_date) : null,
+  };
 }

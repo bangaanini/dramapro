@@ -3,6 +3,7 @@ import QRCode from "qrcode";
 import { notFound, redirect } from "next/navigation";
 import { SiteFooter } from "@/components/site-footer";
 import { VipCheckoutPanel } from "@/components/vip-checkout-panel";
+import { extractPaymenkuPaymentDetails } from "@/lib/paymenku";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, resolveSafeRedirectPath } from "@/lib/user-auth";
 import { syncVipPaymentStatus } from "@/lib/vip-payments";
@@ -40,6 +41,14 @@ export default async function VipCheckoutDetailPage(
     notFound();
   }
 
+  const providerPayload =
+    (payment.statusPayload as Record<string, unknown> | null) ??
+    (payment.providerPayload as Record<string, unknown> | null);
+  const paymenkuDetails = extractPaymenkuPaymentDetails(
+    providerPayload as Parameters<typeof extractPaymenkuPaymentDetails>[0],
+    payment.channelCode,
+  );
+
   const qrDataUrl =
     !payment.qrUrl && payment.qrString
       ? await QRCode.toDataURL(payment.qrString, {
@@ -70,7 +79,11 @@ export default async function VipCheckoutDetailPage(
           amount: payment.paidAmount ?? payment.amount,
           currency: payment.currency,
           planName: payment.plan.name,
-          channelName: payment.channelName || payment.channelCode.toUpperCase(),
+          channelCode: payment.channelCode,
+          channelName: payment.channelName || paymenkuDetails.channelName,
+          channelGroup: paymenkuDetails.group,
+          bankName: paymenkuDetails.bankName,
+          vaNumber: paymenkuDetails.vaNumber,
         }}
       />
 

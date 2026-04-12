@@ -1,20 +1,16 @@
-import Link from "next/link";
 import {
-  BadgeCheck,
   Crown,
   Gem,
   ShieldCheck,
 } from "lucide-react";
 
-import { createVipCheckoutAction } from "@/app/vip/actions";
-import { FormSubmitButton } from "@/components/form-submit-button";
 import { SiteFooter } from "@/components/site-footer";
+import { VipPaymentSelector } from "@/components/vip-payment-selector";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { PAYMENKU_PRIMARY_CHANNELS } from "@/lib/paymenku";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, resolveSafeRedirectPath } from "@/lib/user-auth";
-import { cn } from "@/lib/utils";
 import { isVipActive } from "@/lib/vip";
 
 export const dynamic = "force-dynamic";
@@ -34,17 +30,6 @@ export default async function VipPage(props: PageProps<"/vip">) {
   });
 
   const userHasVip = isVipActive(user?.vipExpiresAt);
-  const featuredPlan =
-    plans.length > 0
-      ? [...plans].sort((left, right) => {
-          if (right.durationDays !== left.durationDays) {
-            return right.durationDays - left.durationDays;
-          }
-
-          return left.priceAmount - right.priceAmount;
-        })[0]
-      : null;
-
   return (
     <main className="route-transition-shell mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
 
@@ -85,110 +70,27 @@ export default async function VipPage(props: PageProps<"/vip">) {
         </div>
       </section>
 
-      <section className="mt-8 grid gap-5 lg:grid-cols-3">
+      <section className="mt-8">
         {error ? (
-          <div className="lg:col-span-3 rounded-[1.6rem] border border-red-400/20 bg-red-500/10 px-5 py-4 text-sm text-red-100">
+          <div className="mb-5 rounded-[1.6rem] border border-red-400/20 bg-red-500/10 px-5 py-4 text-sm text-red-100">
             {error}
           </div>
         ) : null}
 
         {plans.length > 0 ? (
-          plans.map((plan) => {
-            const isFeatured = featuredPlan?.id === plan.id;
-
-            return (
-              <Card
-                key={plan.id}
-                className={cn(
-                  "relative overflow-hidden rounded-[2rem] border p-0",
-                  isFeatured
-                    ? "border-amber-400/40 bg-[linear-gradient(180deg,rgba(72,48,8,0.92),rgba(26,19,10,0.96))] shadow-[0_28px_80px_rgba(255,177,21,0.14)]"
-                    : "glass-panel border-white/10",
-                )}
-              >
-                {isFeatured ? (
-                  <div className="absolute inset-x-0 top-0 bg-[linear-gradient(180deg,#ffcb4f,#f7ae14)] px-4 py-2 text-center text-xs font-semibold uppercase tracking-[0.24em] text-[#392100]">
-                    Paling populer
-                  </div>
-                ) : null}
-
-                <CardContent
-                  className={cn("space-y-6 p-6", isFeatured && "pt-12")}
-                >
-                  <div className="space-y-3">
-                    <p className="text-xs font-medium uppercase tracking-[0.22em] text-white/45">
-                      {plan.name}
-                    </p>
-                    <div>
-                      <p className="text-5xl font-semibold tracking-tight text-white">
-                        {formatIdr(plan.priceAmount, plan.currency)}
-                      </p>
-                      <p className="mt-2 text-sm text-white/56">
-                        untuk {plan.durationDays} hari
-                      </p>
-                    </div>
-                    {plan.description ? (
-                      <p className="text-sm leading-6 text-white/66">
-                        {plan.description}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <div className="space-y-3 border-t border-white/8 pt-5">
-                    {[
-                      "Buka semua episode premium",
-                      "Akses lebih cepat ke konten VIP",
-                      "Kualitas stream terbaik",
-                    ].map((feature) => (
-                      <div
-                        key={feature}
-                        className="flex items-start gap-3 text-sm text-white/72"
-                      >
-                        <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/8">
-                          <BadgeCheck className="size-3.5 text-amber-300" />
-                        </span>
-                        <span>{feature}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {user ? (
-                    <form action={createVipCheckoutAction}>
-                      <input type="hidden" name="planId" value={plan.id} />
-                      <input type="hidden" name="next" value={next} />
-                      <FormSubmitButton
-                        type="submit"
-                        size="lg"
-                        pendingLabel="Menyiapkan QRIS..."
-                        idleLabel={userHasVip ? "Perpanjang VIP" : "Beli VIP sekarang"}
-                        className={cn(
-                          "h-12 w-full rounded-2xl",
-                          isFeatured &&
-                            "bg-[linear-gradient(180deg,#ffd05a,#f4ae16)] text-[#392100] hover:brightness-105",
-                        )}
-                      >
-                        <Crown className="mr-2 size-4" />
-                        {userHasVip ? "Perpanjang VIP" : "Beli VIP sekarang"}
-                      </FormSubmitButton>
-                    </form>
-                  ) : (
-                    <Link
-                      href={`/sign-in?next=${encodeURIComponent(next)}`}
-                      className={cn(
-                        buttonVariants({ size: "lg" }),
-                        "h-12 w-full rounded-2xl",
-                        isFeatured &&
-                          "bg-[linear-gradient(180deg,#ffd05a,#f4ae16)] text-[#392100] hover:brightness-105",
-                      )}
-                    >
-                      <Crown className="mr-2 size-4" />
-                      Masuk untuk upgrade
-                    </Link>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })
+          <VipPaymentSelector
+            plans={plans.map((plan) => ({
+              id: plan.id,
+              name: plan.name,
+              description: plan.description,
+              durationDays: plan.durationDays,
+              priceAmount: plan.priceAmount,
+              currency: plan.currency,
+            }))}
+            next={next}
+            userHasVip={userHasVip}
+            channels={PAYMENKU_PRIMARY_CHANNELS}
+          />
         ) : (
           <Card className="glass-panel col-span-full rounded-[2rem] border-white/10">
             <CardContent className="space-y-4 p-8 text-center">
@@ -203,18 +105,7 @@ export default async function VipPage(props: PageProps<"/vip">) {
           </Card>
         )}
       </section>
-
-
-
       <SiteFooter />
     </main>
   );
-}
-
-function formatIdr(amount: number, currency: string) {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-  }).format(amount);
 }

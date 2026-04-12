@@ -1,6 +1,7 @@
 import {
   checkPaymenkuTransactionStatus,
   createPaymenkuTransaction,
+  extractPaymenkuPaymentDetails,
   normalizePaymenkuStatus,
   parsePaymenkuAmount,
 } from "@/lib/paymenku";
@@ -32,6 +33,8 @@ async function createPaymenkuCheckout(
     throw new Error(payload.message || "Gateway tidak mengembalikan pay_url.");
   }
 
+  const paymentDetails = extractPaymenkuPaymentDetails(payload, input.channelCode);
+
   return {
     providerTransactionId: payload.data.trx_id,
     referenceId: payload.data.reference_id,
@@ -40,14 +43,15 @@ async function createPaymenkuCheckout(
       payload.data.payment_info?.transaction_status ?? payload.data.status,
     ),
     payUrl: payload.data.pay_url,
-    qrUrl: payload.data.payment_info?.qr_url ?? null,
-    qrString: payload.data.payment_info?.qr_string ?? null,
-    expiresAt: payload.data.payment_info?.expiration_date
-      ? new Date(payload.data.payment_info.expiration_date)
-      : null,
+    qrUrl: paymentDetails.qrUrl,
+    qrString: paymentDetails.qrString,
+    expiresAt: paymentDetails.expiresAt,
     providerPayload: payload as unknown as object,
     channelCode: input.channelCode,
-    channelName: "QRIS",
+    channelName: paymentDetails.channelName,
+    channelGroup: paymentDetails.group,
+    bankName: paymentDetails.bankName,
+    vaNumber: paymentDetails.vaNumber,
   };
 }
 
@@ -59,6 +63,7 @@ async function checkPaymenkuCheckoutStatus(
     gateway.secret!,
     orderIdOrReference,
   );
+  const paymentDetails = extractPaymenkuPaymentDetails(payload);
 
   return {
     providerTransactionId: payload.data?.trx_id ?? null,
@@ -67,12 +72,13 @@ async function checkPaymenkuCheckoutStatus(
       payload.data?.payment_info?.transaction_status ?? payload.data?.status,
     ),
     payUrl: payload.data?.pay_url ?? null,
-    qrUrl: payload.data?.payment_info?.qr_url ?? null,
-    qrString: payload.data?.payment_info?.qr_string ?? null,
-    expiresAt: payload.data?.payment_info?.expiration_date
-      ? new Date(payload.data.payment_info.expiration_date)
-      : null,
+    qrUrl: paymentDetails.qrUrl,
+    qrString: paymentDetails.qrString,
+    expiresAt: paymentDetails.expiresAt,
     providerPayload: payload as unknown as object,
+    channelGroup: paymentDetails.group,
+    bankName: paymentDetails.bankName,
+    vaNumber: paymentDetails.vaNumber,
   };
 }
 

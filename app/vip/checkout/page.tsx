@@ -21,6 +21,8 @@ export default async function VipCheckoutPage(
   const searchParams = await props.searchParams;
   const planId =
     typeof searchParams.plan === "string" ? searchParams.plan : null;
+  const channelCode =
+    typeof searchParams.channel === "string" ? searchParams.channel : "qris";
   const next = resolveSafeRedirectPath(
     typeof searchParams.next === "string" ? searchParams.next : "/vip",
   );
@@ -34,7 +36,7 @@ export default async function VipCheckoutPage(
   try {
     const session = await createVipPaymentSession({
       planId,
-      channelCode: "qris",
+      channelCode,
       next,
     });
 

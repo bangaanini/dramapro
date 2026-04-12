@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { DEFAULT_AFFILIATE_SETTINGS, getAffiliateTier } from "@/lib/affiliate";
+import { PAYMENKU_PRIMARY_CHANNELS } from "@/lib/paymenku";
 import {
   checkGatewayTransactionStatus,
   createActiveGatewayTransaction,
@@ -112,6 +113,7 @@ export async function createVipPaymentSession(input: {
 }) {
   const safeNext = resolveSafeRedirectPath(input.next);
   const user = await requireSignedInVipUser(`/vip?next=${safeNext}`);
+  const channelCode = String(input.channelCode).trim().toLowerCase();
 
   const plan = await prisma.vipPricePlan.findFirst({
     where: {
@@ -124,10 +126,16 @@ export async function createVipPaymentSession(input: {
     redirect(`/vip?error=${encodeURIComponent("Paket VIP tidak ditemukan.")}&next=${encodeURIComponent(safeNext)}`);
   }
 
+  if (!PAYMENKU_PRIMARY_CHANNELS.some((channel) => channel.code === channelCode)) {
+    redirect(
+      `/vip?error=${encodeURIComponent("Metode pembayaran tidak tersedia.")}&next=${encodeURIComponent(safeNext)}`,
+    );
+  }
+
   if (plan.priceAmount < PAYMENKU_MINIMUM_QRIS_AMOUNT) {
     redirect(
       `/vip?error=${encodeURIComponent(
-        "Nominal paket terlalu kecil untuk QRIS Paymenku. Minimum transaksi adalah Rp 1.000.",
+        "Nominal paket terlalu kecil untuk checkout Paymenku. Minimum transaksi adalah Rp 1.000.",
       )}&next=${encodeURIComponent(safeNext)}`,
     );
   }
@@ -141,7 +149,7 @@ export async function createVipPaymentSession(input: {
     amount: plan.priceAmount,
     customerName: user.name,
     customerEmail: resolveUserPaymentContactEmail(user),
-    channelCode: input.channelCode,
+    channelCode,
     returnUrl,
   });
 

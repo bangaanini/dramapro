@@ -4,6 +4,8 @@ import Link from "next/link";
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "qrcode";
 import {
+  Building2,
+  Copy,
   CheckCircle2,
   Clock3,
   ExternalLink,
@@ -32,7 +34,11 @@ type VipCheckoutSnapshot = {
   amount: number;
   currency: string;
   planName: string;
+  channelCode: string;
   channelName: string;
+  channelGroup?: "qris" | "va" | "ewallet" | "other";
+  bankName?: string | null;
+  vaNumber?: string | null;
 };
 
 type VipCheckoutPanelProps = {
@@ -77,7 +83,7 @@ const STATUS_COPY: Record<
   expired: {
     title: "Transaksi kedaluwarsa",
     description:
-      "Masa berlaku QRIS sudah habis. Buat transaksi baru agar bisa melanjutkan pembayaran.",
+      "Masa berlaku pembayaran sudah habis. Buat transaksi baru agar bisa melanjutkan pembayaran.",
     tone: "border-red-400/20 bg-red-500/10 text-red-100",
   },
   cancelled: {
@@ -98,12 +104,20 @@ export function VipCheckoutPanel({
   const [qrDataUrl, setQrDataUrl] = useState(initialQrDataUrl);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [pollError, setPollError] = useState<string | null>(null);
+  const [hasCopiedVa, setHasCopiedVa] = useState(false);
+  const [remainingLabel, setRemainingLabel] = useState<string | null>(null);
   const hasRefreshedAfterPaidRef = useRef(false);
 
   const isFinal = FINAL_STATUSES.has(payment.status);
   const statusCopy = STATUS_COPY[payment.status];
-  const expiresAtDate = payment.expiresAt ? new Date(payment.expiresAt) : null;
-  const activatedAtDate = payment.activatedAt ? new Date(payment.activatedAt) : null;
+  const expiresAtDate = useMemo(
+    () => (payment.expiresAt ? new Date(payment.expiresAt) : null),
+    [payment.expiresAt],
+  );
+  const activatedAtDate = useMemo(
+    () => (payment.activatedAt ? new Date(payment.activatedAt) : null),
+    [payment.activatedAt],
+  );
   const formattedExpiry = expiresAtDate
     ? new Intl.DateTimeFormat("id-ID", {
         dateStyle: "medium",
@@ -124,6 +138,10 @@ export function VipCheckoutPanel({
       maximumFractionDigits: 0,
     }).format(payment.amount);
   }, [payment.amount, payment.currency]);
+  const isVirtualAccount = payment.channelGroup === "va" || Boolean(payment.vaNumber);
+  const pendingDescription = isVirtualAccount
+    ? "Selesaikan transfer ke nomor virtual account di bawah agar VIP aktif otomatis."
+    : "Scan QRIS di bawah";
 
   useEffect(() => {
     let cancelled = false;
@@ -160,6 +178,41 @@ export function VipCheckoutPanel({
       cancelled = true;
     };
   }, [payment.qrString, payment.qrUrl]);
+
+  useEffect(() => {
+    if (!expiresAtDate || FINAL_STATUSES.has(payment.status)) {
+      setRemainingLabel(null);
+      return;
+    }
+
+    const expiresAtTimestamp = expiresAtDate.getTime();
+
+    function syncRemaining() {
+      const diff = expiresAtTimestamp - Date.now();
+
+      if (diff <= 0) {
+        setRemainingLabel("00:00:00");
+        return;
+      }
+
+      const hours = Math.floor(diff / 3_600_000);
+      const minutes = Math.floor((diff % 3_600_000) / 60_000);
+      const seconds = Math.floor((diff % 60_000) / 1_000);
+
+      setRemainingLabel(
+        [hours, minutes, seconds]
+          .map((part) => String(part).padStart(2, "0"))
+          .join(":"),
+      );
+    }
+
+    syncRemaining();
+    const intervalId = window.setInterval(syncRemaining, 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [expiresAtDate, payment.status]);
 
   useEffect(() => {
     if (payment.status !== "paid" || hasRefreshedAfterPaidRef.current) {
@@ -257,6 +310,21 @@ export function VipCheckoutPanel({
     }
   }
 
+  async function handleCopyVaNumber() {
+    if (!payment.vaNumber) {
+      return;
+    }
+
+    try {
+      triggerSelectionHaptic();
+      await navigator.clipboard.writeText(payment.vaNumber);
+      setHasCopiedVa(true);
+      window.setTimeout(() => setHasCopiedVa(false), 1800);
+    } catch {
+      setHasCopiedVa(false);
+    }
+  }
+
   return (
     <section className="mt-6 grid gap-6 lg:grid-cols-[1fr_0.9fr]">
       <Card className="glass-panel rounded-[2rem] border-white/10">
@@ -289,7 +357,11 @@ export function VipCheckoutPanel({
                 <p className="text-lg font-semibold text-white">
                   {statusCopy.title}
                 </p>
-                <p className="text-sm leading-7">{statusCopy.description}</p>
+                <p className="text-sm leading-7">
+                  {payment.status === "pending"
+                    ? pendingDescription
+                    : statusCopy.description}
+                </p>
                 {payment.status === "pending" ? (
                   <p className="text-xs uppercase tracking-[0.16em] text-white/70">
                     ...
@@ -301,18 +373,113 @@ export function VipCheckoutPanel({
 
           {payment.status === "pending" ? (
             <div className="space-y-5">
-              {(payment.qrUrl || qrDataUrl) ? (
-                <div className="rounded-[1.8rem] border border-white/10 bg-white p-4 text-center">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={payment.qrUrl ?? qrDataUrl ?? ""}
-                    alt={`QR pembayaran ${payment.referenceId}`}
-                    className="mx-auto w-full max-w-[320px] rounded-2xl"
-                  />
+              {isVirtualAccount && payment.vaNumber ? (
+                <div className="space-y-4 rounded-[1.8rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-5">
+                  <div className="text-center">
+                    <p className="text-xs uppercase tracking-[0.22em] text-white/45">
+                      Total pembayaran
+                    </p>
+                    <p className="mt-3 text-4xl font-semibold text-white">
+                      {amountLabel}
+                    </p>
+                    <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-amber-400/18 bg-amber-500/10 px-3 py-1 text-sm text-amber-200">
+                      <Building2 className="size-4" />
+                      {payment.bankName ?? payment.channelName}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-center text-xs uppercase tracking-[0.22em] text-white/45">
+                      Nomor Virtual Account
+                    </p>
+                    <div className="flex items-center gap-3 rounded-[1.35rem] border border-white/10 bg-black/20 p-3">
+                      <div className="min-w-0 flex-1 rounded-[1rem] bg-black/20 px-4 py-3 text-center text-lg font-semibold tracking-[0.16em] text-white">
+                        {payment.vaNumber}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleCopyVaNumber()}
+                        className={cn(
+                          buttonVariants({ variant: "secondary", size: "sm" }),
+                          "h-12 rounded-2xl px-4",
+                        )}
+                      >
+                        <Copy className="mr-2 size-4" />
+                        {hasCopiedVa ? "Tersalin" : "Salin"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {remainingLabel ? (
+                    <div className="rounded-[1.35rem] border border-indigo-400/15 bg-indigo-500/10 px-4 py-3 text-center">
+                      <p className="text-sm font-semibold tracking-[0.14em] text-indigo-100">
+                        {remainingLabel}
+                      </p>
+                      <p className="mt-1 text-xs text-indigo-100/70">
+                        Kedaluwarsa dalam
+                      </p>
+                    </div>
+                  ) : null}
+
+                  <div className="rounded-[1.35rem] border border-amber-400/15 bg-amber-500/10 p-4 text-sm leading-7 text-amber-50">
+                    Transfer tepat <span className="font-semibold">{amountLabel}</span> ke
+                    nomor VA di atas. Pembayaran akan dikonfirmasi otomatis.
+                  </div>
+
+                  <div className="rounded-[1.35rem] border border-white/10 bg-black/15 p-4">
+                    <p className="text-sm font-semibold text-white">
+                      Cara bayar via {payment.bankName ?? payment.channelName}
+                    </p>
+                    <div className="mt-4 space-y-3">
+                      {getVirtualAccountSteps(payment.bankName).map((step, index) => (
+                        <div key={step} className="flex gap-3 text-sm text-white/72">
+                          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-500/20 text-xs font-semibold text-indigo-100">
+                            {index + 1}
+                          </span>
+                          <span>{step}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (payment.qrUrl || qrDataUrl) ? (
+                <div className="space-y-4 rounded-[1.8rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-5 text-center">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-white/45">
+                      Total pembayaran
+                    </p>
+                    <p className="mt-3 text-4xl font-semibold text-white">
+                      {amountLabel}
+                    </p>
+                  </div>
+
+                  <div className="rounded-[1.5rem] bg-white p-4">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={payment.qrUrl ?? qrDataUrl ?? ""}
+                      alt={`QR pembayaran ${payment.referenceId}`}
+                      className="mx-auto w-full max-w-[320px] rounded-2xl"
+                    />
+                  </div>
+
+                  {remainingLabel ? (
+                    <div className="rounded-[1.35rem] border border-indigo-400/15 bg-indigo-500/10 px-4 py-3 text-center">
+                      <p className="text-sm font-semibold tracking-[0.14em] text-indigo-100">
+                        {remainingLabel}
+                      </p>
+                      <p className="mt-1 text-xs text-indigo-100/70">
+                        Kedaluwarsa dalam
+                      </p>
+                    </div>
+                  ) : null}
+
+                  <div className="text-sm text-white/62">
+                    Scan dengan aplikasi QRIS manapun.
+                  </div>
                 </div>
               ) : (
                 <div className="rounded-[1.6rem] border border-white/10 bg-white/5 p-5 text-sm text-[var(--muted)]">
-                  QRIS sedang disiapkan.Jika belum muncul, gunakan
+                  Pembayaran sedang disiapkan. Jika belum muncul, gunakan
                   tombol buka pembayaran atau tunggu beberapa detik.
                 </div>
               )}
@@ -326,7 +493,7 @@ export function VipCheckoutPanel({
                   className={cn(buttonVariants({ size: "lg" }), "rounded-2xl")}
                 >
                   <ExternalLink className="mr-2 size-4" />
-                  Buka pembayaran
+                  {isVirtualAccount ? "Buka instruksi pembayaran" : "Buka pembayaran"}
                 </Link>
                 <button
                   type="button"
@@ -419,6 +586,12 @@ export function VipCheckoutPanel({
           <div className="space-y-3 rounded-[1.6rem] border border-white/10 bg-white/5 p-4 text-sm">
             <SummaryRow label="Paket" value={payment.planName} />
             <SummaryRow label="Channel" value={payment.channelName} />
+            {payment.bankName ? (
+              <SummaryRow label="Bank" value={payment.bankName} />
+            ) : null}
+            {payment.vaNumber ? (
+              <SummaryRow label="Nomor VA" value={payment.vaNumber} />
+            ) : null}
             <SummaryRow label="Nominal" value={amountLabel} />
             {formattedExpiry ? (
               <SummaryRow label="Berlaku sampai" value={formattedExpiry} />
@@ -448,4 +621,47 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
       <span className="text-right font-medium text-white">{value}</span>
     </div>
   );
+}
+
+function getVirtualAccountSteps(bankName?: string | null) {
+  const bank = String(bankName ?? "").trim().toUpperCase();
+
+  if (bank.includes("BNI")) {
+    return [
+      "Buka aplikasi BNI Mobile Banking.",
+      "Pilih menu Transfer.",
+      "Pilih Virtual Account Billing.",
+      "Masukkan nomor VA di atas.",
+      "Konfirmasi detail pembayaran.",
+      "Masukkan PIN untuk menyelesaikan transfer.",
+    ];
+  }
+
+  if (bank.includes("BRI")) {
+    return [
+      "Buka aplikasi BRImo atau ATM BRI.",
+      "Pilih menu BRIVA atau Transfer Virtual Account.",
+      "Masukkan nomor VA di atas.",
+      "Periksa nama penerima dan nominal transfer.",
+      "Konfirmasi lalu selesaikan pembayaran.",
+    ];
+  }
+
+  if (bank.includes("MANDIRI")) {
+    return [
+      "Buka Livin' by Mandiri atau ATM Mandiri.",
+      "Masuk ke menu Bayar atau Multipayment.",
+      "Pilih Virtual Account.",
+      "Masukkan nomor VA di atas.",
+      "Konfirmasi detail pembayaran dan lanjutkan hingga selesai.",
+    ];
+  }
+
+  return [
+    "Buka aplikasi mobile banking atau ATM sesuai bank pilihanmu.",
+    "Masuk ke menu Transfer atau Virtual Account.",
+    "Masukkan nomor virtual account di atas.",
+    "Periksa nominal transfer lalu konfirmasi pembayaran.",
+    "Status VIP akan aktif otomatis setelah pembayaran terverifikasi.",
+  ];
 }
