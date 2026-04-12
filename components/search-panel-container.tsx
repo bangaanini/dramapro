@@ -32,7 +32,7 @@ export function SearchPanelContainer({
   initialProviders = [],
   initialTags = [],
 }: SearchPanelContainerProps) {
-  const [shortcuts, setShortcuts] = useState<SearchShortcutsResponse>({
+  const [, setShortcuts] = useState<SearchShortcutsResponse>({
     providers: initialProviders,
     tags: initialTags,
   });
@@ -122,7 +122,7 @@ export function SearchPanelContainer({
 
   return (
     <>
-      <SearchPanel providers={shortcuts.providers} tags={shortcuts.tags} />
+      <SearchPanel />
       {error ? (
         <div className="mt-4 rounded-[1.5rem] border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
           <div className="flex items-start gap-3">

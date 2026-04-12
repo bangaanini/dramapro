@@ -22,6 +22,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { safeSessionStorage } from "@/lib/safe-session-storage";
+import type {
+  TelegramHomeScreenEventPayload,
+  TelegramHomeScreenStatus,
+} from "@/lib/telegram-web-app";
 import "@/lib/telegram-web-app";
 import {
   getUserAvatarUrl,
@@ -100,6 +104,38 @@ const profileMenuItems = [
   },
 ] as const;
 
+function normalizeTelegramHomeScreenStatus(
+  payload?: TelegramHomeScreenEventPayload,
+): TelegramHomeScreenStatus | null {
+  if (!payload) {
+    return null;
+  }
+
+  if (typeof payload === "string") {
+    return payload;
+  }
+
+  return payload.status ?? null;
+}
+
+function isStandaloneDisplayMode() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const standaloneNavigator = navigator as Navigator & {
+    standalone?: boolean;
+  };
+  const isStandaloneMedia =
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(display-mode: standalone)").matches;
+  const isNavigatorStandalone =
+    typeof standaloneNavigator.standalone === "boolean" &&
+    standaloneNavigator.standalone;
+
+  return isStandaloneMedia || isNavigatorStandalone;
+}
+
 export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
   const [profileData, setProfileData] = useState<ProfileResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -107,6 +143,9 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
     useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalling, setIsInstalling] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [hasInstallSurface, setHasInstallSurface] = useState(false);
+  const [homeScreenStatus, setHomeScreenStatus] =
+    useState<TelegramHomeScreenStatus | "idle">("idle");
 
   useEffect(() => {
     let isMounted = true;
@@ -159,12 +198,87 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
       setInstallPromptEvent(event as BeforeInstallPromptEvent);
+      setHasInstallSurface(true);
     };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
 
     return () => {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isStandaloneDisplayMode()) {
+      setHomeScreenStatus("added");
+      setHasInstallSurface(true);
+    }
+
+    const mediaQuery =
+      typeof window.matchMedia === "function"
+        ? window.matchMedia("(display-mode: standalone)")
+        : null;
+    const handleDisplayModeChange = () => {
+      if (isStandaloneDisplayMode()) {
+        setHomeScreenStatus("added");
+      }
+    };
+
+    mediaQuery?.addEventListener?.("change", handleDisplayModeChange);
+
+    return () => {
+      mediaQuery?.removeEventListener?.("change", handleDisplayModeChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const telegramWebApp = window.Telegram?.WebApp;
+
+    if (!telegramWebApp) {
+      return;
+    }
+
+    if (telegramWebApp.addToHomeScreen) {
+      setHasInstallSurface(true);
+    }
+
+    const handleHomeScreenAdded = () => {
+      setHomeScreenStatus("added");
+      setActionMessage("Shortcut DramaPro sudah ada di layar utama.");
+    };
+
+    const handleHomeScreenChecked = (payload?: TelegramHomeScreenEventPayload) => {
+      const status = normalizeTelegramHomeScreenStatus(payload);
+
+      if (!status) {
+        return;
+      }
+
+      setHomeScreenStatus(status);
+    };
+
+    const handleHomeScreenFailed = (payload?: TelegramHomeScreenEventPayload) => {
+      if (payload && typeof payload !== "string" && payload.error === "UNSUPPORTED") {
+        setHomeScreenStatus("unsupported");
+        return;
+      }
+
+      if (isStandaloneDisplayMode()) {
+        setHomeScreenStatus("added");
+      }
+    };
+
+    telegramWebApp.onEvent?.("homeScreenAdded", handleHomeScreenAdded);
+    telegramWebApp.onEvent?.("homeScreenChecked", handleHomeScreenChecked);
+    telegramWebApp.onEvent?.("homeScreenFailed", handleHomeScreenFailed);
+    telegramWebApp.checkHomeScreenStatus?.((status) => {
+      setHomeScreenStatus(status);
+    });
+
+    return () => {
+      telegramWebApp.offEvent?.("homeScreenAdded", handleHomeScreenAdded);
+      telegramWebApp.offEvent?.("homeScreenChecked", handleHomeScreenChecked);
+      telegramWebApp.offEvent?.("homeScreenFailed", handleHomeScreenFailed);
     };
   }, []);
 
@@ -211,7 +325,9 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
   });
 
   async function handleAddToHomescreen() {
-    if (isInstalling) {
+    if (isInstalling || homeScreenStatus === "added" || isStandaloneDisplayMode()) {
+      setHomeScreenStatus("added");
+      setActionMessage("Shortcut DramaPro sudah ada di layar utama.");
       return;
     }
 
@@ -221,16 +337,38 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
       const telegramWebApp = window.Telegram?.WebApp;
 
       if (telegramWebApp?.addToHomeScreen) {
+        telegramWebApp.checkHomeScreenStatus?.((status) => {
+          if (status === "added") {
+            setHomeScreenStatus("added");
+            setActionMessage("Shortcut DramaPro sudah ada di layar utama.");
+          }
+        });
+
         telegramWebApp.addToHomeScreen();
-        setActionMessage("Telegram sedang menyiapkan shortcut ke layar utama.");
+        setActionMessage("Telegram sedang membuka pilihan add to homescreen.");
+        window.setTimeout(() => {
+          telegramWebApp.checkHomeScreenStatus?.((status) => {
+            setHomeScreenStatus(status);
+
+            if (status === "added") {
+              setActionMessage("Shortcut DramaPro sudah ada di layar utama.");
+            }
+          });
+        }, 900);
         return;
       }
 
       if (installPromptEvent) {
         await installPromptEvent.prompt();
         const choice = await installPromptEvent.userChoice;
+        const accepted = choice?.outcome === "accepted";
+
+        if (accepted || isStandaloneDisplayMode()) {
+          setHomeScreenStatus("added");
+        }
+
         setActionMessage(
-          choice?.outcome === "accepted"
+          accepted
             ? "DramaPro ditambahkan ke layar utama."
             : "Permintaan add to homescreen dibatalkan.",
         );
@@ -256,6 +394,19 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
 
     window.open(supportUrl, "_blank", "noopener,noreferrer");
   }
+
+  const addToHomescreenBadge =
+    homeScreenStatus === "added"
+      ? "Terpasang"
+      : homeScreenStatus === "unsupported"
+        ? "Tidak didukung"
+        : homeScreenStatus === "unknown"
+          ? "Tersedia"
+        : homeScreenStatus === "missed"
+            ? "Belum ditambah"
+            : hasInstallSurface
+              ? "Siap"
+              : "Manual";
 
   return (
     <>
@@ -405,9 +556,17 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
             onClick={() => {
               void handleAddToHomescreen();
             }}
+            disabled={isInstalling || homeScreenStatus === "added"}
             className="block w-full text-left"
           >
-            <Card className="soft-panel rounded-[1.6rem] border-white/10 transition hover:border-accent/35">
+            <Card
+              className={
+                "soft-panel rounded-[1.6rem] border-white/10 transition hover:border-accent/35 " +
+                (homeScreenStatus === "added"
+                  ? "opacity-90"
+                  : "cursor-pointer")
+              }
+            >
               <CardContent className="flex items-center justify-between gap-4 p-4">
                 <div className="flex items-center gap-4">
                   <div className="flex size-11 items-center justify-center rounded-2xl border border-white/10 bg-white/6 text-white shadow-[0_10px_24px_rgba(0,0,0,0.18)]">
@@ -420,11 +579,13 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
                   <div>
                     <p className="font-medium text-white">Add to Homescreen</p>
                     <p className="text-sm text-[var(--muted-foreground)]">
-                      Tambahkan shortcut DramaPro ke layar utama seperti aplikasi.
+                      {homeScreenStatus === "added"
+                        ? "Shortcut DramaPro sudah terpasang di layar utama."
+                        : "Tambahkan shortcut DramaPro ke layar utama seperti aplikasi."}
                     </p>
                   </div>
                 </div>
-                <Badge variant="secondary">Aktif</Badge>
+                <Badge variant="secondary">{addToHomescreenBadge}</Badge>
               </CardContent>
             </Card>
           </button>

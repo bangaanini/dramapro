@@ -4,16 +4,15 @@ import {
   startTransition,
   useDeferredValue,
   useEffect,
-  useMemo,
   useState,
 } from "react";
-import { LoaderCircle, Search, Sparkles, X } from "lucide-react";
+import { LoaderCircle, Search, Sparkles } from "lucide-react";
 
 import { DramaCard } from "@/components/drama-card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+
 import { Card, CardContent } from "@/components/ui/card";
-import { cn, formatProviderName } from "@/lib/utils";
+import { formatProviderName } from "@/lib/utils";
 
 type SearchResult = {
   id: string;
@@ -30,26 +29,16 @@ type SearchResponse = {
   minimumQueryLength: number;
 };
 
-type SearchShortcut = {
-  value: string;
-  count: number;
-};
-
-type SearchPanelProps = {
-  providers: SearchShortcut[];
-  tags: SearchShortcut[];
-};
-
 const DEFAULT_EMPTY_RESPONSE: SearchResponse = {
   results: [],
   total: 0,
   minimumQueryLength: 3,
 };
 
-export function SearchPanel({ providers, tags }: SearchPanelProps) {
+export function SearchPanel() {
   const [query, setQuery] = useState("");
-  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [selectedProvider] = useState<string | null>(null);
+  const [selectedTag] = useState<string | null>(null);
   const [results, setResults] = useState<SearchResponse>(DEFAULT_EMPTY_RESPONSE);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,11 +48,6 @@ export function SearchPanel({ providers, tags }: SearchPanelProps) {
     deferredQuery.length >= DEFAULT_EMPTY_RESPONSE.minimumQueryLength ||
     Boolean(selectedProvider) ||
     Boolean(selectedTag);
-
-  const activeFilterCount = useMemo(
-    () => [selectedProvider, selectedTag].filter(Boolean).length,
-    [selectedProvider, selectedTag],
-  );
 
   useEffect(() => {
     if (!canSearch) {
@@ -134,25 +118,6 @@ export function SearchPanel({ providers, tags }: SearchPanelProps) {
 
     return () => controller.abort();
   }, [canSearch, deferredQuery, selectedProvider, selectedTag]);
-
-  function toggleProvider(provider: string) {
-    startTransition(() => {
-      setSelectedProvider((current) => (current === provider ? null : provider));
-    });
-  }
-
-  function toggleTag(tag: string) {
-    startTransition(() => {
-      setSelectedTag((current) => (current === tag ? null : tag));
-    });
-  }
-
-  function clearFilters() {
-    startTransition(() => {
-      setSelectedProvider(null);
-      setSelectedTag(null);
-    });
-  }
 
   return (
     <section id="search" className="mt-4 scroll-mt-24 sm:mt-5">

@@ -5,6 +5,21 @@ export type TelegramBackButton = {
   offClick?: (callback: () => void) => void;
 };
 
+export type TelegramHomeScreenStatus =
+  | "unsupported"
+  | "unknown"
+  | "added"
+  | "missed";
+
+export type TelegramHomeScreenEventPayload =
+  | TelegramHomeScreenStatus
+  | {
+      status?: TelegramHomeScreenStatus;
+      error?: string;
+    }
+  | null
+  | undefined;
+
 export type TelegramWebApp = {
   initData?: string;
   ready?: () => void;
@@ -13,6 +28,17 @@ export type TelegramWebApp = {
   setBackgroundColor?: (color: string) => void;
   openTelegramLink?: (url: string) => void;
   addToHomeScreen?: () => void;
+  checkHomeScreenStatus?: (
+    callback?: (status: TelegramHomeScreenStatus) => void,
+  ) => void;
+  onEvent?: (
+    eventType: "homeScreenAdded" | "homeScreenChecked" | "homeScreenFailed",
+    eventHandler: (payload?: TelegramHomeScreenEventPayload) => void,
+  ) => void;
+  offEvent?: (
+    eventType: "homeScreenAdded" | "homeScreenChecked" | "homeScreenFailed",
+    eventHandler: (payload?: TelegramHomeScreenEventPayload) => void,
+  ) => void;
   BackButton?: TelegramBackButton;
 };
 
