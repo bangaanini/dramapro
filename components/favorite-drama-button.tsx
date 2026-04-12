@@ -12,6 +12,7 @@ type FavoriteDramaButtonProps = {
   isFavorite: boolean;
   size?: ButtonProps["size"];
   className?: string;
+  compact?: boolean;
 };
 
 export async function FavoriteDramaButton({
@@ -20,6 +21,7 @@ export async function FavoriteDramaButton({
   isFavorite,
   size = "sm",
   className,
+  compact = false,
 }: FavoriteDramaButtonProps) {
   const user = await getCurrentUser();
 
@@ -32,8 +34,10 @@ export async function FavoriteDramaButton({
           className,
         )}
       >
-        <Heart className="mr-2 size-4" />
-        Sign in untuk favorit
+        <Heart className={compact ? "size-4 sm:mr-2" : "mr-2 size-4"} />
+        <span className={compact ? "sr-only sm:not-sr-only" : undefined}>
+          Sign in untuk favorit
+        </span>
       </Link>
     );
   }
@@ -51,9 +55,16 @@ export async function FavoriteDramaButton({
           }),
           className,
         )}
+        aria-label={isFavorite ? "Hapus dari favorit" : "Simpan ke favorit"}
       >
-        <Heart className={`mr-2 size-4 ${isFavorite ? "fill-current" : ""}`} />
-        {isFavorite ? "Tersimpan di favorit" : "Simpan ke favorit"}
+        <Heart
+          className={`${compact ? "size-4 sm:mr-2" : "mr-2 size-4"} ${
+            isFavorite ? "fill-current" : ""
+          }`}
+        />
+        <span className={compact ? "sr-only sm:not-sr-only" : undefined}>
+          {isFavorite ? "Tersimpan di favorit" : "Simpan ke favorit"}
+        </span>
       </button>
     </form>
   );
