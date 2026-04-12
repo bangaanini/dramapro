@@ -1,16 +1,24 @@
+import QRCode from "qrcode";
 import {
   Crown,
   Gem,
   ShieldCheck,
 } from "lucide-react";
+import { redirect } from "next/navigation";
 
+import { VipCheckoutPanel } from "@/components/vip-checkout-panel";
 import { VipPaymentSelector } from "@/components/vip-payment-selector";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { getPaymenkuCheckoutChannels, PAYMENKU_PRIMARY_CHANNELS } from "@/lib/paymenku";
+import {
+  extractPaymenkuPaymentDetailsFromPayloads,
+  getPaymenkuCheckoutChannels,
+  PAYMENKU_PRIMARY_CHANNELS,
+} from "@/lib/paymenku";
 import { getActivePaymentGateway } from "@/lib/payment-gateways";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, resolveSafeRedirectPath } from "@/lib/user-auth";
+import { syncVipPaymentStatus } from "@/lib/vip-payments";
 import { isVipActive } from "@/lib/vip";
 
 export const dynamic = "force-dynamic";
@@ -19,15 +27,55 @@ export default async function VipPage(props: PageProps<"/vip">) {
   const searchParams = await props.searchParams;
   const error =
     typeof searchParams.error === "string" ? searchParams.error : null;
+  const checkoutReferenceId =
+    typeof searchParams.checkout === "string" ? searchParams.checkout : null;
   const next = resolveSafeRedirectPath(
     typeof searchParams.next === "string" ? searchParams.next : "/vip",
   );
   const user = await getCurrentUser();
+
+  if (checkoutReferenceId && !user) {
+    redirect(`/sign-in?next=${encodeURIComponent(`/vip?checkout=${checkoutReferenceId}&next=${encodeURIComponent(next)}`)}`);
+  }
   const activeGateway = await getActivePaymentGateway().catch(() => null);
   const availableChannels =
     activeGateway?.provider === "paymenku"
       ? getPaymenkuCheckoutChannels(activeGateway.configJson)
       : PAYMENKU_PRIMARY_CHANNELS;
+  const checkoutPayment =
+    checkoutReferenceId && user
+      ? await syncVipPaymentStatus(checkoutReferenceId, user.id).catch(async () =>
+          prisma.vipPayment.findUnique({
+            where: { referenceId: checkoutReferenceId },
+            include: { plan: true },
+          }),
+        )
+      : null;
+
+  const resolvedCheckoutPayment =
+    checkoutPayment && user && checkoutPayment.userId === user.id
+      ? checkoutPayment
+      : null;
+  const paymenkuDetails = resolvedCheckoutPayment
+    ? extractPaymenkuPaymentDetailsFromPayloads(
+        resolvedCheckoutPayment.statusPayload as Parameters<typeof extractPaymenkuPaymentDetailsFromPayloads>[0],
+        resolvedCheckoutPayment.providerPayload as Parameters<typeof extractPaymenkuPaymentDetailsFromPayloads>[1],
+        resolvedCheckoutPayment.channelCode,
+      )
+    : null;
+  const qrDataUrl =
+    resolvedCheckoutPayment &&
+    !resolvedCheckoutPayment.qrUrl &&
+    resolvedCheckoutPayment.qrString
+      ? await QRCode.toDataURL(resolvedCheckoutPayment.qrString, {
+          margin: 1,
+          width: 640,
+          color: {
+            dark: "#111111",
+            light: "#ffffff",
+          },
+        }).catch(() => null)
+      : null;
 
   const plans = await prisma.vipPricePlan.findMany({
     where: { isActive: true },
@@ -110,6 +158,33 @@ export default async function VipPage(props: PageProps<"/vip">) {
           </Card>
         )}
       </section>
+
+      {resolvedCheckoutPayment && paymenkuDetails ? (
+        <VipCheckoutPanel
+          presentation="sheet"
+          closeHref={`/vip?next=${encodeURIComponent(next)}`}
+          nextHref={next}
+          initialQrDataUrl={qrDataUrl}
+          initialPayment={{
+            referenceId: resolvedCheckoutPayment.referenceId,
+            status: resolvedCheckoutPayment.status,
+            payUrl: resolvedCheckoutPayment.payUrl,
+            qrUrl: resolvedCheckoutPayment.qrUrl,
+            qrString: resolvedCheckoutPayment.qrString,
+            expiresAt: resolvedCheckoutPayment.expiresAt?.toISOString() ?? null,
+            activatedAt: resolvedCheckoutPayment.activatedAt?.toISOString() ?? null,
+            amount: resolvedCheckoutPayment.paidAmount ?? resolvedCheckoutPayment.amount,
+            currency: resolvedCheckoutPayment.currency,
+            planName: resolvedCheckoutPayment.plan.name,
+            channelCode: resolvedCheckoutPayment.channelCode,
+            channelName:
+              resolvedCheckoutPayment.channelName || paymenkuDetails.channelName,
+            channelGroup: paymenkuDetails.group,
+            bankName: paymenkuDetails.bankName,
+            vaNumber: paymenkuDetails.vaNumber,
+          }}
+        />
+      ) : null}
     </main>
   );
 }

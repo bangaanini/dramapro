@@ -370,6 +370,25 @@ export function extractPaymenkuPaymentDetails(
   };
 }
 
+export function extractPaymenkuPaymentDetailsFromPayloads(
+  preferredPayload: PaymenkuCreateTransactionResponse | PaymenkuStatusResponse | null | undefined,
+  fallbackPayload: PaymenkuCreateTransactionResponse | PaymenkuStatusResponse | null | undefined,
+  channelCode?: string | null,
+) {
+  const preferred = extractPaymenkuPaymentDetails(preferredPayload, channelCode);
+  const fallback = extractPaymenkuPaymentDetails(fallbackPayload, channelCode);
+
+  return {
+    group: preferred.group ?? fallback.group,
+    channelName: preferred.channelName || fallback.channelName,
+    bankName: preferred.bankName ?? fallback.bankName,
+    vaNumber: preferred.vaNumber ?? fallback.vaNumber,
+    qrUrl: preferred.qrUrl ?? fallback.qrUrl,
+    qrString: preferred.qrString ?? fallback.qrString,
+    expiresAt: preferred.expiresAt ?? fallback.expiresAt,
+  };
+}
+
 export function resolvePaymenkuEnabledChannelCodes(configJson: unknown) {
   const rawEnabledChannels =
     configJson &&

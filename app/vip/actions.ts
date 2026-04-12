@@ -46,6 +46,6 @@ export async function createVipCheckoutAction(formData: FormData) {
   }
 
   redirect(
-    `/vip/checkout/${session.referenceId}?next=${encodeURIComponent(session.next)}`,
+    `/vip?checkout=${encodeURIComponent(session.referenceId)}&next=${encodeURIComponent(session.next)}`,
   );
 }

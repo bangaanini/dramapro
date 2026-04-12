@@ -40,9 +40,7 @@ export default async function VipCheckoutPage(
       next,
     });
 
-    redirect(
-      `/vip/checkout/${session.referenceId}?next=${encodeURIComponent(session.next)}`,
-    );
+    redirect(`/vip?checkout=${encodeURIComponent(session.referenceId)}&next=${encodeURIComponent(session.next)}`);
   } catch (error) {
     if (isNextRedirect(error)) {
       throw error;

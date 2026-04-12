@@ -10,6 +10,7 @@ import {
   ExternalLink,
   LoaderCircle,
   RefreshCcw,
+  X,
   XCircle,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -44,6 +45,8 @@ type VipCheckoutPanelProps = {
   initialPayment: VipCheckoutSnapshot;
   initialQrDataUrl: string | null;
   nextHref: string;
+  closeHref?: string;
+  presentation?: "page" | "sheet";
 };
 
 const FINAL_STATUSES = new Set<PaymentStatus>([
@@ -97,6 +100,8 @@ export function VipCheckoutPanel({
   initialPayment,
   initialQrDataUrl,
   nextHref,
+  closeHref = "/vip",
+  presentation = "page",
 }: VipCheckoutPanelProps) {
   const router = useRouter();
   const [payment, setPayment] = useState(initialPayment);
@@ -138,6 +143,7 @@ export function VipCheckoutPanel({
     }).format(payment.amount);
   }, [payment.amount, payment.currency]);
   const isVirtualAccount = payment.channelGroup === "va" || Boolean(payment.vaNumber);
+  const isSheet = presentation === "sheet";
   const pendingDescription = isVirtualAccount
     ? "Selesaikan transfer ke nomor virtual account di bawah agar VIP aktif otomatis."
     : "Scan QRIS di bawah";
@@ -324,8 +330,13 @@ export function VipCheckoutPanel({
     }
   }
 
-  return (
-    <section className="mt-6 grid gap-6 lg:grid-cols-[1fr_0.9fr]">
+  const content = (
+    <section
+      className={cn(
+        "grid gap-6",
+        isSheet ? "mt-0" : "mt-6 lg:grid-cols-[1fr_0.9fr]",
+      )}
+    >
       <Card className="glass-panel rounded-[2rem] border-white/10">
         <CardContent className="space-y-6 p-6">
           <div>
@@ -490,35 +501,73 @@ export function VipCheckoutPanel({
                 </div>
               )}
 
-              <div className="flex flex-wrap gap-3">
-                <Link
-                  href={payment.payUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  onPointerDown={() => triggerSelectionHaptic()}
-                  className={cn(buttonVariants({ size: "lg" }), "rounded-2xl")}
-                >
-                  <ExternalLink className="mr-2 size-4" />
-                  {isVirtualAccount ? "Buka instruksi pembayaran" : "Buka pembayaran"}
-                </Link>
-                <button
-                  type="button"
-                  onPointerDown={() => triggerSelectionHaptic()}
-                  onClick={() => void handleManualRefresh()}
-                  disabled={isRefreshing}
-                  className={cn(
-                    buttonVariants({ variant: "secondary", size: "lg" }),
-                    "rounded-2xl",
-                  )}
-                >
-                  {isRefreshing ? (
-                    <LoaderCircle className="mr-2 size-4 animate-spin" />
-                  ) : (
-                    <RefreshCcw className="mr-2 size-4" />
-                  )}
-                  Cek sekarang
-                </button>
-              </div>
+              {isVirtualAccount ? (
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onPointerDown={() => triggerSelectionHaptic()}
+                    onClick={() => void handleManualRefresh()}
+                    disabled={isRefreshing}
+                    className={cn(
+                      buttonVariants({ size: "lg" }),
+                      "h-12 w-full rounded-2xl bg-[linear-gradient(180deg,#4a8cff,#2d67ff)] text-white hover:brightness-105",
+                    )}
+                  >
+                    {isRefreshing ? (
+                      <LoaderCircle className="mr-2 size-4 animate-spin" />
+                    ) : (
+                      <RefreshCcw className="mr-2 size-4" />
+                    )}
+                    Sudah transfer? Cek di sini
+                  </button>
+
+                  <div className="flex flex-wrap gap-3">
+                    <Link
+                      href={payment.payUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      onPointerDown={() => triggerSelectionHaptic()}
+                      className={cn(
+                        buttonVariants({ variant: "secondary", size: "sm" }),
+                        "rounded-2xl",
+                      )}
+                    >
+                      <ExternalLink className="mr-2 size-4" />
+                      Buka halaman Paymenku
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-3">
+                  <Link
+                    href={payment.payUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    onPointerDown={() => triggerSelectionHaptic()}
+                    className={cn(buttonVariants({ size: "lg" }), "rounded-2xl")}
+                  >
+                    <ExternalLink className="mr-2 size-4" />
+                    Buka pembayaran
+                  </Link>
+                  <button
+                    type="button"
+                    onPointerDown={() => triggerSelectionHaptic()}
+                    onClick={() => void handleManualRefresh()}
+                    disabled={isRefreshing}
+                    className={cn(
+                      buttonVariants({ variant: "secondary", size: "lg" }),
+                      "rounded-2xl",
+                    )}
+                  >
+                    {isRefreshing ? (
+                      <LoaderCircle className="mr-2 size-4 animate-spin" />
+                    ) : (
+                      <RefreshCcw className="mr-2 size-4" />
+                    )}
+                    Cek sekarang
+                  </button>
+                </div>
+              )}
             </div>
           ) : payment.status === "paid" ? (
             <div className="flex flex-wrap gap-3">
@@ -617,6 +666,38 @@ export function VipCheckoutPanel({
         </CardContent>
       </Card>
     </section>
+  );
+
+  if (!isSheet) {
+    return content;
+  }
+
+  return (
+    <div className="fixed inset-0 z-[90]">
+      <Link
+        href={closeHref}
+        onPointerDown={() => triggerSelectionHaptic()}
+        className="absolute inset-0 bg-black/72 backdrop-blur-sm"
+        aria-label="Tutup checkout"
+      />
+
+      <div className="absolute inset-x-0 bottom-0 max-h-[92dvh] overflow-y-auto rounded-t-[2.4rem] border border-white/10 bg-[linear-gradient(180deg,rgba(28,18,12,0.98),rgba(14,10,8,0.99))] px-4 pb-[calc(1.2rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-28px_80px_rgba(0,0,0,0.45)]">
+        <div className="mx-auto max-w-5xl">
+          <div className="relative sticky top-0 z-10 flex items-center justify-between gap-3 bg-transparent pb-3 pt-1">
+            <span className="mx-auto h-1.5 w-16 rounded-full bg-white/18" />
+            <Link
+              href={closeHref}
+              onPointerDown={() => triggerSelectionHaptic()}
+              className="absolute right-0 top-0 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/78 transition hover:bg-white/10"
+              aria-label="Tutup checkout"
+            >
+              <X className="size-4" />
+            </Link>
+          </div>
+          {content}
+        </div>
+      </div>
+    </div>
   );
 }
 
