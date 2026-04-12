@@ -182,7 +182,63 @@ export function SearchPanel({ providers, tags }: SearchPanelProps) {
               </div>
             </label>
 
+          <div className="rounded-[1.5rem] border border-white/10 bg-black/18 p-4">
+            {!canSearch ? (
+              <div className="flex min-h-36 flex-col items-center justify-center gap-3 text-center">
+                <div className="rounded-full border border-white/10 bg-white/5 p-3">
+                  <Sparkles className="size-6 text-accent" />
+                </div>
+              </div>
+            ) : isLoading ? (
+              <div className="flex min-h-36 items-center justify-center gap-3 text-sm text-white">
+                <LoaderCircle className="size-4 animate-spin text-accent" />
+                Menjalankan pencarian...
+              </div>
+            ) : error ? (
+              <div className="rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                {error}
+              </div>
+            ) : results.results.length === 0 ? (
+              <div className="flex min-h-36 flex-col items-center justify-center gap-2 text-center">
+                <p className="font-medium text-white">Belum ada hasil cocok</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap gap-2">
+                    {selectedProvider ? (
+                      <Badge className="border-white/10 bg-black/35 text-white">
+                        Provider: {formatProviderName(selectedProvider)}
+                      </Badge>
+                    ) : null}
+                    {selectedTag ? (
+                      <Badge className="border-white/10 bg-black/35 text-white">
+                        Tag: #{selectedTag}
+                      </Badge>
+                    ) : null}
+                  </div>
+                </div>
 
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
+                  {results.results.map((drama) => (
+                    <DramaCard
+                      key={drama.id}
+                      href={`/watch/${drama.id}`}
+                      title={drama.title}
+                      thumbUrl={drama.thumbUrl}
+                      providerName={drama.providerName}
+                      episodeCount={drama.episodeCount}
+                      extraMeta={
+                        drama.tags.length > 0
+                          ? drama.tags.slice(0, 2).join(" • ")
+                          : null
+                      }
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
 
 
