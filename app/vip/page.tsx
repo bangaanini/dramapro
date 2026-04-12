@@ -92,16 +92,6 @@ export default async function VipPage(props: PageProps<"/vip">) {
             Premium membership
           </Badge>
 
-          <h1 className="mt-4 text-3xl font-semibold leading-tight tracking-tight text-white sm:text-5xl">
-            Upgrade ke{" "}
-            <span className="bg-[linear-gradient(180deg,#ffd56a,#ffb115)] bg-clip-text text-transparent">
-              VIP Premium
-            </span>
-          </h1>
-          <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-white/68 sm:text-base">
-            Buka episode premium, nikmati akses ke semua drama.
-          </p>
-
           <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
             {userHasVip ? (
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-100">
