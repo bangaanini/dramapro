@@ -3,12 +3,13 @@ import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { decryptPaymentSecret } from "@/lib/payment-crypto";
 
-export const FALLBACK_SITE_URL = "https://dramapro.netlify.app";
-export const DEFAULT_SITE_NAME = "DramaPro";
+export const FALLBACK_SITE_URL = "https://layardrama.id";
+export const DEFAULT_SITE_NAME = "Layar Drama";
 export const DEFAULT_SITE_TAGLINE = "Nonton short drama sub Indo fresh setiap hari";
 export const DEFAULT_SITE_TITLE = `${DEFAULT_SITE_NAME} - ${DEFAULT_SITE_TAGLINE}`;
 export const DEFAULT_SITE_DESCRIPTION =
   "Nonton ribuan short drama dalam 1 platform. Short drama terbaru dari berbagai sumber cepat dan aman.";
+export const DEFAULT_SITE_LOGO = "/site-logo.jpg";
 export const DEFAULT_OG_IMAGE = "/opengraph.jpg";
 
 function readTrimmed(value?: string | null) {
@@ -57,7 +58,7 @@ export const getAppSettings = cache(async () => {
   const siteName = readTrimmed(row?.siteName) || DEFAULT_SITE_NAME;
   const siteDescription =
     readTrimmed(row?.siteDescription) || DEFAULT_SITE_DESCRIPTION;
-  const siteLogoUrl = readTrimmed(row?.siteLogoUrl) || DEFAULT_OG_IMAGE;
+  const siteLogoUrl = readTrimmed(row?.siteLogoUrl) || DEFAULT_SITE_LOGO;
   const telegramBotUsername =
     (readTrimmed(row?.telegramBotUsername) ||
       readTrimmed(process.env.TELEGRAM_BOT_USERNAME)
@@ -102,7 +103,8 @@ export const getAppSettings = cache(async () => {
       title: `${siteName} - ${DEFAULT_SITE_TAGLINE}`,
       description: siteDescription,
       logoUrl: siteLogoUrl,
-      customLogoUrl: readTrimmed(row?.siteLogoUrl) || null,
+      ogImageUrl: DEFAULT_OG_IMAGE,
+      customLogoUrl: readTrimmed(row?.siteLogoUrl) || DEFAULT_SITE_LOGO,
     },
     telegram: {
       botUsername: telegramBotUsername,

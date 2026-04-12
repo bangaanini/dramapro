@@ -174,7 +174,7 @@ export default async function AffiliatePage(props: PageProps<"/affiliate">) {
                 Program Afiliasi
               </Badge>
               <h1 className="mt-3 text-2xl font-semibold tracking-tight text-white">
-                Referral DramaPro
+                Referral Layar Drama
               </h1>
               <p className="mt-2 max-w-md text-sm leading-6 text-white/70">
                 Bagikan link affiliate kamu untuk mendapatkan komisi.

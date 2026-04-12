@@ -13,7 +13,7 @@ type DramaDetailShareButtonProps = {
 };
 
 function buildTelegramShareUrl(title: string, shareUrl: string) {
-  const text = `Tonton ${title} di DramaPro`;
+  const text = `Tonton ${title} di Layar Drama`;
   return `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(text)}`;
 }
 
@@ -45,7 +45,7 @@ export function DramaDetailShareButton({
       if (navigator.share) {
         await navigator.share({
           title,
-          text: `Tonton ${title} di DramaPro`,
+          text: `Tonton ${title} di Layar Drama`,
           url: shareUrl,
         });
         setState("idle");

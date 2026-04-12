@@ -18,7 +18,7 @@ function getDefaultAdminEmail() {
 }
 
 function getDefaultAdminName() {
-  return process.env.ADMIN_NAME?.trim() || "DramaPro Administrator";
+  return process.env.ADMIN_NAME?.trim() || "Layar Drama Administrator";
 }
 
 function getBootstrapPassword() {

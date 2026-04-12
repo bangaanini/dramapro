@@ -1,4 +1,4 @@
-const FALLBACK_SITE_URL = "https://dramapro.netlify.app";
+const FALLBACK_SITE_URL = "https://layardrama.id";
 
 function getPublicSiteUrl() {
   const rawUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
@@ -51,7 +51,7 @@ export function getUserSecondaryLabel(
     return "Akun Telegram";
   }
 
-  return "Akun DramaPro";
+  return "Akun Layar Drama";
 }
 
 export function getUserAvatarUrl(

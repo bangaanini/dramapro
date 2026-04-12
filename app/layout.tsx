@@ -21,7 +21,7 @@ export const viewport: Viewport = {
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getAppSettings();
   const site = settings.site;
-  const ogImage = site.logoUrl || DEFAULT_OG_IMAGE;
+  const ogImage = site.ogImageUrl || DEFAULT_OG_IMAGE;
 
   return {
     metadataBase: new URL(site.url),

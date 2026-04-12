@@ -218,7 +218,7 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
 
     const handleHomeScreenAdded = () => {
       setHomeScreenStatus("added");
-      setActionMessage("Shortcut DramaPro sudah ada di layar utama.");
+      setActionMessage("Shortcut Layar Drama sudah ada di layar utama.");
     };
 
     const handleHomeScreenChecked = (payload?: TelegramHomeScreenEventPayload) => {
@@ -303,7 +303,7 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
   async function handleAddToHomescreen() {
     if (isInstalling || homeScreenStatus === "added" || isStandaloneDisplayMode()) {
       setHomeScreenStatus("added");
-      setActionMessage("Shortcut DramaPro sudah ada di layar utama.");
+      setActionMessage("Shortcut Layar Drama sudah ada di layar utama.");
       return;
     }
 
@@ -317,7 +317,7 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
           telegramWebApp.checkHomeScreenStatus?.((status) => {
             if (status === "added") {
               setHomeScreenStatus("added");
-              setActionMessage("Shortcut DramaPro sudah ada di layar utama.");
+              setActionMessage("Shortcut Layar Drama sudah ada di layar utama.");
             }
           });
 
@@ -329,7 +329,7 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
                 setHomeScreenStatus(status);
 
                 if (status === "added") {
-                  setActionMessage("Shortcut DramaPro sudah ada di layar utama.");
+                  setActionMessage("Shortcut Layar Drama sudah ada di layar utama.");
                 }
               });
             } catch {
@@ -353,7 +353,7 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
 
         setActionMessage(
           accepted
-            ? "DramaPro ditambahkan ke layar utama."
+            ? "Layar Drama ditambahkan ke layar utama."
             : "Permintaan add to homescreen dibatalkan.",
         );
         setInstallPromptEvent(null);
@@ -445,7 +445,7 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
                 ) : (
                   <Gem className="mr-2 size-3.5" />
                 )}
-                {hasActiveVip ? "DramaPro Premium Aktif" : "DramaPro VIP"}
+                {hasActiveVip ? "Layar Drama Premium Aktif" : "Layar Drama VIP"}
               </Badge>
               <p className="text-sm leading-7 text-white/72">
                 {hasActiveVip
@@ -544,8 +544,8 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
                     <p className="font-medium text-white">Add to Homescreen</p>
                     <p className="text-sm text-[var(--muted-foreground)]">
                       {homeScreenStatus === "added"
-                        ? "Shortcut DramaPro sudah terpasang di layar utama."
-                        : "Tambahkan shortcut DramaPro ke layar utama seperti aplikasi."}
+                        ? "Shortcut Layar Drama sudah terpasang di layar utama."
+                        : "Tambahkan shortcut Layar Drama ke layar utama seperti aplikasi."}
                     </p>
                   </div>
                 </div>

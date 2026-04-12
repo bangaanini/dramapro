@@ -273,7 +273,7 @@ export default async function AdminSettingsPage(
                 label="Nama situs"
                 name="siteName"
                 defaultValue={site.name}
-                placeholder="DramaPro"
+                placeholder="Layar Drama"
               />
               <label className="block space-y-2">
                 <span className="text-sm font-medium text-white">

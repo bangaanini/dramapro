@@ -6,7 +6,7 @@ import { Check, Copy, LoaderCircle, Share2 } from "lucide-react";
 import "@/lib/telegram-web-app";
 
 function buildTelegramShareUrl(link: string) {
-  return `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent("Gabung lewat link referral DramaPro ini.")}`;
+  return `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent("Gabung lewat link referral Layar Drama ini.")}`;
 }
 
 export function AffiliateLinkCard({ link }: { link: string }) {
@@ -44,8 +44,8 @@ export function AffiliateLinkCard({ link }: { link: string }) {
 
       if (navigator.share) {
         await navigator.share({
-          title: "Referral DramaPro",
-          text: "Gabung ke DramaPro lewat link referral ini.",
+          title: "Referral Layar Drama",
+          text: "Gabung ke Layar Drama lewat link referral ini.",
           url: link,
         });
         return;

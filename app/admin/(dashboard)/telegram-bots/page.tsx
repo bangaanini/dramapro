@@ -59,7 +59,7 @@ export default async function AdminTelegramBotsPage(
           Telegram Partner Bots
         </h1>
         <p className="mt-2 max-w-3xl text-sm leading-7 text-[var(--muted)]">
-          Hubungkan bot Telegram milik affiliate ke Mini App DramaPro. Setiap
+          Hubungkan bot Telegram milik affiliate ke Mini App Layar Drama. Setiap
           user baru yang masuk dari bot partner akan otomatis menjadi referral
           owner bot tersebut, selama user belum punya referrer sebelumnya.
         </p>

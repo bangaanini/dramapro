@@ -18,8 +18,8 @@ export async function SiteHeader({ current }: SiteHeaderProps) {
   const [user, settings] = await Promise.all([getCurrentUser(), getAppSettings()]);
   const isTelegramHeader = user?.authProvider === "telegram";
   const avatarUrl = user ? getUserAvatarUrl(user) : null;
-  const initials = user ? getUserInitials(user.name) : "DP";
-  const secondaryLabel = user ? getUserSecondaryLabel(user) : "DramaPro";
+  const initials = user ? getUserInitials(user.name) : "LD";
+  const secondaryLabel = user ? getUserSecondaryLabel(user) : "Layar Drama";
   const brandLogoUrl = settings.site.customLogoUrl;
   const brandName = settings.site.name;
 

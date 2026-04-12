@@ -1054,7 +1054,7 @@ export function VideoPlayer({
       if (navigator.share) {
         await navigator.share({
           title,
-          text: `Tonton ${title} di DramaPro`,
+          text: `Tonton ${title} di Layar Drama`,
           url: shareUrl,
         });
         return;
