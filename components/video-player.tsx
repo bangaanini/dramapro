@@ -1156,10 +1156,11 @@ export function VideoPlayer({
           type="button"
           onClick={() => {
             if (isLocked) {
-              setToast({
-                message: `EP.${episode} terkunci. Buka akses VIP untuk melanjutkan.`,
-                tone: "info",
-              });
+              router.push(
+                `/vip?next=${encodeURIComponent(
+                  `/watch/${internalDramaId}/play?episode=${episode}`,
+                )}`,
+              );
               return;
             }
 
@@ -1190,6 +1191,11 @@ export function VideoPlayer({
           <span className="block text-base tracking-tight">
             {episode.toString().padStart(2, "0")}
           </span>
+          {isLocked ? (
+            <span className="mt-1.5 block text-[10px] font-medium uppercase tracking-[0.18em] text-amber-200/80">
+              Buka VIP
+            </span>
+          ) : null}
         </button>
       );
     });

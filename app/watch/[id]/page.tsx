@@ -360,10 +360,11 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
 
                     if (isLocked) {
                       return (
-                        <button
+                        <Link
                           key={episode}
-                          type="button"
-                          disabled
+                          href={`/vip?next=${encodeURIComponent(
+                            `/watch/${drama.id}/play?episode=${episode}`,
+                          )}`}
                           className="relative overflow-hidden rounded-[1.45rem] border border-amber-500/35 bg-amber-500/9 px-3 py-4 text-sm font-semibold text-amber-300"
                         >
                           <span className="absolute right-1.5 top-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-black shadow-[0_8px_18px_rgba(245,158,11,0.35)]">
@@ -372,7 +373,10 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
                           <span className="block text-base tracking-tight">
                             {episode.toString().padStart(2, "0")}
                           </span>
-                        </button>
+                          <span className="mt-1.5 block text-[10px] font-medium uppercase tracking-[0.18em] text-amber-200/80">
+                            Buka VIP
+                          </span>
+                        </Link>
                       );
                     }
 
