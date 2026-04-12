@@ -115,7 +115,7 @@ export async function buildTelegramStartMessage(firstName?: string) {
     "🔥 Tanpa ribet • Full HD • Update setiap hari",
     "",
     "📌 Cara pakai:",
-    "• Nonton Sekarang -> Langsung mulai nonton",
+    "• Buka -> Langsung mulai nonton",
     "• Cari Judul -> Cari drama / film favoritmu",
     "• Gabung Affiliate -> Dapat cuan dari Telegram",
     "• Channel Drama -> Drama China trending",
@@ -142,7 +142,7 @@ export async function buildTelegramStartKeyboard(
     inline_keyboard: [
       [
         {
-          text: "🎬 Nonton Sekarang",
+          text: "🎬 Buka",
           web_app: { url: await getTelegramMiniAppUrl("home", miniAppOptions) },
         },
       ],
