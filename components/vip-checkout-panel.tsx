@@ -4,6 +4,7 @@ import Link from "next/link";
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "qrcode";
 import {
+  ChevronDown,
   Copy,
   CheckCircle2,
   Clock3,
@@ -110,6 +111,9 @@ export function VipCheckoutPanel({
   const [pollError, setPollError] = useState<string | null>(null);
   const [hasCopiedVa, setHasCopiedVa] = useState(false);
   const [remainingLabel, setRemainingLabel] = useState<string | null>(null);
+  const [sheetVisible, setSheetVisible] = useState(presentation !== "sheet");
+  const [openInstructionKey, setOpenInstructionKey] = useState<string | null>(null);
+  const [copyToast, setCopyToast] = useState<string | null>(null);
   const hasRefreshedAfterPaidRef = useRef(false);
 
   const isFinal = FINAL_STATUSES.has(payment.status);
@@ -147,6 +151,39 @@ export function VipCheckoutPanel({
   const pendingDescription = isVirtualAccount
     ? "Selesaikan transfer ke nomor virtual account di bawah agar VIP aktif otomatis."
     : "Scan QRIS di bawah";
+  const instructionSections = useMemo(
+    () => getVirtualAccountInstructionSections(payment.bankName),
+    [payment.bankName],
+  );
+
+  useEffect(() => {
+    if (presentation !== "sheet") {
+      return;
+    }
+
+    const rafId = window.requestAnimationFrame(() => {
+      setSheetVisible(true);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+    };
+  }, [presentation]);
+
+  useEffect(() => {
+    if (instructionSections.length === 0) {
+      setOpenInstructionKey(null);
+      return;
+    }
+
+    setOpenInstructionKey((current) => {
+      if (current && instructionSections.some((section) => section.key === current)) {
+        return current;
+      }
+
+      return instructionSections[0]?.key ?? null;
+    });
+  }, [instructionSections]);
 
   useEffect(() => {
     let cancelled = false;
@@ -324,9 +361,13 @@ export function VipCheckoutPanel({
       triggerSelectionHaptic();
       await navigator.clipboard.writeText(payment.vaNumber);
       setHasCopiedVa(true);
+      setCopyToast("Nomor virtual account berhasil disalin.");
       window.setTimeout(() => setHasCopiedVa(false), 1800);
+      window.setTimeout(() => setCopyToast(null), 2200);
     } catch {
       setHasCopiedVa(false);
+      setCopyToast("Gagal menyalin nomor virtual account.");
+      window.setTimeout(() => setCopyToast(null), 2200);
     }
   }
 
@@ -443,19 +484,67 @@ export function VipCheckoutPanel({
                     nomor VA di atas. Pembayaran akan dikonfirmasi otomatis.
                   </div>
 
-                  <div className="rounded-[1.35rem] border border-white/10 bg-black/15 p-4">
+                  <div className="space-y-3 rounded-[1.35rem] border border-white/10 bg-black/15 p-4">
                     <p className="text-sm font-semibold text-white">
                       Cara bayar via {payment.bankName ?? payment.channelName}
                     </p>
-                    <div className="mt-4 space-y-3">
-                      {getVirtualAccountSteps(payment.bankName).map((step, index) => (
-                        <div key={step} className="flex gap-3 text-sm text-white/72">
-                          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-500/20 text-xs font-semibold text-indigo-100">
-                            {index + 1}
-                          </span>
-                          <span>{step}</span>
-                        </div>
-                      ))}
+                    <div className="space-y-2">
+                      {instructionSections.map((section) => {
+                        const isOpen = openInstructionKey === section.key;
+
+                        return (
+                          <div
+                            key={section.key}
+                            className="overflow-hidden rounded-[1.15rem] border border-white/8 bg-white/5"
+                          >
+                            <button
+                              type="button"
+                              onPointerDown={() => triggerSelectionHaptic()}
+                              onClick={() =>
+                                setOpenInstructionKey((current) =>
+                                  current === section.key ? null : section.key,
+                                )
+                              }
+                              className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                            >
+                              <span className="text-sm font-medium text-white">
+                                {section.title}
+                              </span>
+                              <ChevronDown
+                                className={cn(
+                                  "size-4 text-white/55 transition-transform duration-200",
+                                  isOpen && "rotate-180",
+                                )}
+                              />
+                            </button>
+
+                            <div
+                              className={cn(
+                                "grid transition-[grid-template-rows,opacity] duration-300",
+                                isOpen
+                                  ? "grid-rows-[1fr] opacity-100"
+                                  : "grid-rows-[0fr] opacity-0",
+                              )}
+                            >
+                              <div className="overflow-hidden">
+                                <div className="space-y-3 border-t border-white/8 px-4 py-4">
+                                  {section.steps.map((step, index) => (
+                                    <div
+                                      key={`${section.key}-${step}`}
+                                      className="flex gap-3 text-sm text-white/72"
+                                    >
+                                      <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-500/20 text-xs font-semibold text-indigo-100">
+                                        {index + 1}
+                                      </span>
+                                      <span>{step}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -669,7 +758,14 @@ export function VipCheckoutPanel({
   );
 
   if (!isSheet) {
-    return content;
+    return (
+      <>
+        {content}
+        {copyToast ? (
+          <FloatingToast message={copyToast} tone={hasCopiedVa ? "success" : "info"} />
+        ) : null}
+      </>
+    );
   }
 
   return (
@@ -681,8 +777,14 @@ export function VipCheckoutPanel({
         aria-label="Tutup checkout"
       />
 
-      <div className="absolute inset-x-0 bottom-0 max-h-[92dvh] overflow-y-auto rounded-t-[2.4rem] border border-white/10 bg-[linear-gradient(180deg,rgba(28,18,12,0.98),rgba(14,10,8,0.99))] px-4 pb-[calc(1.2rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-28px_80px_rgba(0,0,0,0.45)]">
-        <div className="mx-auto max-w-5xl">
+      <div className="absolute inset-x-0 bottom-0 flex max-h-[92dvh] items-end">
+        <div
+          className={cn(
+            "max-h-[92dvh] w-full overflow-y-auto rounded-t-[2.4rem] border border-white/10 bg-[linear-gradient(180deg,rgba(28,18,12,0.98),rgba(14,10,8,0.99))] px-4 pb-[calc(1.2rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-28px_80px_rgba(0,0,0,0.45)] transition-transform duration-300 ease-out will-change-transform",
+            sheetVisible ? "translate-y-0" : "translate-y-full",
+          )}
+        >
+          <div className="mx-auto max-w-5xl">
           <div className="relative sticky top-0 z-10 flex items-center justify-between gap-3 bg-transparent pb-3 pt-1">
             <span className="mx-auto h-1.5 w-16 rounded-full bg-white/18" />
             <Link
@@ -695,8 +797,16 @@ export function VipCheckoutPanel({
             </Link>
           </div>
           {content}
+          {copyToast ? (
+            <FloatingToast
+              message={copyToast}
+              tone={hasCopiedVa ? "success" : "info"}
+              className="sticky bottom-2 mt-4"
+            />
+          ) : null}
         </div>
       </div>
+    </div>
     </div>
   );
 }
@@ -710,96 +820,249 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function getVirtualAccountSteps(bankName?: string | null) {
+function getVirtualAccountInstructionSections(bankName?: string | null) {
   const bank = String(bankName ?? "").trim().toUpperCase();
 
   if (bank.includes("BNI")) {
     return [
-      "Buka aplikasi BNI Mobile Banking.",
-      "Pilih menu Transfer.",
-      "Pilih Virtual Account Billing.",
-      "Masukkan nomor VA di atas.",
-      "Konfirmasi detail pembayaran.",
-      "Masukkan PIN untuk menyelesaikan transfer.",
+      {
+        key: "atm",
+        title: "ATM BNI",
+        steps: [
+          "Masukkan kartu ATM dan PIN Anda.",
+          "Pilih menu Transaksi Lainnya > Transfer > Ke Rekening Virtual Account.",
+          "Masukkan nomor VA di atas.",
+          "Pastikan merchant dan nominal pembayaran sudah benar.",
+          "Selesaikan pembayaran hingga transaksi berhasil.",
+        ],
+      },
+      {
+        key: "mobile",
+        title: "Mobile Banking",
+        steps: [
+          "Buka aplikasi BNI Mobile Banking.",
+          "Pilih menu Transfer.",
+          "Pilih Virtual Account Billing.",
+          "Masukkan nomor VA di atas.",
+          "Konfirmasi detail pembayaran.",
+          "Masukkan PIN untuk menyelesaikan transfer.",
+        ],
+      },
     ];
   }
 
   if (bank.includes("BRI")) {
     return [
-      "Buka aplikasi BRImo atau ATM BRI.",
-      "Pilih menu BRIVA atau Transfer Virtual Account.",
-      "Masukkan nomor VA di atas.",
-      "Periksa nama penerima dan nominal transfer.",
-      "Konfirmasi lalu selesaikan pembayaran.",
+      {
+        key: "atm",
+        title: "ATM BRI",
+        steps: [
+          "Masukkan kartu ATM dan PIN BRI.",
+          "Pilih menu Pembayaran > BRIVA.",
+          "Masukkan nomor VA di atas.",
+          "Periksa nama merchant dan nominal pembayaran.",
+          "Lanjutkan transaksi sampai berhasil.",
+        ],
+      },
+      {
+        key: "mobile",
+        title: "BRImo",
+        steps: [
+          "Buka aplikasi BRImo.",
+          "Pilih menu BRIVA atau Virtual Account.",
+          "Masukkan nomor VA di atas.",
+          "Periksa nama penerima dan nominal transfer.",
+          "Konfirmasi lalu selesaikan pembayaran.",
+        ],
+      },
     ];
   }
 
   if (bank.includes("MANDIRI")) {
     return [
-      "Buka Livin' by Mandiri atau ATM Mandiri.",
-      "Masuk ke menu Bayar atau Multipayment.",
-      "Pilih Virtual Account.",
-      "Masukkan nomor VA di atas.",
-      "Konfirmasi detail pembayaran dan lanjutkan hingga selesai.",
+      {
+        key: "atm",
+        title: "ATM Mandiri",
+        steps: [
+          "Masukkan kartu ATM dan PIN Mandiri.",
+          "Pilih Bayar/Beli > Lainnya > Multi Payment.",
+          "Masukkan kode perusahaan jika dibutuhkan lalu nomor VA di atas.",
+          "Periksa detail transaksi.",
+          "Konfirmasi pembayaran sampai selesai.",
+        ],
+      },
+      {
+        key: "mobile",
+        title: "Livin' by Mandiri",
+        steps: [
+          "Buka Livin' by Mandiri.",
+          "Masuk ke menu Bayar atau Multipayment.",
+          "Pilih Virtual Account.",
+          "Masukkan nomor VA di atas.",
+          "Konfirmasi detail pembayaran dan lanjutkan hingga selesai.",
+        ],
+      },
     ];
   }
 
   if (bank.includes("BSI")) {
     return [
-      "Buka aplikasi BYOND/BSI Mobile atau ATM BSI.",
-      "Pilih menu Bayar atau Transfer Virtual Account.",
-      "Masukkan nomor VA di atas.",
-      "Periksa total pembayaran lalu lanjutkan.",
-      "Selesaikan transaksi dengan PIN atau otorisasi perangkat.",
+      {
+        key: "atm",
+        title: "ATM BSI",
+        steps: [
+          "Masukkan kartu dan PIN ATM BSI.",
+          "Pilih menu Pembayaran atau Virtual Account.",
+          "Masukkan nomor VA di atas.",
+          "Periksa detail pembayaran.",
+          "Lanjutkan transaksi sampai selesai.",
+        ],
+      },
+      {
+        key: "mobile",
+        title: "BYOND / BSI Mobile",
+        steps: [
+          "Buka aplikasi BYOND/BSI Mobile.",
+          "Pilih menu Bayar atau Transfer Virtual Account.",
+          "Masukkan nomor VA di atas.",
+          "Periksa total pembayaran lalu lanjutkan.",
+          "Selesaikan transaksi dengan PIN atau otorisasi perangkat.",
+        ],
+      },
     ];
   }
 
   if (bank.includes("CIMB")) {
     return [
-      "Buka aplikasi OCTO Mobile / OCTO Clicks atau ATM CIMB.",
-      "Pilih menu Transfer atau Pembayaran Virtual Account.",
-      "Masukkan nomor VA yang tertera.",
-      "Verifikasi nama merchant dan nominal pembayaran.",
-      "Konfirmasi pembayaran sampai status berhasil.",
+      {
+        key: "atm",
+        title: "ATM CIMB Niaga",
+        steps: [
+          "Masukkan kartu ATM dan PIN.",
+          "Pilih menu Pembayaran atau Virtual Account.",
+          "Masukkan nomor VA yang tertera.",
+          "Periksa nominal dan nama merchant.",
+          "Selesaikan transaksi.",
+        ],
+      },
+      {
+        key: "mobile",
+        title: "OCTO Mobile / Clicks",
+        steps: [
+          "Buka aplikasi OCTO Mobile atau OCTO Clicks.",
+          "Pilih menu Transfer atau Pembayaran Virtual Account.",
+          "Masukkan nomor VA yang tertera.",
+          "Verifikasi nama merchant dan nominal pembayaran.",
+          "Konfirmasi pembayaran sampai status berhasil.",
+        ],
+      },
     ];
   }
 
   if (bank.includes("PERMATA")) {
     return [
-      "Buka aplikasi PermataMobile X atau ATM Permata.",
-      "Pilih menu Pembayaran atau Virtual Account.",
-      "Masukkan nomor VA di atas.",
-      "Periksa detail transaksi lalu tekan lanjut.",
-      "Masukkan PIN untuk menyelesaikan pembayaran.",
+      {
+        key: "atm",
+        title: "ATM Permata",
+        steps: [
+          "Masukkan kartu ATM dan PIN.",
+          "Pilih menu Pembayaran atau Virtual Account.",
+          "Masukkan nomor VA di atas.",
+          "Periksa detail transaksi.",
+          "Selesaikan pembayaran.",
+        ],
+      },
+      {
+        key: "mobile",
+        title: "PermataMobile X",
+        steps: [
+          "Buka aplikasi PermataMobile X.",
+          "Pilih menu Pembayaran atau Virtual Account.",
+          "Masukkan nomor VA di atas.",
+          "Periksa detail transaksi lalu tekan lanjut.",
+          "Masukkan PIN untuk menyelesaikan pembayaran.",
+        ],
+      },
     ];
   }
 
   if (bank.includes("DANAMON")) {
     return [
-      "Buka aplikasi D-Bank PRO atau ATM Danamon.",
-      "Masuk ke menu Transfer / Bayar Virtual Account.",
-      "Masukkan nomor virtual account di atas.",
-      "Cek detail pembayaran dan pastikan nominal benar.",
-      "Konfirmasi transaksi hingga berhasil.",
+      {
+        key: "atm",
+        title: "ATM Danamon",
+        steps: [
+          "Masukkan kartu ATM dan PIN.",
+          "Pilih menu Pembayaran / Virtual Account.",
+          "Masukkan nomor VA di atas.",
+          "Cek nominal dan merchant.",
+          "Lanjutkan transaksi sampai selesai.",
+        ],
+      },
+      {
+        key: "mobile",
+        title: "D-Bank PRO",
+        steps: [
+          "Buka aplikasi D-Bank PRO.",
+          "Masuk ke menu Transfer / Bayar Virtual Account.",
+          "Masukkan nomor virtual account di atas.",
+          "Cek detail pembayaran dan pastikan nominal benar.",
+          "Konfirmasi transaksi hingga berhasil.",
+        ],
+      },
     ];
   }
 
   if (bank.includes("BJB")) {
     return [
-      "Buka Digi by bank bjb atau ATM bank bjb.",
-      "Pilih menu Pembayaran atau Virtual Account.",
-      "Masukkan nomor VA yang tampil di halaman ini.",
-      "Periksa nominal lalu konfirmasi pembayaran.",
-      "Tunggu status VIP aktif otomatis setelah verifikasi.",
+      {
+        key: "atm",
+        title: "ATM bank bjb",
+        steps: [
+          "Masukkan kartu ATM dan PIN.",
+          "Pilih menu Pembayaran atau Virtual Account.",
+          "Masukkan nomor VA yang tampil di halaman ini.",
+          "Periksa nominal lalu konfirmasi pembayaran.",
+          "Selesaikan transaksi hingga berhasil.",
+        ],
+      },
+      {
+        key: "mobile",
+        title: "Digi bank bjb",
+        steps: [
+          "Buka aplikasi Digi bank bjb.",
+          "Pilih menu Pembayaran atau Virtual Account.",
+          "Masukkan nomor VA yang tampil di halaman ini.",
+          "Periksa nominal lalu konfirmasi pembayaran.",
+          "Tunggu status VIP aktif otomatis setelah verifikasi.",
+        ],
+      },
     ];
   }
 
   return [
-    "Buka aplikasi mobile banking atau ATM sesuai bank pilihanmu.",
-    "Masuk ke menu Transfer atau Virtual Account.",
-    "Masukkan nomor virtual account di atas.",
-    "Periksa nominal transfer lalu konfirmasi pembayaran.",
-    "Status VIP akan aktif otomatis setelah pembayaran terverifikasi.",
+    {
+      key: "atm",
+      title: "ATM",
+      steps: [
+        "Buka ATM sesuai bank pilihanmu.",
+        "Masuk ke menu Pembayaran atau Virtual Account.",
+        "Masukkan nomor virtual account di atas.",
+        "Periksa nominal transfer lalu konfirmasi pembayaran.",
+        "Status VIP akan aktif otomatis setelah pembayaran terverifikasi.",
+      ],
+    },
+    {
+      key: "mobile",
+      title: "Mobile Banking",
+      steps: [
+        "Buka aplikasi mobile banking sesuai bank pilihanmu.",
+        "Masuk ke menu Transfer atau Virtual Account.",
+        "Masukkan nomor virtual account di atas.",
+        "Periksa nominal transfer lalu konfirmasi pembayaran.",
+        "Status VIP akan aktif otomatis setelah pembayaran terverifikasi.",
+      ],
+    },
   ];
 }
 
@@ -850,4 +1113,40 @@ function getBankBadgeTone(bankName: string) {
   }
 
   return "bg-white/10 text-white border border-white/12";
+}
+
+function FloatingToast({
+  message,
+  tone = "info",
+  className,
+}: {
+  message: string;
+  tone?: "info" | "success";
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "mx-auto flex w-full max-w-sm items-center gap-3 rounded-[1.2rem] border px-4 py-3 text-sm shadow-[0_16px_34px_rgba(0,0,0,0.3)] backdrop-blur-xl",
+        tone === "success"
+          ? "border-emerald-400/20 bg-emerald-500/12 text-emerald-50"
+          : "border-white/12 bg-[rgba(24,18,14,0.9)] text-white",
+        className,
+      )}
+    >
+      <span
+        className={cn(
+          "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+          tone === "success" ? "bg-emerald-500/16" : "bg-white/8",
+        )}
+      >
+        {tone === "success" ? (
+          <CheckCircle2 className="size-4" />
+        ) : (
+          <Copy className="size-4" />
+        )}
+      </span>
+      <span className="leading-6">{message}</span>
+    </div>
+  );
 }
