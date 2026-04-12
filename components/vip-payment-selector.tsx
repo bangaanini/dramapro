@@ -143,9 +143,6 @@ export function VipPaymentSelector({
                       <p className="mt-3 text-4xl font-semibold tracking-tight text-white">
                         {formatIdr(plan.priceAmount, plan.currency)}
                       </p>
-                      <p className="mt-2 text-sm text-white/56">
-                        untuk {plan.durationDays} hari
-                      </p>
                     </div>
                     {isSelected ? (
                       <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-amber-400 text-[#392100]">
@@ -154,15 +151,7 @@ export function VipPaymentSelector({
                     ) : null}
                   </div>
 
-                  {plan.description ? (
-                    <p className="text-sm leading-6 text-white/66">
-                      {plan.description}
-                    </p>
-                  ) : (
-                    <p className="text-sm leading-6 text-white/66">
-                      Akses semua episode drama premium.
-                    </p>
-                  )}
+                  
                 </CardContent>
               </Card>
             </button>
