@@ -11,6 +11,8 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const sourceUrl = request.nextUrl.searchParams.get("url");
+  const shouldDownload = request.nextUrl.searchParams.get("download") === "1";
+  const requestedFilename = request.nextUrl.searchParams.get("filename");
 
   if (!sourceUrl) {
     return Response.json({ error: "Missing media `url` query param." }, { status: 400 });
@@ -107,6 +109,17 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  if (shouldDownload) {
+    const filename = sanitizeDownloadFilename(
+      requestedFilename || upstreamUrl.pathname.split("/").pop() || "video.mp4",
+    );
+
+    headers.set(
+      "content-disposition",
+      `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    );
+  }
+
   return new Response(upstreamResponse.body, {
     status: upstreamResponse.status,
     headers,
@@ -153,4 +166,8 @@ function convertSrtToVtt(input: string) {
   );
 
   return body.startsWith("WEBVTT") ? body : `WEBVTT\n\n${body}`;
+}
+
+function sanitizeDownloadFilename(value: string) {
+  return value.replace(/[^\w.\-]+/g, "-").slice(0, 120) || "video.mp4";
 }

@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import {
+  getProviderPayloadError,
+  normalizeStreamPayload,
   ProviderType,
   ProviderDetailMetadata,
   SyncSource,
@@ -7,6 +9,7 @@ import {
   fetchProviderJson,
   normalizeCollectionPayload,
   normalizeDetailMetadata,
+  resolveStreamRequest,
 } from "@/lib/provider-adapter";
 
 export type SyncError = {
@@ -37,6 +40,12 @@ export type BatchSyncResult = {
     errors: number;
   };
 };
+
+const STREAM_VALIDATION_PROVIDERS = new Set<ProviderType>(["netshort"]);
+
+type StreamValidationResult =
+  | { ok: true }
+  | { ok: false; message: string };
 
 async function fetchCollectionPayloadWithRetry(
   provider: ProviderType,
@@ -141,6 +150,79 @@ function mergeDramaMetadata(
   };
 }
 
+async function validateDramaStreamAvailability(drama: {
+  providerDramaId: string;
+  providerName: ProviderType;
+  title: string;
+}) : Promise<StreamValidationResult> {
+  if (!STREAM_VALIDATION_PROVIDERS.has(drama.providerName)) {
+    return { ok: true };
+  }
+
+  try {
+    const resolved = await resolveStreamRequest({
+      provider: drama.providerName,
+      providerDramaId: drama.providerDramaId,
+      episodeIndex: 1,
+    });
+
+    const payload = await fetchProviderJson(
+      "stream",
+      drama.providerName,
+      resolved.streamArgs,
+      { timeoutMs: 12000 },
+    );
+
+    const payloadError = getProviderPayloadError(payload);
+
+    if (payloadError) {
+      return {
+        ok: false,
+        message: `Skipped item because upstream stream validation failed for episode 1: ${payloadError}`,
+      };
+    }
+
+    const normalized = normalizeStreamPayload({
+      dramaId: drama.providerDramaId,
+      provider: drama.providerName,
+      episodeIndex: 1,
+      payload,
+    });
+
+    if (!normalized.qualities.length) {
+      return {
+        ok: false,
+        message:
+          "Skipped item because episode 1 does not have any playable stream qualities.",
+      };
+    }
+
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof UpstreamHttpError) {
+      return {
+        ok: false,
+        message: `Skipped item because episode 1 stream returned upstream status ${error.status}: ${error.message}`,
+      };
+    }
+
+    if (error instanceof RangeError) {
+      return {
+        ok: false,
+        message: `Skipped item because episode 1 could not be resolved: ${error.message}`,
+      };
+    }
+
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? `Skipped item because stream validation failed: ${error.message}`
+          : "Skipped item because stream validation failed unexpectedly.",
+    };
+  }
+}
+
 export async function runProviderSync(
   provider: ProviderType,
   page: number,
@@ -163,6 +245,17 @@ export async function runProviderSync(
         errors.push({
           providerDramaId: enrichedDrama.providerDramaId || null,
           message: "Skipped malformed upstream item: missing providerDramaId or title.",
+        });
+        continue;
+      }
+
+      const validation = await validateDramaStreamAvailability(enrichedDrama);
+
+      if (!validation.ok) {
+        skipped += 1;
+        errors.push({
+          providerDramaId: enrichedDrama.providerDramaId,
+          message: validation.message,
         });
         continue;
       }

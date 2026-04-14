@@ -8,6 +8,7 @@ import {
   Bot,
   Crown,
   CreditCard,
+  Download,
   KeyRound,
   LayoutGrid,
   Menu,
@@ -40,6 +41,12 @@ const adminNavItems = [
     label: "Harga VIP",
     description: "Siapkan paket pembayaran",
     icon: Crown,
+  },
+  {
+    href: "/admin/promo-downloader",
+    label: "Download Promo",
+    description: "Cari episode untuk materi promosi",
+    icon: Download,
   },
   {
     href: "/admin/affiliate-settings",

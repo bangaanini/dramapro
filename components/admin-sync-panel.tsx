@@ -1,11 +1,15 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   CirclePlay,
+  Eye,
+  EyeOff,
   LoaderCircle,
   RefreshCcw,
   ServerCog,
+  ShieldAlert,
+  ShieldCheck,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +32,16 @@ type SyncResult = SyncApiResult & {
   ok: boolean;
   status: number;
   detail?: string;
+};
+
+type ProviderControl = {
+  providerName: ProviderType;
+  isHomepageVisible: boolean;
+  healthStatus: "unknown" | "healthy" | "no_data" | "stream_error";
+  healthMessage: string;
+  checkedDramaId: string;
+  checkedDramaTitle: string;
+  lastCheckedAt: string | null;
 };
 
 async function readResponsePayload(response: Response) {
@@ -65,6 +79,15 @@ export function AdminSyncPanel({
   const [results, setResults] = useState<SyncResult[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
+  const [providerControls, setProviderControls] = useState<ProviderControl[]>([]);
+  const [controlsError, setControlsError] = useState<string | null>(null);
+  const [isCheckingProviders, setIsCheckingProviders] = useState(false);
+  const [activeProviderCheck, setActiveProviderCheck] = useState<string | null>(null);
+  const [activeProviderToggle, setActiveProviderToggle] = useState<string | null>(null);
+
+  useEffect(() => {
+    void loadProviderControls();
+  }, []);
 
   const providersToRun = useMemo(
     () =>
@@ -73,6 +96,119 @@ export function AdminSyncPanel({
         : [provider as ProviderType],
     [provider],
   );
+
+  async function loadProviderControls() {
+    try {
+      const response = await fetch("/api/admin/provider-stream-health", {
+        cache: "no-store",
+      });
+      const payload = (await response.json()) as {
+        controls?: ProviderControl[];
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Gagal memuat status provider.");
+      }
+
+      setProviderControls(payload.controls ?? []);
+      setControlsError(null);
+    } catch (loadError) {
+      setControlsError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Gagal memuat status provider.",
+      );
+    }
+  }
+
+  async function handleCheckProviders(targetProvider?: ProviderType) {
+    setControlsError(null);
+    setIsCheckingProviders(!targetProvider);
+    setActiveProviderCheck(targetProvider ?? "all");
+
+    try {
+      const response = await fetch("/api/admin/provider-stream-health", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          provider: targetProvider ?? "all",
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        controls?: ProviderControl[];
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Cek stream provider gagal.");
+      }
+
+      setProviderControls((currentControls) => {
+        const incoming = new Map(
+          (payload.controls ?? []).map((control) => [control.providerName, control]),
+        );
+
+        return currentControls.length
+          ? currentControls.map((control) =>
+              incoming.get(control.providerName) ?? control,
+            )
+          : payload.controls ?? [];
+      });
+    } catch (checkError) {
+      setControlsError(
+        checkError instanceof Error
+          ? checkError.message
+          : "Cek stream provider gagal.",
+      );
+    } finally {
+      setIsCheckingProviders(false);
+      setActiveProviderCheck(null);
+    }
+  }
+
+  async function handleToggleProviderVisibility(
+    providerName: ProviderType,
+    isHomepageVisible: boolean,
+  ) {
+    setControlsError(null);
+    setActiveProviderToggle(providerName);
+
+    try {
+      const response = await fetch("/api/admin/provider-stream-health", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          provider: providerName,
+          isHomepageVisible,
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        controls?: ProviderControl[];
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Gagal mengubah visibilitas provider.");
+      }
+
+      setProviderControls(payload.controls ?? []);
+    } catch (toggleError) {
+      setControlsError(
+        toggleError instanceof Error
+          ? toggleError.message
+          : "Gagal mengubah visibilitas provider.",
+      );
+    } finally {
+      setActiveProviderToggle(null);
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -295,6 +431,169 @@ export function AdminSyncPanel({
               {summary}
             </div>
           ) : null}
+        </CardContent>
+      </Card>
+
+      <Card className="glass-panel rounded-[2rem]">
+        <CardContent className="space-y-5 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-white">
+                <ShieldCheck className="size-4 text-accent" />
+                <h2 className="text-lg font-semibold">Status endpoint stream</h2>
+              </div>
+              <p className="max-w-3xl text-sm leading-6 text-[var(--muted)]">
+                Cek stream episode 1 per provider dari data lokal terbaru. Jika
+                provider sedang rusak atau tidak punya sumber stream, admin bisa
+                sembunyikan provider itu dari homepage agar user tidak mengklik
+                drama yang memang belum playable.
+              </p>
+            </div>
+
+            <Button
+              onClick={() => void handleCheckProviders()}
+              disabled={isCheckingProviders || activeProviderCheck !== null}
+            >
+              {isCheckingProviders ? (
+                <>
+                  <LoaderCircle className="mr-2 size-4 animate-spin" />
+                  Mengecek semua provider...
+                </>
+              ) : (
+                <>
+                  <ShieldAlert className="mr-2 size-4" />
+                  Cek endpoint stream
+                </>
+              )}
+            </Button>
+          </div>
+
+          {controlsError ? (
+            <div className="rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+              {controlsError}
+            </div>
+          ) : null}
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {(providerControls.length ? providerControls : PROVIDERS.map((providerName) => ({
+              providerName,
+              isHomepageVisible: true,
+              healthStatus: "unknown" as const,
+              healthMessage: "",
+              checkedDramaId: "",
+              checkedDramaTitle: "",
+              lastCheckedAt: null,
+            }))).map((control) => {
+              const isHealthy = control.healthStatus === "healthy";
+              const isUnavailable =
+                control.healthStatus === "stream_error" ||
+                control.healthStatus === "no_data";
+              const isCheckingThisProvider = activeProviderCheck === control.providerName;
+              const isTogglingThisProvider = activeProviderToggle === control.providerName;
+
+              return (
+                <div
+                  key={control.providerName}
+                  className="rounded-[1.7rem] border border-white/10 bg-white/4 p-4"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="secondary">{control.providerName}</Badge>
+                    <Badge
+                      className={
+                        isHealthy
+                          ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-100"
+                          : isUnavailable
+                            ? "border-red-400/20 bg-red-500/10 text-red-100"
+                            : "border-white/10 bg-white/6 text-white"
+                      }
+                    >
+                      {control.healthStatus}
+                    </Badge>
+                    <Badge
+                      className={
+                        control.isHomepageVisible
+                          ? "border-accent/20 bg-accent/10 text-accent"
+                          : "border-white/10 bg-white/6 text-[var(--muted)]"
+                      }
+                    >
+                      {control.isHomepageVisible ? "tampil di home" : "disembunyikan"}
+                    </Badge>
+                  </div>
+
+                  <div className="mt-3 space-y-2 text-sm">
+                    <p className="text-white/85">
+                      {control.healthMessage || "Belum pernah dicek."}
+                    </p>
+                    {control.checkedDramaTitle ? (
+                      <p className="text-xs text-[var(--muted-foreground)]">
+                        Sample terakhir: {control.checkedDramaTitle}
+                      </p>
+                    ) : null}
+                    {control.lastCheckedAt ? (
+                      <p className="text-xs text-[var(--muted-foreground)]">
+                        Dicek: {new Date(control.lastCheckedAt).toLocaleString("id-ID")}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => void handleCheckProviders(control.providerName)}
+                      disabled={Boolean(activeProviderCheck) || isTogglingThisProvider}
+                    >
+                      {isCheckingThisProvider ? (
+                        <>
+                          <LoaderCircle className="mr-2 size-4 animate-spin" />
+                          Mengecek...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCcw className="mr-2 size-4" />
+                          Cek ulang
+                        </>
+                      )}
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant={control.isHomepageVisible ? "outline" : "default"}
+                      className={
+                        control.isHomepageVisible && isUnavailable
+                          ? "border-red-400/25 text-red-100 hover:bg-red-500/10"
+                          : undefined
+                      }
+                      onClick={() =>
+                        void handleToggleProviderVisibility(
+                          control.providerName,
+                          !control.isHomepageVisible,
+                        )
+                      }
+                      disabled={Boolean(activeProviderCheck) || isTogglingThisProvider}
+                    >
+                      {isTogglingThisProvider ? (
+                        <>
+                          <LoaderCircle className="mr-2 size-4 animate-spin" />
+                          Menyimpan...
+                        </>
+                      ) : control.isHomepageVisible ? (
+                        <>
+                          <EyeOff className="mr-2 size-4" />
+                          Sembunyikan dari home
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="mr-2 size-4" />
+                          Tampilkan lagi
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </CardContent>
       </Card>
 

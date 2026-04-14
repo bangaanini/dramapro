@@ -283,6 +283,25 @@ Field utama:
 
 Badge highlight opsional. Jika kosong, paket tampil tanpa badge.
 
+### Promo Downloader
+
+Dipakai admin untuk mengambil source episode tertentu sebagai materi promosi.
+
+Alurnya:
+
+1. Cari judul drama dari database lokal.
+2. Pilih drama.
+3. Pilih episode.
+4. Sistem menyiapkan source promo langsung dari provider.
+
+Perilaku v1:
+
+- admin bisa mengakses semua episode, termasuk episode yang terkunci VIP untuk user biasa,
+- file tidak disimpan permanen di server,
+- jika source punya `MP4`, admin bisa unduh langsung ke device,
+- jika source hanya `HLS (.m3u8)`, sistem hanya menampilkan fallback link promo atau buka source,
+- v1 belum melakukan convert atau merge `HLS` menjadi `MP4`.
+
 ### Payment Gateway
 
 Mengatur gateway pembayaran.

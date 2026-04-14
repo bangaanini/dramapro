@@ -59,6 +59,13 @@ enum AffiliateWithdrawalStatus {
   paid
 }
 
+enum ProviderHealthStatus {
+  unknown
+  healthy
+  no_data
+  stream_error
+}
+
 model Drama {
   id              String       @id @default(uuid()) @db.Uuid
   providerDramaId String
@@ -265,6 +272,20 @@ model AppSettings {
   siteLogoUrl                  String   @default("")
   createdAt                    DateTime @default(now())
   updatedAt                    DateTime @updatedAt
+}
+
+model ProviderRuntimeControl {
+  providerName      ProviderName       @id
+  isHomepageVisible Boolean            @default(true)
+  healthStatus      ProviderHealthStatus @default(unknown)
+  healthMessage     String             @default("")
+  checkedDramaId    String             @default("")
+  checkedDramaTitle String             @default("")
+  lastCheckedAt     DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([isHomepageVisible, providerName])
 }
 
 model TelegramPartnerBot {

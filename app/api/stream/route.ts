@@ -1,20 +1,10 @@
 import { NextRequest } from "next/server";
 
-import { buildMediaProxyUrl, shouldProxyMediaUrl } from "@/lib/media-proxy";
 import { prisma } from "@/lib/prisma";
-import {
-  getProviderPayloadError,
-  ProviderType,
-  StreamResponse,
-  UpstreamHttpError,
-  fetchProviderJson,
-  normalizeStreamPayload,
-  resolveStreamRequest,
-} from "@/lib/provider-adapter";
+import { resolveDramaStreamSources, toStreamErrorResponse } from "@/lib/stream-access";
 import { getUserFromRequest } from "@/lib/user-auth";
 import {
   getVipLockStartEpisode,
-  isEpisodeVipLocked,
   isVipActive,
 } from "@/lib/vip";
 
@@ -42,16 +32,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const [drama, vipSettings, user] = await Promise.all([
-    prisma.drama.findUnique({
-      where: { id: internalDramaId },
-      select: {
-        id: true,
-        providerName: true,
-        providerDramaId: true,
-        episodeCount: true,
-      },
-    }),
+  const [vipSettings, user] = await Promise.all([
     prisma.vipSettings.findUnique({
       where: { id: "global" },
       select: {
@@ -62,109 +43,20 @@ export async function GET(request: NextRequest) {
     getUserFromRequest(request),
   ]);
 
-  if (!drama) {
-    return Response.json({ error: "Drama not found." }, { status: 404 });
-  }
-
-  if (episodeIndex > drama.episodeCount) {
-    return Response.json(
-      { error: "Requested episode is out of range." },
-      { status: 400 },
-    );
-  }
-
   const vipLockFromEpisode = isVipActive(user?.vipExpiresAt)
     ? null
     : getVipLockStartEpisode(vipSettings);
 
-  if (isEpisodeVipLocked(episodeIndex, vipLockFromEpisode)) {
-    return Response.json(
-      {
-        error: `Episode VIP terkunci mulai EP.${vipLockFromEpisode}.`,
-      },
-      { status: 403 },
-    );
-  }
-
   try {
-    const resolved = await resolveStreamRequest({
-      provider: drama.providerName as ProviderType,
-      providerDramaId: drama.providerDramaId,
+    const resolved = await resolveDramaStreamSources({
+      internalDramaId,
       episodeIndex,
+      vipLockFromEpisode,
     });
 
-    const streamPayload = await fetchProviderJson(
-      "stream",
-      drama.providerName as ProviderType,
-      resolved.streamArgs,
-      { revalidate: 3600 },
-    );
-
-    const upstreamPayloadError = getProviderPayloadError(streamPayload);
-
-    if (upstreamPayloadError) {
-      return Response.json(
-        {
-          error: "Upstream stream resolution failed.",
-          detail: upstreamPayloadError,
-        },
-        { status: 502 },
-      );
-    }
-
-    const normalized = normalizeStreamPayload({
-      dramaId: drama.id,
-      provider: drama.providerName as ProviderType,
-      episodeIndex,
-      payload: streamPayload,
-    });
-
-    const proxiedNormalized = {
-      ...normalized,
-      qualities: normalized.qualities.map((quality) => ({
-        ...quality,
-        url: shouldProxyMediaUrl(quality.url)
-          ? buildMediaProxyUrl(quality.url)
-          : quality.url,
-      })),
-      subtitles: normalized.subtitles.map((subtitle) => ({
-        ...subtitle,
-        url: shouldProxyMediaUrl(subtitle.url)
-          ? buildMediaProxyUrl(subtitle.url)
-          : subtitle.url,
-      })),
-    };
-
-    if (!proxiedNormalized.qualities.length) {
-      return Response.json(
-        { error: "No playable stream qualities were found." },
-        { status: 502 },
-      );
-    }
-
-    return Response.json(proxiedNormalized satisfies StreamResponse);
+    return Response.json(resolved.stream);
   } catch (error) {
-    if (error instanceof RangeError) {
-      return Response.json({ error: error.message }, { status: 400 });
-    }
-
-    if (error instanceof UpstreamHttpError) {
-      return Response.json(
-        {
-          error: "Upstream stream resolution failed.",
-          status: error.status,
-          detail: error.message,
-        },
-        { status: 502 },
-      );
-    }
-
-    return Response.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Unexpected stream failure.",
-      },
-      { status: 502 },
-    );
+    const resolvedError = toStreamErrorResponse(error);
+    return Response.json(resolvedError.body, { status: resolvedError.status });
   }
 }

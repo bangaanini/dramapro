@@ -2,6 +2,7 @@ import { unstable_cache } from "next/cache";
 
 import type { SyncSource } from "@/lib/provider-adapter";
 import { prisma } from "@/lib/prisma";
+import { getHomepageVisibleProviders } from "@/lib/provider-runtime-controls";
 
 const INITIAL_HOME_SECTION_ITEMS = 18;
 
@@ -95,6 +96,8 @@ function parsePopularityScore(value: string | null | undefined) {
 
 const getCachedHomepageCatalogData = unstable_cache(
   async (): Promise<HomeCatalogPayload> => {
+    const visibleProviders = await getHomepageVisibleProviders();
+
     const [
       totalDramas,
       homeEntries,
@@ -104,28 +107,82 @@ const getCachedHomepageCatalogData = unstable_cache(
       popularEntries,
       popularTotal,
     ] = await Promise.all([
-      prisma.drama.count(),
+      prisma.drama.count({
+        where: {
+          providerName: {
+            in: visibleProviders,
+          },
+        },
+      }),
       prisma.dramaFeed.findMany({
-        where: { source: "home" },
+        where: {
+          source: "home",
+          drama: {
+            providerName: {
+              in: visibleProviders,
+            },
+          },
+        },
         include: { drama: true },
         orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }, { id: "asc" }],
         take: INITIAL_HOME_SECTION_ITEMS,
       }),
-      prisma.dramaFeed.count({ where: { source: "home" } }),
+      prisma.dramaFeed.count({
+        where: {
+          source: "home",
+          drama: {
+            providerName: {
+              in: visibleProviders,
+            },
+          },
+        },
+      }),
       prisma.dramaFeed.findMany({
-        where: { source: "new" },
+        where: {
+          source: "new",
+          drama: {
+            providerName: {
+              in: visibleProviders,
+            },
+          },
+        },
         include: { drama: true },
         orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }, { id: "asc" }],
         take: INITIAL_HOME_SECTION_ITEMS,
       }),
-      prisma.dramaFeed.count({ where: { source: "new" } }),
+      prisma.dramaFeed.count({
+        where: {
+          source: "new",
+          drama: {
+            providerName: {
+              in: visibleProviders,
+            },
+          },
+        },
+      }),
       prisma.dramaFeed.findMany({
-        where: { source: "popular" },
+        where: {
+          source: "popular",
+          drama: {
+            providerName: {
+              in: visibleProviders,
+            },
+          },
+        },
         include: { drama: true },
         orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }, { id: "asc" }],
         take: INITIAL_HOME_SECTION_ITEMS,
       }),
-      prisma.dramaFeed.count({ where: { source: "popular" } }),
+      prisma.dramaFeed.count({
+        where: {
+          source: "popular",
+          drama: {
+            providerName: {
+              in: visibleProviders,
+            },
+          },
+        },
+      }),
     ]);
 
     const normalizedPopularEntries = toHomeFeedEntries(popularEntries);
@@ -158,16 +215,33 @@ export async function getHomepageFeedPage(
 ) {
   const resolvedOffset = Math.max(0, offset);
   const resolvedLimit = Math.min(Math.max(1, limit), 36);
+  const visibleProviders = await getHomepageVisibleProviders();
 
   const [entries, total] = await Promise.all([
     prisma.dramaFeed.findMany({
-      where: { source },
+      where: {
+        source,
+        drama: {
+          providerName: {
+            in: visibleProviders,
+          },
+        },
+      },
       include: { drama: true },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }, { id: "asc" }],
       skip: resolvedOffset,
       take: resolvedLimit,
     }),
-    prisma.dramaFeed.count({ where: { source } }),
+    prisma.dramaFeed.count({
+      where: {
+        source,
+        drama: {
+          providerName: {
+            in: visibleProviders,
+          },
+        },
+      },
+    }),
   ]);
 
   const normalizedEntries = toHomeFeedEntries(entries);
