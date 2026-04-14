@@ -142,7 +142,9 @@ model User {
   affiliateCode              String?               @unique
   affiliateCommissionOverrideRate Int?
   referredById               String?               @db.Uuid
+  referredByPartnerBotId     String?               @db.Uuid
   referredBy                 User?                 @relation("AffiliateReferrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referredByPartnerBot       TelegramPartnerBot?   @relation("PartnerBotReferrals", fields: [referredByPartnerBotId], references: [id], onDelete: SetNull)
   referrals                  User[]                @relation("AffiliateReferrals")
   sessions                   UserSession[]
   favorites                  FavoriteDrama[]
@@ -158,6 +160,7 @@ model User {
   updatedAt                  DateTime              @updatedAt
 
   @@index([referredById, createdAt])
+  @@index([referredByPartnerBotId, createdAt])
 }
 
 model UserSession {
@@ -299,6 +302,8 @@ model TelegramPartnerBot {
   webhookSecretCiphertext String?
   ownerUserId             String   @db.Uuid
   owner                   User     @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  referredUsers           User[]   @relation("PartnerBotReferrals")
+  affiliateCommissions    AffiliateCommission[]
   isEnabled               Boolean  @default(true)
   notes                   String   @default("")
   createdAt               DateTime @default(now())
@@ -380,19 +385,24 @@ model AffiliateCommission {
   affiliateUserId String                   @db.Uuid
   referredUserId  String                   @db.Uuid
   vipPaymentId    String                   @unique @db.Uuid
+  partnerBotId    String?                  @db.Uuid
   baseAmount      Int
   commissionRate  Int
   amount          Int
   status          AffiliateCommissionStatus @default(approved)
   description     String                   @default("")
+  notificationSentAt DateTime?
+  notificationError  String                 @default("")
   affiliateUser   User                     @relation("AffiliateOwner", fields: [affiliateUserId], references: [id], onDelete: Cascade)
   referredUser    User                     @relation("AffiliateReferred", fields: [referredUserId], references: [id], onDelete: Cascade)
   vipPayment      VipPayment               @relation(fields: [vipPaymentId], references: [id], onDelete: Cascade)
+  partnerBot      TelegramPartnerBot?      @relation(fields: [partnerBotId], references: [id], onDelete: SetNull)
   createdAt       DateTime                 @default(now())
   updatedAt       DateTime                 @updatedAt
 
   @@index([affiliateUserId, status, createdAt])
   @@index([referredUserId, createdAt])
+  @@index([partnerBotId, createdAt])
 }
 
 model AffiliateWithdrawal {

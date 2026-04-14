@@ -13,6 +13,7 @@ import {
   createActiveGatewayTransaction,
 } from "@/lib/payment-gateway-service";
 import { getActivePaymentGateway } from "@/lib/payment-gateways";
+import { notifyPartnerBotCommissionForPayment } from "@/lib/partner-bot-notifications";
 import { prisma } from "@/lib/prisma";
 import {
   getCurrentUser,
@@ -45,6 +46,7 @@ async function createAffiliateCommissionForPaidPayment(
     referenceId: string;
     user: {
       referredById: string | null;
+      referredByPartnerBotId: string | null;
     };
   },
 ) {
@@ -105,6 +107,7 @@ async function createAffiliateCommissionForPaidPayment(
       affiliateUserId: payment.user.referredById,
       referredUserId: payment.userId,
       vipPaymentId: payment.id,
+      partnerBotId: payment.user.referredByPartnerBotId,
       baseAmount: payment.amount,
       commissionRate,
       amount: commissionAmount,
@@ -230,6 +233,7 @@ export async function syncVipPaymentStatus(referenceId: string, userId: string) 
           id: true,
           vipExpiresAt: true,
           referredById: true,
+          referredByPartnerBotId: true,
         },
       },
     },
@@ -249,7 +253,7 @@ export async function syncVipPaymentStatus(referenceId: string, userId: string) 
     payment.providerTransactionId || payment.referenceId,
   );
 
-  return prisma.$transaction(async (tx) => {
+  const syncedPayment = await prisma.$transaction(async (tx) => {
     const latestPayment = await tx.vipPayment.findUnique({
       where: { id: payment.id },
       include: {
@@ -258,6 +262,7 @@ export async function syncVipPaymentStatus(referenceId: string, userId: string) 
             id: true,
             vipExpiresAt: true,
             referredById: true,
+            referredByPartnerBotId: true,
           },
         },
         plan: true,
@@ -319,4 +324,10 @@ export async function syncVipPaymentStatus(referenceId: string, userId: string) 
       },
     });
   });
+
+  if (syncedPayment?.status === "paid") {
+    await notifyPartnerBotCommissionForPayment(payment.id);
+  }
+
+  return syncedPayment;
 }

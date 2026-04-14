@@ -164,6 +164,7 @@ export async function createTelegramUserSessionFromInitData(
       vipExpiresAt: true,
       vipStartedAt: true,
       referredById: true,
+      referredByPartnerBotId: true,
     },
   });
 
@@ -174,6 +175,15 @@ export async function createTelegramUserSessionFromInitData(
       : referralUser && referralUser.id !== existingUser?.id
         ? referralUser.id
         : null;
+  const referralPartnerBotId =
+    partnerBot && referralOwnerId === partnerOwnerId ? partnerBot.id : null;
+  const shouldBackfillPartnerBot =
+    Boolean(
+      partnerBot &&
+        partnerOwnerId &&
+        existingUser?.referredById === partnerOwnerId &&
+        !existingUser.referredByPartnerBotId,
+    );
 
   const user = existingUser
     ? await prisma.user.update({
@@ -190,6 +200,11 @@ export async function createTelegramUserSessionFromInitData(
           telegramLanguageCode: verified.user.language_code?.trim() || null,
           referredById:
             existingUser.referredById ?? referralOwnerId ?? undefined,
+          referredByPartnerBotId: existingUser.referredById
+            ? shouldBackfillPartnerBot
+              ? partnerBot?.id
+              : undefined
+            : referralPartnerBotId ?? undefined,
         },
         select: {
           id: true,
@@ -221,6 +236,7 @@ export async function createTelegramUserSessionFromInitData(
           telegramLastName: verified.user.last_name?.trim() || null,
           telegramLanguageCode: verified.user.language_code?.trim() || null,
           referredById: referralOwnerId,
+          referredByPartnerBotId: referralPartnerBotId,
         },
         select: {
           id: true,
