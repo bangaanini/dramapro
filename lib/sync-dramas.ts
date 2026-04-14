@@ -73,6 +73,13 @@ export type StoredDramaStreamAuditResult = {
   }>;
 };
 
+export type StoredDramaStreamAuditBatchResult = StoredDramaStreamAuditResult & {
+  batchSize: number;
+  cursor: string | null;
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
 const STREAM_VALIDATION_PROVIDERS = new Set<ProviderType>(PROVIDERS);
 
 type StreamValidationResult =
@@ -383,6 +390,151 @@ export async function runStoredDramaStreamAudit(
     alreadyHidden,
     errors,
     providerSummary: [...providerSummaryMap.values()],
+  };
+}
+
+export async function runStoredDramaStreamAuditBatch({
+  source,
+  cursor = null,
+  batchSize = 10,
+}: {
+  source: SyncSource;
+  cursor?: string | null;
+  batchSize?: number;
+}): Promise<StoredDramaStreamAuditBatchResult> {
+  const resolvedBatchSize = Math.min(Math.max(Math.floor(batchSize), 1), 25);
+  const [total, feedEntries] = await Promise.all([
+    prisma.dramaFeed.count({
+      where: {
+        source,
+      },
+    }),
+    prisma.dramaFeed.findMany({
+      where: {
+        source,
+      },
+      orderBy: {
+        id: "asc",
+      },
+      cursor: cursor ? { id: cursor } : undefined,
+      skip: cursor ? 1 : 0,
+      take: resolvedBatchSize + 1,
+      select: {
+        id: true,
+        drama: {
+          select: {
+            id: true,
+            providerDramaId: true,
+            providerName: true,
+            title: true,
+            isStreamPlayable: true,
+          },
+        },
+      },
+    }),
+  ]);
+  const batchEntries = feedEntries.slice(0, resolvedBatchSize);
+  const providerSummaryMap = new Map<
+    ProviderType,
+    {
+      provider: ProviderType;
+      total: number;
+      playable: number;
+      hidden: number;
+      restored: number;
+      alreadyHidden: number;
+      errors: number;
+    }
+  >();
+  const errors: StoredDramaStreamAuditError[] = [];
+  let playable = 0;
+  let hidden = 0;
+  let restored = 0;
+  let alreadyHidden = 0;
+
+  for (const entry of batchEntries) {
+    const drama = entry.drama;
+    const provider = drama.providerName as ProviderType;
+    const summary = providerSummaryMap.get(provider) ?? {
+      provider,
+      total: 0,
+      playable: 0,
+      hidden: 0,
+      restored: 0,
+      alreadyHidden: 0,
+      errors: 0,
+    };
+
+    summary.total += 1;
+
+    const validation = await validateDramaStreamAvailability({
+      providerDramaId: drama.providerDramaId,
+      providerName: provider,
+      title: drama.title,
+    });
+    const streamCheckedAt = new Date();
+    const streamCheckMessage = validation.ok
+      ? "Stream episode 1 normal saat audit ulang."
+      : cleanValidationMessage(validation.message);
+
+    await prisma.drama.update({
+      where: {
+        id: drama.id,
+      },
+      data: {
+        isStreamPlayable: validation.ok,
+        streamCheckMessage,
+        streamCheckedAt,
+      },
+    });
+
+    if (validation.ok) {
+      playable += 1;
+      summary.playable += 1;
+
+      if (!drama.isStreamPlayable) {
+        restored += 1;
+        summary.restored += 1;
+      }
+    } else {
+      hidden += 1;
+      summary.hidden += 1;
+      summary.errors += 1;
+
+      if (!drama.isStreamPlayable) {
+        alreadyHidden += 1;
+        summary.alreadyHidden += 1;
+      }
+
+      errors.push({
+        dramaId: drama.id,
+        provider,
+        providerDramaId: drama.providerDramaId,
+        title: drama.title,
+        message: streamCheckMessage,
+        status: "hidden",
+      });
+    }
+
+    providerSummaryMap.set(provider, summary);
+  }
+
+  const lastProcessedEntry = batchEntries.at(-1);
+
+  return {
+    source,
+    total,
+    checked: batchEntries.length,
+    playable,
+    hidden,
+    restored,
+    alreadyHidden,
+    errors,
+    providerSummary: [...providerSummaryMap.values()],
+    batchSize: resolvedBatchSize,
+    cursor,
+    nextCursor: lastProcessedEntry?.id ?? null,
+    hasMore: feedEntries.length > resolvedBatchSize,
   };
 }
 

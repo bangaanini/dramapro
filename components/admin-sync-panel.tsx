@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   CirclePlay,
   ClipboardCheck,
@@ -72,6 +72,10 @@ type StoredDramaAuditResult = {
     alreadyHidden: number;
     errors: number;
   }>;
+  batchSize?: number;
+  cursor?: string | null;
+  nextCursor?: string | null;
+  hasMore?: boolean;
 };
 
 async function readResponsePayload(response: Response) {
@@ -138,9 +142,11 @@ export function AdminSyncPanel({
   const [activeAuditSource, setActiveAuditSource] = useState<SyncSource | null>(null);
   const [auditResult, setAuditResult] = useState<StoredDramaAuditResult | null>(null);
   const [auditError, setAuditError] = useState<string | null>(null);
+  const [isStoppingAudit, setIsStoppingAudit] = useState(false);
   const [isRefreshingCatalogCache, setIsRefreshingCatalogCache] = useState(false);
   const [catalogCacheMessage, setCatalogCacheMessage] = useState<string | null>(null);
   const [catalogCacheError, setCatalogCacheError] = useState<string | null>(null);
+  const stopAuditRef = useRef(false);
 
   useEffect(() => {
     void loadProviderControls();
@@ -267,39 +273,111 @@ export function AdminSyncPanel({
     }
   }
 
+  function mergeAuditResult(
+    current: StoredDramaAuditResult | null,
+    batch: StoredDramaAuditResult,
+  ): StoredDramaAuditResult {
+    if (!current || current.source !== batch.source) {
+      return batch;
+    }
+
+    const providerSummaryMap = new Map(
+      current.providerSummary.map((item) => [item.provider, { ...item }]),
+    );
+
+    for (const item of batch.providerSummary) {
+      const existing = providerSummaryMap.get(item.provider) ?? {
+        provider: item.provider,
+        total: 0,
+        playable: 0,
+        hidden: 0,
+        restored: 0,
+        alreadyHidden: 0,
+        errors: 0,
+      };
+
+      existing.total += item.total;
+      existing.playable += item.playable;
+      existing.hidden += item.hidden;
+      existing.restored += item.restored;
+      existing.alreadyHidden += item.alreadyHidden;
+      existing.errors += item.errors;
+      providerSummaryMap.set(item.provider, existing);
+    }
+
+    return {
+      ...batch,
+      total: batch.total,
+      checked: current.checked + batch.checked,
+      playable: current.playable + batch.playable,
+      hidden: current.hidden + batch.hidden,
+      restored: current.restored + batch.restored,
+      alreadyHidden: current.alreadyHidden + batch.alreadyHidden,
+      errors: [...current.errors, ...batch.errors],
+      providerSummary: [...providerSummaryMap.values()].sort((a, b) =>
+        a.provider.localeCompare(b.provider),
+      ),
+    };
+  }
+
   async function handleAuditStoredDramas(targetSource: SyncSource) {
+    const batchSize = 10;
+    let cursor: string | null = null;
+    let aggregateResult: StoredDramaAuditResult | null = null;
+
+    stopAuditRef.current = false;
     setActiveAuditSource(targetSource);
+    setIsStoppingAudit(false);
     setAuditError(null);
     setAuditResult(null);
 
     try {
-      const response = await fetch("/api/admin/drama-stream-audit", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          source: targetSource,
-        }),
-      });
-      const payload = (await response.json().catch(() => null)) as
-        | StoredDramaAuditResult
-        | { error?: string }
-        | null;
+      while (!stopAuditRef.current) {
+        const response = await fetch("/api/admin/drama-stream-audit", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            source: targetSource,
+            cursor,
+            batchSize,
+          }),
+        });
+        const payload = (await response.json().catch(() => null)) as
+          | StoredDramaAuditResult
+          | { error?: string }
+          | null;
 
-      if (!response.ok) {
-        throw new Error(
-          payload && "error" in payload && payload.error
-            ? payload.error
-            : "Audit drama tersimpan gagal.",
-        );
+        if (!response.ok) {
+          throw new Error(
+            payload && "error" in payload && payload.error
+              ? payload.error
+              : "Audit drama tersimpan gagal.",
+          );
+        }
+
+        if (!payload || !("providerSummary" in payload)) {
+          throw new Error("Payload audit tidak valid.");
+        }
+
+        aggregateResult = mergeAuditResult(aggregateResult, payload);
+        setAuditResult(aggregateResult);
+
+        if (!payload.hasMore || !payload.nextCursor) {
+          break;
+        }
+
+        cursor = payload.nextCursor;
       }
 
-      if (!payload || !("providerSummary" in payload)) {
-        throw new Error("Payload audit tidak valid.");
+      if (stopAuditRef.current && aggregateResult) {
+        setAuditResult({
+          ...aggregateResult,
+          message: `Audit ${targetSource} dihentikan. ${aggregateResult.checked} dari ${aggregateResult.total} drama sudah dicek.`,
+        });
       }
 
-      setAuditResult(payload);
       await loadProviderControls();
     } catch (auditError) {
       setAuditError(
@@ -308,8 +386,15 @@ export function AdminSyncPanel({
           : "Audit drama tersimpan gagal.",
       );
     } finally {
+      stopAuditRef.current = false;
       setActiveAuditSource(null);
+      setIsStoppingAudit(false);
     }
+  }
+
+  function handleStopAudit() {
+    stopAuditRef.current = true;
+    setIsStoppingAudit(true);
   }
 
   async function handleRefreshCatalogCache() {
@@ -592,24 +677,44 @@ export function AdminSyncPanel({
                 menyembunyikan judul yang gagal agar tidak muncul di halaman user.
               </p>
             </div>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => void handleRefreshCatalogCache()}
-              disabled={isRefreshingCatalogCache || activeAuditSource !== null}
-            >
-              {isRefreshingCatalogCache ? (
-                <>
-                  <LoaderCircle className="mr-2 size-4 animate-spin" />
-                  Refresh cache...
-                </>
-              ) : (
-                <>
-                  <RefreshCcw className="mr-2 size-4" />
-                  Paksa refresh homepage
-                </>
-              )}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              {activeAuditSource ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleStopAudit}
+                  disabled={isStoppingAudit}
+                  className="border-red-400/25 text-red-100 hover:bg-red-500/10"
+                >
+                  {isStoppingAudit ? (
+                    <>
+                      <LoaderCircle className="mr-2 size-4 animate-spin" />
+                      Menghentikan...
+                    </>
+                  ) : (
+                    "Stop audit"
+                  )}
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => void handleRefreshCatalogCache()}
+                disabled={isRefreshingCatalogCache || activeAuditSource !== null}
+              >
+                {isRefreshingCatalogCache ? (
+                  <>
+                    <LoaderCircle className="mr-2 size-4 animate-spin" />
+                    Refresh cache...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCcw className="mr-2 size-4" />
+                    Paksa refresh homepage
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
 
           <div className="grid gap-3 md:grid-cols-3">
@@ -661,12 +766,52 @@ export function AdminSyncPanel({
 
           {auditResult ? (
             <div className="space-y-4 rounded-[1.7rem] border border-white/10 bg-white/4 p-4">
+              {auditResult.total > 0 ? (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--muted)]">
+                    <span>
+                      Progress audit:{" "}
+                      <b className="text-white">
+                        {auditResult.checked} / {auditResult.total}
+                      </b>{" "}
+                      drama
+                    </span>
+                    {activeAuditSource === auditResult.source ? (
+                      <span className="inline-flex items-center gap-2 text-accent">
+                        <LoaderCircle className="size-3.5 animate-spin" />
+                        Batch berjalan
+                      </span>
+                    ) : (
+                      <span className="text-emerald-100">
+                        {auditResult.checked >= auditResult.total
+                          ? "Audit selesai"
+                          : "Audit berhenti"}
+                      </span>
+                    )}
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-black/28">
+                    <div
+                      className="h-full rounded-full bg-accent transition-all duration-500"
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          Math.round((auditResult.checked / auditResult.total) * 100),
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : null}
+
               <div className="flex flex-wrap items-center gap-2">
                 <Badge className="border-accent/20 bg-accent/10 text-accent">
                   {auditResult.source === "popular" ? "populer" : auditResult.source}
                 </Badge>
                 <Badge variant="outline">
                   Total {auditResult.total} drama
+                </Badge>
+                <Badge variant="outline">
+                  Dicek {auditResult.checked}
                 </Badge>
                 <Badge variant="outline">
                   Playable {auditResult.playable}

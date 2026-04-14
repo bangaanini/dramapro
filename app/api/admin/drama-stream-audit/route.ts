@@ -6,7 +6,7 @@ import {
   normalizeSyncSource,
   SYNC_SOURCES,
 } from "@/lib/provider-adapter";
-import { runStoredDramaStreamAudit } from "@/lib/sync-dramas";
+import { runStoredDramaStreamAuditBatch } from "@/lib/sync-dramas";
 
 export const runtime = "nodejs";
 
@@ -19,6 +19,8 @@ export async function POST(request: NextRequest) {
 
   const payload = (await request.json().catch(() => null)) as
     | {
+        batchSize?: number;
+        cursor?: string | null;
         source?: string;
       }
     | null;
@@ -34,7 +36,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const result = await runStoredDramaStreamAudit(source);
+  const result = await runStoredDramaStreamAuditBatch({
+    source,
+    cursor: payload?.cursor ?? null,
+    batchSize: payload?.batchSize,
+  });
 
   revalidateTag("catalog-home", "max");
   revalidateTag("catalog-shortcuts", "max");
@@ -43,7 +49,7 @@ export async function POST(request: NextRequest) {
     ...result,
     message:
       result.hidden > 0
-        ? `Audit ${source} selesai. ${result.checked} drama dicek, ${result.hidden} drama disembunyikan karena error stream.`
-        : `Audit ${source} selesai. Semua ${result.checked} drama playable.`,
+        ? `Batch ${source} selesai. ${result.checked} drama dicek, ${result.hidden} drama disembunyikan karena error stream.`
+        : `Batch ${source} selesai. ${result.checked} drama playable.`,
   });
 }
