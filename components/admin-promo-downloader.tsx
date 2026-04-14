@@ -54,6 +54,7 @@ type PromoDownloadResponse = {
     label: string;
     mimeType: string;
     sourceUrl: string;
+    ffmpegCommand: string;
   }>;
 };
 
@@ -495,7 +496,20 @@ export function AdminPromoDownloader() {
                               }
                             >
                               <Copy className="mr-2 size-4" />
-                              Salin link promo
+                              Copy source .m3u8
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() =>
+                                copyToClipboard(
+                                  quality.ffmpegCommand,
+                                  "Command FFmpeg berhasil disalin.",
+                                )
+                              }
+                            >
+                              <Copy className="mr-2 size-4" />
+                              Copy command
                             </Button>
                             <a
                               href={quality.sourceUrl}

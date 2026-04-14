@@ -28,6 +28,10 @@ function sanitizeFilename(value: string) {
     .slice(0, 80);
 }
 
+function buildFfmpegCommand(sourceUrl: string, filename: string) {
+  return "ffmpeg -i \"" + sourceUrl + "\" -c copy \"" + filename + "\"";
+}
+
 export async function GET(request: NextRequest) {
   const admin = await getAdminFromRequest(request);
 
@@ -95,10 +99,14 @@ export async function GET(request: NextRequest) {
           `${baseFilename}-${index + 1}.mp4`,
         ),
       })),
-      hlsQualities: hlsQualities.map((quality) => ({
+      hlsQualities: hlsQualities.map((quality, index) => ({
         label: quality.label,
         mimeType: quality.mimeType,
         sourceUrl: quality.url,
+        ffmpegCommand: buildFfmpegCommand(
+          quality.url,
+          `${baseFilename}-hls-${index + 1}.mp4`,
+        ),
       })),
     });
   } catch (error) {
