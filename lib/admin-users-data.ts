@@ -120,6 +120,83 @@ export async function getAdminUsersTableData(input?: {
       .filter((item) => item.referredById)
       .map((item) => [item.referredById as string, item._count._all]),
   );
+  const [commissionGroups, withdrawalGroups] =
+    userIds.length > 0
+      ? await Promise.all([
+          prisma.affiliateCommission.groupBy({
+            by: ["affiliateUserId", "status"],
+            where: {
+              affiliateUserId: {
+                in: userIds,
+              },
+            },
+            _sum: {
+              amount: true,
+            },
+            _count: {
+              _all: true,
+            },
+          }),
+          prisma.affiliateWithdrawal.groupBy({
+            by: ["affiliateUserId", "status"],
+            where: {
+              affiliateUserId: {
+                in: userIds,
+              },
+            },
+            _sum: {
+              amount: true,
+            },
+          }),
+        ])
+      : [[], []];
+  const commissionSummaryMap = new Map<
+    string,
+    {
+      count: number;
+      totalAmount: number;
+    }
+  >();
+
+  for (const item of commissionGroups) {
+    if (item.status === "cancelled") {
+      continue;
+    }
+
+    const current = commissionSummaryMap.get(item.affiliateUserId) ?? {
+      count: 0,
+      totalAmount: 0,
+    };
+
+    current.count += item._count._all;
+    current.totalAmount += item._sum.amount ?? 0;
+    commissionSummaryMap.set(item.affiliateUserId, current);
+  }
+
+  const withdrawalSummaryMap = new Map<
+    string,
+    {
+      pendingAmount: number;
+      withdrawnAmount: number;
+    }
+  >();
+
+  for (const item of withdrawalGroups) {
+    const current = withdrawalSummaryMap.get(item.affiliateUserId) ?? {
+      pendingAmount: 0,
+      withdrawnAmount: 0,
+    };
+    const amount = item._sum.amount ?? 0;
+
+    if (item.status === "pending") {
+      current.pendingAmount += amount;
+    } else if (item.status === "approved" || item.status === "paid") {
+      current.withdrawnAmount += amount;
+    }
+
+    withdrawalSummaryMap.set(item.affiliateUserId, current);
+  }
+
   const resolvedAffiliateSettings = affiliateSettings ?? DEFAULT_AFFILIATE_SETTINGS;
 
   return {
@@ -130,6 +207,20 @@ export async function getAdminUsersTableData(input?: {
     totalPages,
     users: users.map((user) => {
       const activeReferralCount = activeReferralMap.get(user.id) ?? 0;
+      const commissionSummary = commissionSummaryMap.get(user.id) ?? {
+        count: 0,
+        totalAmount: 0,
+      };
+      const withdrawalSummary = withdrawalSummaryMap.get(user.id) ?? {
+        pendingAmount: 0,
+        withdrawnAmount: 0,
+      };
+      const affiliateCommissionAvailable = Math.max(
+        0,
+        commissionSummary.totalAmount -
+          withdrawalSummary.pendingAmount -
+          withdrawalSummary.withdrawnAmount,
+      );
       const generalTier = getAffiliateTier(
         activeReferralCount,
         resolvedAffiliateSettings,
@@ -158,6 +249,11 @@ export async function getAdminUsersTableData(input?: {
         sessionsCount: user._count.sessions,
         totalReferralCount: user._count.referrals,
         activeReferralCount,
+        affiliateCommissionAvailable,
+        affiliateCommissionTotal: commissionSummary.totalAmount,
+        affiliateCommissionCount: commissionSummary.count,
+        affiliateCommissionPendingWithdrawal: withdrawalSummary.pendingAmount,
+        affiliateCommissionWithdrawn: withdrawalSummary.withdrawnAmount,
         commissionOverride,
         effectiveCommissionRate,
         generalTierLevel: generalTier.level,

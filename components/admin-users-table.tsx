@@ -26,6 +26,14 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+function formatIdr(value: number) {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
 function buildAdminUsersApiUrl(query: string, page: number, pageSize: number) {
   const searchParams = new URLSearchParams({
     q: query,
@@ -165,13 +173,14 @@ export function AdminUsersTable({ initialData }: AdminUsersTableProps) {
       ) : null}
 
       <div className="overflow-x-auto">
-        <table className="min-w-[1080px] text-left text-sm">
+        <table className="min-w-[1200px] text-left text-sm">
           <thead className="border-b border-white/10 bg-white/4 text-[var(--muted)]">
             <tr>
               <th className="px-5 py-4 font-medium">User</th>
               <th className="px-5 py-4 font-medium">Referred by</th>
               <th className="px-5 py-4 font-medium">Status</th>
-              <th className="px-5 py-4 font-medium">Komisi</th>
+              <th className="px-5 py-4 font-medium">Rate komisi</th>
+              <th className="px-5 py-4 font-medium">Saldo komisi</th>
               <th className="px-5 py-4 font-medium">Favorit</th>
               <th className="px-5 py-4 font-medium">Riwayat</th>
               <th className="px-5 py-4 font-medium">Referral aktif</th>
@@ -197,7 +206,7 @@ export function AdminUsersTable({ initialData }: AdminUsersTableProps) {
             ) : (
               <tr>
                 <td
-                  colSpan={10}
+                  colSpan={11}
                   className="px-5 py-10 text-center text-[var(--muted)]"
                 >
                   {isLoading ? (
@@ -335,6 +344,28 @@ function AdminUserTableRow({
             </Button>
           </form>
         </div>
+      </td>
+      <td className="px-5 py-4">
+        {user.affiliateCommissionCount > 0 ? (
+          <div>
+            <p className="font-semibold text-white">
+              {formatIdr(user.affiliateCommissionAvailable)}
+            </p>
+            <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+              Total {formatIdr(user.affiliateCommissionTotal)}
+            </p>
+            <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+              {user.affiliateCommissionCount} transaksi komisi
+            </p>
+            {user.affiliateCommissionPendingWithdrawal > 0 ? (
+              <p className="mt-1 text-xs text-amber-100/80">
+                Pending withdraw {formatIdr(user.affiliateCommissionPendingWithdrawal)}
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <span className="text-[var(--muted-foreground)]">Belum ada</span>
+        )}
       </td>
       <td className="px-5 py-4 text-white">{user.favoritesCount}</td>
       <td className="px-5 py-4 text-white">{user.watchHistoryCount}</td>
