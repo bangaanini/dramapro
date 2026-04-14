@@ -35,6 +35,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   try {
     const dramas = await prisma.drama.findMany({
+      where: {
+        isStreamPlayable: true,
+      },
       select: {
         id: true,
         updatedAt: true,

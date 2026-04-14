@@ -45,8 +45,11 @@ import {
 export const dynamic = "force-dynamic";
 
 const getDramaById = cache(async (id: string) =>
-  prisma.drama.findUnique({
-    where: { id },
+  prisma.drama.findFirst({
+    where: {
+      id,
+      isStreamPlayable: true,
+    },
   }),
 );
 
@@ -175,6 +178,7 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
   const relatedDramas = await prisma.drama.findMany({
     where: {
       id: { not: drama.id },
+      isStreamPlayable: true,
       OR: relatedFilters,
     },
     orderBy: [{ updatedAt: "desc" }],

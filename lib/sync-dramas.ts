@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import {
   getProviderPayloadError,
   normalizeStreamPayload,
+  PROVIDERS,
   ProviderType,
   ProviderDetailMetadata,
   SyncSource,
@@ -24,6 +25,7 @@ export type ProviderSyncResult = {
   processed: number;
   created: number;
   updated: number;
+  hidden: number;
   skipped: number;
   errors: SyncError[];
 };
@@ -36,12 +38,13 @@ export type BatchSyncResult = {
     processed: number;
     created: number;
     updated: number;
+    hidden: number;
     skipped: number;
     errors: number;
   };
 };
 
-const STREAM_VALIDATION_PROVIDERS = new Set<ProviderType>(["netshort"]);
+const STREAM_VALIDATION_PROVIDERS = new Set<ProviderType>(PROVIDERS);
 
 type StreamValidationResult =
   | { ok: true }
@@ -234,6 +237,7 @@ export async function runProviderSync(
 
   let created = 0;
   let updated = 0;
+  let hidden = 0;
   let skipped = 0;
 
   for (const drama of dramas) {
@@ -250,15 +254,10 @@ export async function runProviderSync(
       }
 
       const validation = await validateDramaStreamAvailability(enrichedDrama);
-
-      if (!validation.ok) {
-        skipped += 1;
-        errors.push({
-          providerDramaId: enrichedDrama.providerDramaId,
-          message: validation.message,
-        });
-        continue;
-      }
+      const streamCheckedAt = new Date();
+      const streamCheckMessage = validation.ok
+        ? "Stream episode 1 normal saat sync terakhir."
+        : validation.message;
 
       const existing = await prisma.drama.findUnique({
         where: {
@@ -277,7 +276,12 @@ export async function runProviderSync(
             providerDramaId: enrichedDrama.providerDramaId,
           },
         },
-        create: enrichedDrama,
+        create: {
+          ...enrichedDrama,
+          isStreamPlayable: validation.ok,
+          streamCheckMessage,
+          streamCheckedAt,
+        },
         update: {
           title: enrichedDrama.title,
           description: enrichedDrama.description,
@@ -286,6 +290,9 @@ export async function runProviderSync(
           watchValue: enrichedDrama.watchValue,
           isNewBook: enrichedDrama.isNewBook,
           tags: enrichedDrama.tags,
+          isStreamPlayable: validation.ok,
+          streamCheckMessage,
+          streamCheckedAt,
         },
         select: { id: true },
       });
@@ -311,6 +318,14 @@ export async function runProviderSync(
       } else {
         created += 1;
       }
+
+      if (!validation.ok) {
+        hidden += 1;
+        errors.push({
+          providerDramaId: enrichedDrama.providerDramaId,
+          message: "Drama disimpan sebagai tersembunyi karena stream episode 1 gagal: " + validation.message,
+        });
+      }
     } catch (error) {
       skipped += 1;
       errors.push({
@@ -328,6 +343,7 @@ export async function runProviderSync(
     processed: dramas.length,
     created,
     updated,
+    hidden,
     skipped,
     errors,
   };
@@ -363,6 +379,7 @@ export async function runBatchSync({
       processed: results.reduce((sum, result) => sum + result.processed, 0),
       created: results.reduce((sum, result) => sum + result.created, 0),
       updated: results.reduce((sum, result) => sum + result.updated, 0),
+      hidden: results.reduce((sum, result) => sum + result.hidden, 0),
       skipped: results.reduce((sum, result) => sum + result.skipped, 0),
       errors: results.reduce((sum, result) => sum + result.errors.length, 0),
     },

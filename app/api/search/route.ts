@@ -78,6 +78,9 @@ export async function GET(request: NextRequest) {
 
   const where: Prisma.DramaWhereInput = {
     AND: [
+      {
+        isStreamPlayable: true,
+      },
       provider
         ? {
             providerName: provider,

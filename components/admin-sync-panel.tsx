@@ -24,6 +24,7 @@ type SyncApiResult = {
   processed: number;
   created: number;
   updated: number;
+  hidden: number;
   skipped: number;
   errors: Array<{ providerDramaId: string | null; message: string }>;
 };
@@ -259,6 +260,7 @@ export function AdminSyncPanel({
               processed: 0,
               created: 0,
               updated: 0,
+              hidden: 0,
               skipped: 0,
               errors: [],
               ok: false,
@@ -276,6 +278,7 @@ export function AdminSyncPanel({
               processed: 0,
               created: 0,
               updated: 0,
+              hidden: 0,
               skipped: 0,
               errors: [],
               ok: false,
@@ -299,6 +302,7 @@ export function AdminSyncPanel({
             processed: 0,
             created: 0,
             updated: 0,
+            hidden: 0,
             skipped: 0,
             errors: [],
             ok: false,
@@ -314,11 +318,12 @@ export function AdminSyncPanel({
       setResults(nextResults);
       const failedCount = nextResults.filter((result) => !result.ok).length;
       const successCount = nextResults.length - failedCount;
+      const hiddenCount = nextResults.reduce((sum, result) => sum + result.hidden, 0);
 
       setSummary(
         failedCount > 0
-          ? `Sync selesai. ${successCount} provider berhasil, ${failedCount} provider gagal. Provider yang gagal tidak menghentikan provider lain.`
-          : `Sync selesai. ${successCount} provider berhasil diproses.`,
+          ? `Sync selesai. ${successCount} provider berhasil, ${failedCount} provider gagal, ${hiddenCount} drama otomatis disembunyikan. Provider yang gagal tidak menghentikan provider lain.`
+          : `Sync selesai. ${successCount} provider berhasil diproses, ${hiddenCount} drama otomatis disembunyikan.`,
       );
     } catch (submitError) {
       setError(
@@ -632,10 +637,11 @@ export function AdminSyncPanel({
                       {result.status > 0 ? `status ${result.status}` : "request error"}
                     </Badge>
                   </div>
-                  <div className="mt-3 grid gap-2 text-sm text-[var(--muted)] sm:grid-cols-4">
+                  <div className="mt-3 grid gap-2 text-sm text-[var(--muted)] sm:grid-cols-5">
                     <div>Processed: <span className="text-white">{result.processed}</span></div>
                     <div>Created: <span className="text-white">{result.created}</span></div>
                     <div>Updated: <span className="text-white">{result.updated}</span></div>
+                    <div>Hidden: <span className="text-white">{result.hidden}</span></div>
                     <div>Skipped: <span className="text-white">{result.skipped}</span></div>
                   </div>
                   {result.detail ? (

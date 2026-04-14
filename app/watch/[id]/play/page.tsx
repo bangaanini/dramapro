@@ -16,8 +16,11 @@ import {
 export const dynamic = "force-dynamic";
 
 const getDramaById = cache(async (id: string) =>
-  prisma.drama.findUnique({
-    where: { id },
+  prisma.drama.findFirst({
+    where: {
+      id,
+      isStreamPlayable: true,
+    },
   }),
 );
 

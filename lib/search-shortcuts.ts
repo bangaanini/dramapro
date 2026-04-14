@@ -9,6 +9,9 @@ export async function getSearchShortcuts() {
       const [providerCounts, tagRows] = await Promise.all([
         prisma.drama.groupBy({
           by: ["providerName"],
+          where: {
+            isStreamPlayable: true,
+          },
           _count: {
             _all: true,
           },
@@ -21,6 +24,7 @@ export async function getSearchShortcuts() {
           FROM (
             SELECT UNNEST(tags) AS tag
             FROM "Drama"
+            WHERE "isStreamPlayable" = true
           ) AS tags_expanded
           WHERE tag <> ''
           GROUP BY tag

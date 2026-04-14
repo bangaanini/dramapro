@@ -77,6 +77,9 @@ model Drama {
   watchValue      String       @default("")
   isNewBook       Boolean      @default(false)
   tags            String[]     @default([])
+  isStreamPlayable Boolean     @default(true)
+  streamCheckMessage String    @default("")
+  streamCheckedAt  DateTime?
   feedEntries     DramaFeed[]
   favorites       FavoriteDrama[]
   savedEpisodes   SavedEpisode[]
@@ -86,6 +89,7 @@ model Drama {
 
   @@unique([providerName, providerDramaId])
   @@index([providerName, updatedAt])
+  @@index([isStreamPlayable, updatedAt])
 }
 
 model DramaFeed {

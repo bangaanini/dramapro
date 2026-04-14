@@ -112,6 +112,7 @@ const getCachedHomepageCatalogData = unstable_cache(
           providerName: {
             in: visibleProviders,
           },
+          isStreamPlayable: true,
         },
       }),
       prisma.dramaFeed.findMany({
@@ -121,6 +122,7 @@ const getCachedHomepageCatalogData = unstable_cache(
             providerName: {
               in: visibleProviders,
             },
+            isStreamPlayable: true,
           },
         },
         include: { drama: true },
@@ -134,6 +136,7 @@ const getCachedHomepageCatalogData = unstable_cache(
             providerName: {
               in: visibleProviders,
             },
+            isStreamPlayable: true,
           },
         },
       }),
@@ -144,6 +147,7 @@ const getCachedHomepageCatalogData = unstable_cache(
             providerName: {
               in: visibleProviders,
             },
+            isStreamPlayable: true,
           },
         },
         include: { drama: true },
@@ -157,6 +161,7 @@ const getCachedHomepageCatalogData = unstable_cache(
             providerName: {
               in: visibleProviders,
             },
+            isStreamPlayable: true,
           },
         },
       }),
@@ -167,6 +172,7 @@ const getCachedHomepageCatalogData = unstable_cache(
             providerName: {
               in: visibleProviders,
             },
+            isStreamPlayable: true,
           },
         },
         include: { drama: true },
@@ -180,6 +186,7 @@ const getCachedHomepageCatalogData = unstable_cache(
             providerName: {
               in: visibleProviders,
             },
+            isStreamPlayable: true,
           },
         },
       }),
@@ -225,6 +232,7 @@ export async function getHomepageFeedPage(
           providerName: {
             in: visibleProviders,
           },
+          isStreamPlayable: true,
         },
       },
       include: { drama: true },
@@ -239,6 +247,7 @@ export async function getHomepageFeedPage(
           providerName: {
             in: visibleProviders,
           },
+          isStreamPlayable: true,
         },
       },
     }),
