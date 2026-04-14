@@ -3,6 +3,7 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypt
 import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
 
+import { authenticateAdmin } from "@/lib/admin-auth";
 import { ensureUserAffiliateCode, readAffiliateCookieCode } from "@/lib/affiliate";
 import { prisma } from "@/lib/prisma";
 import { resolveUserPaymentEmail } from "@/lib/user-identity";
@@ -178,25 +179,63 @@ export async function registerUser(input: {
 }
 
 export async function authenticateUser(email: string, password: string) {
+  const normalizedEmail = normalizeEmail(email);
   const user = await prisma.user.findUnique({
     where: {
-      email: normalizeEmail(email),
+      email: normalizedEmail,
     },
   });
 
-  if (!user) {
+  if (
+    user?.authProvider === "local" &&
+    user.passwordHash &&
+    verifyPassword(password, user.passwordHash)
+  ) {
+    return mapPublicUser(user);
+  }
+
+  const admin = await authenticateAdmin(normalizedEmail, password);
+
+  if (!admin) {
     return null;
   }
 
-  if (user.authProvider !== "local" || !user.passwordHash) {
-    return null;
-  }
+  const adminUser = await prisma.user.upsert({
+    where: {
+      email: admin.email,
+    },
+    create: {
+      email: admin.email,
+      name: admin.name,
+      authProvider: "local",
+      passwordHash: admin.passwordHash,
+    },
+    update: {
+      name: admin.name,
+      authProvider: "local",
+      passwordHash: admin.passwordHash,
+    },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      affiliateCode: true,
+      authProvider: true,
+      telegramId: true,
+      telegramUsername: true,
+      telegramPhotoUrl: true,
+      telegramFirstName: true,
+      telegramLastName: true,
+      telegramLanguageCode: true,
+      createdAt: true,
+      vipExpiresAt: true,
+      vipStartedAt: true,
+    },
+  });
 
-  if (!verifyPassword(password, user.passwordHash)) {
-    return null;
-  }
+  await ensureUserAffiliateCode(adminUser.id, adminUser.name);
 
-  return mapPublicUser(user);
+  return mapPublicUser(adminUser);
 }
 
 export async function changeCurrentUserPassword(input: {
@@ -397,4 +436,23 @@ export function resolveSafeRedirectPath(candidate: string | null | undefined) {
 
 export function resolveUserPaymentContactEmail(user: PublicUser) {
   return resolveUserPaymentEmail(user);
+}
+
+export async function userHasAdminVideoBypass(
+  user: Pick<PublicUser, "email"> | null | undefined,
+) {
+  if (!user?.email) {
+    return false;
+  }
+
+  const admin = await prisma.adminUser.findUnique({
+    where: {
+      email: normalizeEmail(user.email),
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  return Boolean(admin);
 }

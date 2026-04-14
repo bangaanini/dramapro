@@ -95,7 +95,7 @@ export function AffiliatePageLoadingShell() {
 
 export function VipPageLoadingShell() {
   return (
-    <main className="route-transition-shell mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
+    <main className="route-transition-shell mx-auto flex min-h-screen w-full max-w-none flex-col px-4 py-6 sm:px-6 lg:px-8 2xl:px-10">
       <div className="glass-panel rounded-[2.4rem] p-8">
         <SkeletonBlock className="mx-auto h-6 w-40 rounded-full" />
         <SkeletonBlock className="mx-auto mt-6 h-14 w-80 max-w-full rounded-[1.8rem]" />

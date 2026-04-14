@@ -6,7 +6,7 @@ import { VideoPlayer } from "@/components/video-player";
 import { getAppSettings } from "@/lib/app-settings";
 import { prisma } from "@/lib/prisma";
 import { toSeoDescription } from "@/lib/site";
-import { getCurrentUser } from "@/lib/user-auth";
+import { getCurrentUser, userHasAdminVideoBypass } from "@/lib/user-auth";
 import {
   clampEpisodeForVipAccess,
   getVipLockStartEpisode,
@@ -72,47 +72,49 @@ export default async function WatchPlayerPage(
   const searchParams = await props.searchParams;
   const user = await getCurrentUser();
 
-  const [drama, savedEpisodes, watchHistory, vipSettings] = await Promise.all([
-    getDramaById(id),
-    user
-      ? prisma.savedEpisode.findMany({
-          where: {
-            userId: user.id,
-            dramaId: id,
-          },
-          select: {
-            episodeIndex: true,
-          },
-        })
-      : Promise.resolve([]),
-    user
-      ? prisma.watchHistory.findUnique({
-          where: {
-            userId_dramaId: {
+  const [drama, savedEpisodes, watchHistory, vipSettings, hasAdminBypass] =
+    await Promise.all([
+      getDramaById(id),
+      user
+        ? prisma.savedEpisode.findMany({
+            where: {
               userId: user.id,
               dramaId: id,
             },
-          },
-          select: {
-            episodeIndex: true,
-            lastPositionSeconds: true,
-          },
-        })
-      : Promise.resolve(null),
-    prisma.vipSettings.findUnique({
-      where: { id: "global" },
-      select: {
-        isEnabled: true,
-        lockFromEpisode: true,
-      },
-    }),
-  ]);
+            select: {
+              episodeIndex: true,
+            },
+          })
+        : Promise.resolve([]),
+      user
+        ? prisma.watchHistory.findUnique({
+            where: {
+              userId_dramaId: {
+                userId: user.id,
+                dramaId: id,
+              },
+            },
+            select: {
+              episodeIndex: true,
+              lastPositionSeconds: true,
+            },
+          })
+        : Promise.resolve(null),
+      prisma.vipSettings.findUnique({
+        where: { id: "global" },
+        select: {
+          isEnabled: true,
+          lockFromEpisode: true,
+        },
+      }),
+      userHasAdminVideoBypass(user),
+    ]);
 
   if (!drama) {
     notFound();
   }
 
-  const vipLockFromEpisode = isVipActive(user?.vipExpiresAt)
+  const vipLockFromEpisode = hasAdminBypass || isVipActive(user?.vipExpiresAt)
     ? null
     : getVipLockStartEpisode(vipSettings);
   const requestedEpisode = parseEpisodeSearchParam(searchParams.episode);

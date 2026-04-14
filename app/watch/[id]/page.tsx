@@ -30,7 +30,7 @@ import {
   buildDramaShareStartParam,
   buildTelegramMiniAppStartAppLink,
 } from "@/lib/telegram-bot";
-import { getCurrentUser } from "@/lib/user-auth";
+import { getCurrentUser, userHasAdminVideoBypass } from "@/lib/user-auth";
 import {
   normalizeDisplayImageUrl,
   shouldBypassImageOptimization,
@@ -107,42 +107,44 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
   const { id } = await props.params;
   const user = await getCurrentUser();
 
-  const [drama, watchHistory, favorite, vipSettings, settings] = await Promise.all([
-    getDramaById(id),
-    user
-      ? prisma.watchHistory.findUnique({
-          where: {
-            userId_dramaId: {
-              userId: user.id,
-              dramaId: id,
+  const [drama, watchHistory, favorite, vipSettings, settings, hasAdminBypass] =
+    await Promise.all([
+      getDramaById(id),
+      user
+        ? prisma.watchHistory.findUnique({
+            where: {
+              userId_dramaId: {
+                userId: user.id,
+                dramaId: id,
+              },
             },
-          },
-          select: {
-            episodeIndex: true,
-            lastPositionSeconds: true,
-          },
-        })
-      : Promise.resolve(null),
-    user
-      ? prisma.favoriteDrama.findUnique({
-          where: {
-            userId_dramaId: {
-              userId: user.id,
-              dramaId: id,
+            select: {
+              episodeIndex: true,
+              lastPositionSeconds: true,
             },
-          },
-          select: { id: true },
-        })
-      : Promise.resolve(null),
-    prisma.vipSettings.findUnique({
-      where: { id: "global" },
-      select: {
-        isEnabled: true,
-        lockFromEpisode: true,
-      },
-    }),
-    getAppSettings(),
-  ]);
+          })
+        : Promise.resolve(null),
+      user
+        ? prisma.favoriteDrama.findUnique({
+            where: {
+              userId_dramaId: {
+                userId: user.id,
+                dramaId: id,
+              },
+            },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+      prisma.vipSettings.findUnique({
+        where: { id: "global" },
+        select: {
+          isEnabled: true,
+          lockFromEpisode: true,
+        },
+      }),
+      getAppSettings(),
+      userHasAdminVideoBypass(user),
+    ]);
 
   if (!drama) {
     notFound();
@@ -153,7 +155,7 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
     drama.description,
     `${drama.title} dari ${drama.providerName} dengan ${drama.episodeCount} episode di ${settings.site.name}.`,
   );
-  const vipLockFromEpisode = isVipActive(user?.vipExpiresAt)
+  const vipLockFromEpisode = hasAdminBypass || isVipActive(user?.vipExpiresAt)
     ? null
     : getVipLockStartEpisode(vipSettings);
   const preferredInitialEpisode = clampEpisodeForVipAccess(

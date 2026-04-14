@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 import { resolveDramaStreamSources, toStreamErrorResponse } from "@/lib/stream-access";
-import { getUserFromRequest } from "@/lib/user-auth";
+import { getUserFromRequest, userHasAdminVideoBypass } from "@/lib/user-auth";
 import {
   getVipLockStartEpisode,
   isVipActive,
@@ -42,8 +42,9 @@ export async function GET(request: NextRequest) {
     }),
     getUserFromRequest(request),
   ]);
+  const hasAdminBypass = await userHasAdminVideoBypass(user);
 
-  const vipLockFromEpisode = isVipActive(user?.vipExpiresAt)
+  const vipLockFromEpisode = hasAdminBypass || isVipActive(user?.vipExpiresAt)
     ? null
     : getVipLockStartEpisode(vipSettings);
 
