@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   CirclePlay,
+  ClipboardCheck,
   Eye,
   EyeOff,
   LoaderCircle,
@@ -45,6 +46,34 @@ type ProviderControl = {
   lastCheckedAt: string | null;
 };
 
+type StoredDramaAuditResult = {
+  source: SyncSource;
+  total: number;
+  checked: number;
+  playable: number;
+  hidden: number;
+  restored: number;
+  alreadyHidden: number;
+  message?: string;
+  errors: Array<{
+    dramaId: string;
+    provider: ProviderType;
+    providerDramaId: string;
+    title: string;
+    message: string;
+    status: "hidden";
+  }>;
+  providerSummary: Array<{
+    provider: ProviderType;
+    total: number;
+    playable: number;
+    hidden: number;
+    restored: number;
+    alreadyHidden: number;
+    errors: number;
+  }>;
+};
+
 async function readResponsePayload(response: Response) {
   const text = await response.text();
 
@@ -63,6 +92,27 @@ async function readResponsePayload(response: Response) {
 }
 
 const providerOptions = ["all", ...PROVIDERS] as const;
+const auditSourceButtons: Array<{
+  source: SyncSource;
+  label: string;
+  description: string;
+}> = [
+  {
+    source: "new",
+    label: "Audit New",
+    description: "Cek semua drama dari feed new.",
+  },
+  {
+    source: "home",
+    label: "Audit Home",
+    description: "Cek semua drama dari feed home.",
+  },
+  {
+    source: "popular",
+    label: "Audit Populer",
+    description: "Cek semua drama dari feed populer.",
+  },
+];
 
 type AdminSyncPanelProps = {
   adminName: string;
@@ -85,6 +135,12 @@ export function AdminSyncPanel({
   const [isCheckingProviders, setIsCheckingProviders] = useState(false);
   const [activeProviderCheck, setActiveProviderCheck] = useState<string | null>(null);
   const [activeProviderToggle, setActiveProviderToggle] = useState<string | null>(null);
+  const [activeAuditSource, setActiveAuditSource] = useState<SyncSource | null>(null);
+  const [auditResult, setAuditResult] = useState<StoredDramaAuditResult | null>(null);
+  const [auditError, setAuditError] = useState<string | null>(null);
+  const [isRefreshingCatalogCache, setIsRefreshingCatalogCache] = useState(false);
+  const [catalogCacheMessage, setCatalogCacheMessage] = useState<string | null>(null);
+  const [catalogCacheError, setCatalogCacheError] = useState<string | null>(null);
 
   useEffect(() => {
     void loadProviderControls();
@@ -208,6 +264,87 @@ export function AdminSyncPanel({
       );
     } finally {
       setActiveProviderToggle(null);
+    }
+  }
+
+  async function handleAuditStoredDramas(targetSource: SyncSource) {
+    setActiveAuditSource(targetSource);
+    setAuditError(null);
+    setAuditResult(null);
+
+    try {
+      const response = await fetch("/api/admin/drama-stream-audit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          source: targetSource,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | StoredDramaAuditResult
+        | { error?: string }
+        | null;
+
+      if (!response.ok) {
+        throw new Error(
+          payload && "error" in payload && payload.error
+            ? payload.error
+            : "Audit drama tersimpan gagal.",
+        );
+      }
+
+      if (!payload || !("providerSummary" in payload)) {
+        throw new Error("Payload audit tidak valid.");
+      }
+
+      setAuditResult(payload);
+      await loadProviderControls();
+    } catch (auditError) {
+      setAuditError(
+        auditError instanceof Error
+          ? auditError.message
+          : "Audit drama tersimpan gagal.",
+      );
+    } finally {
+      setActiveAuditSource(null);
+    }
+  }
+
+  async function handleRefreshCatalogCache() {
+    setIsRefreshingCatalogCache(true);
+    setCatalogCacheMessage(null);
+    setCatalogCacheError(null);
+
+    try {
+      const response = await fetch("/api/admin/catalog-cache/refresh", {
+        method: "POST",
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            message?: string;
+            refreshedAt?: string;
+            error?: string;
+          }
+        | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "Gagal refresh cache katalog.");
+      }
+
+      setCatalogCacheMessage(
+        payload?.message ??
+          "Cache katalog berhasil direfresh. Halaman user akan memakai data terbaru.",
+      );
+    } catch (refreshError) {
+      setCatalogCacheError(
+        refreshError instanceof Error
+          ? refreshError.message
+          : "Gagal refresh cache katalog.",
+      );
+    } finally {
+      setIsRefreshingCatalogCache(false);
     }
   }
 
@@ -434,6 +571,195 @@ export function AdminSyncPanel({
           {summary ? (
             <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[var(--muted)]">
               {summary}
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Card className="glass-panel rounded-[2rem]">
+        <CardContent className="space-y-5 p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-white">
+                <ClipboardCheck className="size-4 text-accent" />
+                <h2 className="text-lg font-semibold">
+                  Audit drama tersimpan
+                </h2>
+              </div>
+              <p className="max-w-3xl text-sm leading-6 text-[var(--muted)]">
+                Cek ulang semua drama yang sudah tersimpan berdasarkan feed.
+                Sistem akan memanggil upstream stream episode 1, lalu otomatis
+                menyembunyikan judul yang gagal agar tidak muncul di halaman user.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void handleRefreshCatalogCache()}
+              disabled={isRefreshingCatalogCache || activeAuditSource !== null}
+            >
+              {isRefreshingCatalogCache ? (
+                <>
+                  <LoaderCircle className="mr-2 size-4 animate-spin" />
+                  Refresh cache...
+                </>
+              ) : (
+                <>
+                  <RefreshCcw className="mr-2 size-4" />
+                  Paksa refresh homepage
+                </>
+              )}
+            </Button>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            {auditSourceButtons.map((item) => {
+              const isActive = activeAuditSource === item.source;
+              const isDisabled = activeAuditSource !== null;
+
+              return (
+                <button
+                  key={item.source}
+                  type="button"
+                  onClick={() => void handleAuditStoredDramas(item.source)}
+                  disabled={isDisabled}
+                  className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 text-left transition hover:border-accent/35 hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <span className="flex items-center gap-2 font-semibold text-white">
+                    {isActive ? (
+                      <LoaderCircle className="size-4 animate-spin text-accent" />
+                    ) : (
+                      <RefreshCcw className="size-4 text-accent" />
+                    )}
+                    {isActive ? `Mengecek ${item.source}...` : item.label}
+                  </span>
+                  <span className="mt-2 block text-xs leading-5 text-[var(--muted)]">
+                    {item.description}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {auditError ? (
+            <div className="rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+              {auditError}
+            </div>
+          ) : null}
+
+          {catalogCacheMessage ? (
+            <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+              {catalogCacheMessage}
+            </div>
+          ) : null}
+
+          {catalogCacheError ? (
+            <div className="rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+              {catalogCacheError}
+            </div>
+          ) : null}
+
+          {auditResult ? (
+            <div className="space-y-4 rounded-[1.7rem] border border-white/10 bg-white/4 p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge className="border-accent/20 bg-accent/10 text-accent">
+                  {auditResult.source === "popular" ? "populer" : auditResult.source}
+                </Badge>
+                <Badge variant="outline">
+                  Total {auditResult.total} drama
+                </Badge>
+                <Badge variant="outline">
+                  Playable {auditResult.playable}
+                </Badge>
+                <Badge
+                  className={
+                    auditResult.hidden > 0
+                      ? "border-red-400/20 bg-red-500/10 text-red-100"
+                      : "border-emerald-400/20 bg-emerald-500/10 text-emerald-100"
+                  }
+                >
+                  Error disembunyikan {auditResult.hidden}
+                </Badge>
+                <Badge variant="outline">
+                  Restored {auditResult.restored}
+                </Badge>
+              </div>
+
+              <p className="text-sm leading-6 text-[var(--muted)]">
+                {auditResult.message ??
+                  `Berhasil sync ulang status stream semua drama: ${auditResult.checked} judul dicek.`}
+              </p>
+
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {auditResult.providerSummary.map((summary) => (
+                  <div
+                    key={summary.provider}
+                    className="rounded-2xl border border-white/10 bg-black/18 p-3 text-sm"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-semibold text-white">
+                        {summary.provider}
+                      </span>
+                      <Badge
+                        className={
+                          summary.errors > 0
+                            ? "border-red-400/20 bg-red-500/10 text-red-100"
+                            : "border-emerald-400/20 bg-emerald-500/10 text-emerald-100"
+                        }
+                      >
+                        {summary.errors > 0 ? "ada error" : "normal"}
+                      </Badge>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-[var(--muted)]">
+                      <span>Total: <b className="text-white">{summary.total}</b></span>
+                      <span>Playable: <b className="text-white">{summary.playable}</b></span>
+                      <span>Hidden: <b className="text-white">{summary.hidden}</b></span>
+                      <span>Restored: <b className="text-white">{summary.restored}</b></span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {auditResult.errors.length > 0 ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="font-semibold text-white">
+                      Detail error yang disembunyikan
+                    </h3>
+                    <Badge className="border-red-400/20 bg-red-500/10 text-red-100">
+                      {auditResult.errors.length} judul
+                    </Badge>
+                  </div>
+                  <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
+                    {auditResult.errors.map((item) => (
+                      <div
+                        key={item.dramaId}
+                        className="rounded-2xl border border-red-400/15 bg-red-500/8 p-3 text-sm"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="secondary">{item.provider}</Badge>
+                          <Badge className="border-red-400/20 bg-red-500/10 text-red-100">
+                            status: sembunyikan
+                          </Badge>
+                        </div>
+                        <p className="mt-2 font-semibold text-white">
+                          {item.title}
+                        </p>
+                        <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                          Provider ID: {item.providerDramaId}
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-red-100">
+                          {item.message}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+                  Tidak ada error stream di feed ini. Semua drama tetap tampil.
+                </div>
+              )}
             </div>
           ) : null}
         </CardContent>

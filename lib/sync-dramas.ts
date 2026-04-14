@@ -44,6 +44,35 @@ export type BatchSyncResult = {
   };
 };
 
+export type StoredDramaStreamAuditError = {
+  dramaId: string;
+  provider: ProviderType;
+  providerDramaId: string;
+  title: string;
+  message: string;
+  status: "hidden";
+};
+
+export type StoredDramaStreamAuditResult = {
+  source: SyncSource;
+  total: number;
+  checked: number;
+  playable: number;
+  hidden: number;
+  restored: number;
+  alreadyHidden: number;
+  errors: StoredDramaStreamAuditError[];
+  providerSummary: Array<{
+    provider: ProviderType;
+    total: number;
+    playable: number;
+    hidden: number;
+    restored: number;
+    alreadyHidden: number;
+    errors: number;
+  }>;
+};
+
 const STREAM_VALIDATION_PROVIDERS = new Set<ProviderType>(PROVIDERS);
 
 type StreamValidationResult =
@@ -224,6 +253,137 @@ async function validateDramaStreamAvailability(drama: {
           : "Skipped item because stream validation failed unexpectedly.",
     };
   }
+}
+
+function cleanValidationMessage(message: string) {
+  return message
+    .replace(/^Skipped item because\s+/i, "")
+    .replace(/^episode 1/i, "Episode 1")
+    .trim();
+}
+
+export async function runStoredDramaStreamAudit(
+  source: SyncSource,
+): Promise<StoredDramaStreamAuditResult> {
+  const dramas = await prisma.drama.findMany({
+    where: {
+      feedEntries: {
+        some: {
+          source,
+        },
+      },
+    },
+    orderBy: [
+      {
+        providerName: "asc",
+      },
+      {
+        updatedAt: "desc",
+      },
+    ],
+    select: {
+      id: true,
+      providerDramaId: true,
+      providerName: true,
+      title: true,
+      isStreamPlayable: true,
+    },
+  });
+  const providerSummaryMap = new Map<
+    ProviderType,
+    {
+      provider: ProviderType;
+      total: number;
+      playable: number;
+      hidden: number;
+      restored: number;
+      alreadyHidden: number;
+      errors: number;
+    }
+  >();
+  const errors: StoredDramaStreamAuditError[] = [];
+  let playable = 0;
+  let hidden = 0;
+  let restored = 0;
+  let alreadyHidden = 0;
+
+  for (const drama of dramas) {
+    const provider = drama.providerName as ProviderType;
+    const summary = providerSummaryMap.get(provider) ?? {
+      provider,
+      total: 0,
+      playable: 0,
+      hidden: 0,
+      restored: 0,
+      alreadyHidden: 0,
+      errors: 0,
+    };
+
+    summary.total += 1;
+
+    const validation = await validateDramaStreamAvailability({
+      providerDramaId: drama.providerDramaId,
+      providerName: provider,
+      title: drama.title,
+    });
+    const streamCheckedAt = new Date();
+    const streamCheckMessage = validation.ok
+      ? "Stream episode 1 normal saat audit ulang."
+      : cleanValidationMessage(validation.message);
+
+    await prisma.drama.update({
+      where: {
+        id: drama.id,
+      },
+      data: {
+        isStreamPlayable: validation.ok,
+        streamCheckMessage,
+        streamCheckedAt,
+      },
+    });
+
+    if (validation.ok) {
+      playable += 1;
+      summary.playable += 1;
+
+      if (!drama.isStreamPlayable) {
+        restored += 1;
+        summary.restored += 1;
+      }
+    } else {
+      hidden += 1;
+      summary.hidden += 1;
+      summary.errors += 1;
+
+      if (!drama.isStreamPlayable) {
+        alreadyHidden += 1;
+        summary.alreadyHidden += 1;
+      }
+
+      errors.push({
+        dramaId: drama.id,
+        provider,
+        providerDramaId: drama.providerDramaId,
+        title: drama.title,
+        message: streamCheckMessage,
+        status: "hidden",
+      });
+    }
+
+    providerSummaryMap.set(provider, summary);
+  }
+
+  return {
+    source,
+    total: dramas.length,
+    checked: dramas.length,
+    playable,
+    hidden,
+    restored,
+    alreadyHidden,
+    errors,
+    providerSummary: [...providerSummaryMap.values()],
+  };
 }
 
 export async function runProviderSync(
