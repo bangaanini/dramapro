@@ -29,21 +29,37 @@ function parseTelegramStartParam(value: string | null) {
     return {
       dramaId: null,
       referralCode: null,
+      target: null,
     };
   }
 
-  const match = value.match(/^drama_([a-z0-9-]+)(?:__ref_([A-Z0-9]+))?$/i);
+  const trimmed = value.trim();
+  const targetMatch = trimmed.match(
+    /^(?:(?:tg_)?target_)?(home|search|vip|profile|affiliate)(?:__ref_([A-Z0-9]+))?$/i,
+  );
+
+  if (targetMatch) {
+    return {
+      dramaId: null,
+      referralCode: targetMatch[2]?.toUpperCase() ?? null,
+      target: targetMatch[1]?.toLowerCase() as TelegramTarget,
+    };
+  }
+
+  const match = trimmed.match(/^drama_([a-z0-9-]+)(?:__ref_([A-Z0-9]+))?$/i);
 
   if (!match) {
     return {
       dramaId: null,
       referralCode: null,
+      target: null,
     };
   }
 
   return {
     dramaId: match[1] ?? null,
     referralCode: match[2]?.toUpperCase() ?? null,
+    target: null,
   };
 }
 
@@ -51,10 +67,11 @@ export function TelegramMiniAppBridge() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const target = searchParams.get("tg_target");
+  const targetFromQuery = searchParams.get("tg_target");
   const botUsername = searchParams.get("tg_bot")?.trim().replace(/^@/, "") ?? null;
   const startParam = searchParams.get("tgWebAppStartParam");
   const parsedStartParam = parseTelegramStartParam(startParam);
+  const target = targetFromQuery ?? parsedStartParam.target;
   const referralCode =
     searchParams.get("tg_ref")?.trim().toUpperCase() ??
     parsedStartParam.referralCode;

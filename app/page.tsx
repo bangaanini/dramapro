@@ -58,8 +58,12 @@ export default async function HomePage(props: PageProps<"/">) {
     typeof searchParams.ref === "string" ? searchParams.ref.trim().toUpperCase() : "";
   const telegramTarget =
     typeof searchParams.tg_target === "string" ? searchParams.tg_target.trim() : "";
+  const telegramStartParam =
+    typeof searchParams.tgWebAppStartParam === "string"
+      ? searchParams.tgWebAppStartParam.trim()
+      : "";
 
-  if (telegramTarget) {
+  if (telegramTarget || telegramStartParam) {
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-none flex-col px-0 py-0">
         {referralCode ? <AffiliateCaptureEffect referralCode={referralCode} /> : null}
