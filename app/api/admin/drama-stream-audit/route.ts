@@ -2,6 +2,7 @@ import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 
 import { getAdminFromRequest } from "@/lib/admin-auth";
+import { hasValidInternalSecret } from "@/lib/internal-route-auth";
 import {
   normalizeSyncSource,
   SYNC_SOURCES,
@@ -12,8 +13,9 @@ export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   const admin = await getAdminFromRequest(request);
+  const hasValidSecret = hasValidInternalSecret(request);
 
-  if (!admin) {
+  if (!admin && !hasValidSecret) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

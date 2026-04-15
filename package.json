@@ -7,6 +7,10 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
+    "worker:scheduler": "node scripts/ops-worker.mjs scheduler",
+    "worker:sync": "node scripts/ops-worker.mjs sync",
+    "worker:audit": "node scripts/ops-worker.mjs audit",
+    "worker:refresh": "node scripts/ops-worker.mjs refresh",
     "postinstall": "prisma generate"
   },
   "dependencies": {

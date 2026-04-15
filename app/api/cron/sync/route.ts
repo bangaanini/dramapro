@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { revalidateTag } from "next/cache";
 
 import { getAdminFromRequest } from "@/lib/admin-auth";
+import { hasValidInternalSecret } from "@/lib/internal-route-auth";
 import {
   normalizeSyncSource,
   PROVIDERS,
@@ -13,26 +14,14 @@ import { runProviderSync } from "@/lib/sync-dramas";
 
 export const runtime = "nodejs";
 
-function getSecretFromRequest(request: NextRequest) {
-  const authorization = request.headers.get("authorization");
-
-  if (authorization?.startsWith("Bearer ")) {
-    return authorization.slice("Bearer ".length).trim();
-  }
-
-  return request.headers.get("x-cron-secret");
-}
-
 export async function GET(request: NextRequest) {
   const providerParam = request.nextUrl.searchParams.get("provider");
   const pageParam = request.nextUrl.searchParams.get("page") ?? "1";
   const rawSourceParam = request.nextUrl.searchParams.get("source") ?? "home";
 
   try {
-    const cronSecret = process.env.CRON_SECRET;
-    const suppliedSecret = getSecretFromRequest(request);
     const admin = await getAdminFromRequest(request);
-    const hasValidSecret = Boolean(cronSecret && suppliedSecret === cronSecret);
+    const hasValidSecret = hasValidInternalSecret(request);
 
     if (!admin && !hasValidSecret) {
       return Response.json({ error: "Unauthorized." }, { status: 401 });
