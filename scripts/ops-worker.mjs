@@ -72,6 +72,11 @@ function parseCsv(value, fallback) {
   return normalized.length > 0 ? normalized : fallback;
 }
 
+function parseOptionalString(value) {
+  const normalized = String(value ?? "").trim();
+  return normalized ? normalized : null;
+}
+
 function parsePositiveInt(value, fallback) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
@@ -127,10 +132,25 @@ function createConfig() {
       process.env.WORKER_AUDIT_INTERVAL_MINUTES,
       60,
     ),
+    auditInitialDelayMinutes: parsePositiveInt(
+      process.env.WORKER_AUDIT_INITIAL_DELAY_MINUTES,
+      15,
+    ),
     requestTimeoutMs: parsePositiveInt(
       process.env.WORKER_REQUEST_TIMEOUT_MS,
       120000,
     ),
+    notifyTelegramBotToken:
+      parseOptionalString(process.env.WORKER_NOTIFY_TELEGRAM_BOT_TOKEN) ||
+      parseOptionalString(process.env.TELEGRAM_BOT_TOKEN),
+    notifyTelegramChatId: parseOptionalString(
+      process.env.WORKER_NOTIFY_TELEGRAM_CHAT_ID,
+    ),
+    notifyTelegramThreadId: parseOptionalString(
+      process.env.WORKER_NOTIFY_TELEGRAM_MESSAGE_THREAD_ID,
+    ),
+    notifyOnSuccess: parseBoolean(process.env.WORKER_NOTIFY_ON_SUCCESS, true),
+    notifyOnFailure: parseBoolean(process.env.WORKER_NOTIFY_ON_FAILURE, true),
     refreshAfterRun: parseBoolean(process.env.WORKER_REFRESH_AFTER_RUN, true),
     syncOnStart: parseBoolean(process.env.WORKER_SYNC_ON_START, true),
     auditOnStart: parseBoolean(process.env.WORKER_AUDIT_ON_START, false),
@@ -151,6 +171,71 @@ function logSuccess(message) {
 
 function logError(message) {
   console.error(`${ERROR_ICON} ${nowStamp()} ${message}`);
+}
+
+function formatDuration(startedAt) {
+  return `${Math.round((Date.now() - startedAt) / 1000)} detik`;
+}
+
+function truncateLines(items, max = 5) {
+  return items.slice(0, max);
+}
+
+async function sendTelegramNotification(config, lines) {
+  if (!config.notifyTelegramBotToken || !config.notifyTelegramChatId) {
+    return false;
+  }
+
+  const payload = {
+    chat_id: config.notifyTelegramChatId,
+    text: lines.join("\n"),
+    disable_web_page_preview: true,
+  };
+
+  if (config.notifyTelegramThreadId) {
+    payload.message_thread_id = Number.parseInt(
+      config.notifyTelegramThreadId,
+      10,
+    );
+  }
+
+  const response = await fetch(
+    `https://api.telegram.org/bot${config.notifyTelegramBotToken}/sendMessage`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`Telegram notify gagal: ${response.status} ${text}`.trim());
+  }
+
+  return true;
+}
+
+async function notifyIfNeeded(config, input) {
+  const hasFailure = input.level === "error";
+
+  if ((hasFailure && !config.notifyOnFailure) || (!hasFailure && !config.notifyOnSuccess)) {
+    return;
+  }
+
+  try {
+    const sent = await sendTelegramNotification(config, input.lines);
+
+    if (sent) {
+      logSuccess(`Notifikasi Telegram ${input.name} berhasil dikirim.`);
+    }
+  } catch (error) {
+    logError(
+      `Notifikasi Telegram ${input.name} gagal: ${error instanceof Error ? error.message : "Unexpected error"}.`,
+    );
+  }
 }
 
 async function requestJson(config, path, init = {}) {
@@ -217,6 +302,10 @@ async function runSyncOnce(config) {
   let processed = 0;
   let hidden = 0;
   let errors = 0;
+  let created = 0;
+  let updated = 0;
+  let skipped = 0;
+  const failedTasks = [];
 
   logInfo(
     `Memulai sync worker untuk ${config.sources.join(", ")} page 1-${config.pages}.`,
@@ -238,7 +327,10 @@ async function runSyncOnce(config) {
           );
 
           processed += Number(result?.processed ?? 0);
+          created += Number(result?.created ?? 0);
+          updated += Number(result?.updated ?? 0);
           hidden += Number(result?.hidden ?? 0);
+          skipped += Number(result?.skipped ?? 0);
           errors += Array.isArray(result?.errors) ? result.errors.length : 0;
 
           logSuccess(
@@ -246,6 +338,9 @@ async function runSyncOnce(config) {
           );
         } catch (error) {
           errors += 1;
+          failedTasks.push(
+            `${provider} ${source} page ${page}: ${error instanceof Error ? error.message : "Unexpected error"}`,
+          );
           logError(
             `Sync ${provider} ${source} page ${page} gagal: ${error instanceof Error ? error.message : "Unexpected error"}.`,
           );
@@ -262,9 +357,43 @@ async function runSyncOnce(config) {
     });
   }
 
+  const duration = formatDuration(startedAt);
+
   logSuccess(
-    `Sync worker selesai dalam ${Math.round((Date.now() - startedAt) / 1000)} detik. processed=${processed}, hidden=${hidden}, errors=${errors}.`,
+    `Sync worker selesai dalam ${duration}. processed=${processed}, hidden=${hidden}, errors=${errors}.`,
   );
+
+  await notifyIfNeeded(config, {
+    name: "sync",
+    level: errors > 0 ? "error" : "success",
+    lines: [
+      errors > 0 ? "Laporan sync selesai dengan error" : "Laporan sync selesai",
+      "",
+      `Base URL: ${config.baseUrl}`,
+      `Sources: ${config.sources.join(", ")}`,
+      `Pages: 1-${config.pages}`,
+      `Processed: ${processed}`,
+      `Created: ${created}`,
+      `Updated: ${updated}`,
+      `Hidden: ${hidden}`,
+      `Skipped: ${skipped}`,
+      `Errors: ${errors}`,
+      `Durasi: ${duration}`,
+      ...(failedTasks.length > 0
+        ? ["", "Error utama:", ...truncateLines(failedTasks).map((item) => `- ${item}`)]
+        : []),
+    ],
+  });
+
+  return {
+    processed,
+    created,
+    updated,
+    hidden,
+    skipped,
+    errors,
+    duration,
+  };
 }
 
 async function runAuditSource(config, source) {
@@ -314,6 +443,7 @@ async function runAuditOnce(config) {
   let hidden = 0;
   let restored = 0;
   let errors = 0;
+  const failedSources = [];
 
   logInfo(`Memulai audit worker untuk ${config.sources.join(", ")}.`);
 
@@ -326,6 +456,9 @@ async function runAuditOnce(config) {
       errors += result.errors;
     } catch (error) {
       errors += 1;
+      failedSources.push(
+        `${source}: ${error instanceof Error ? error.message : "Unexpected error"}`,
+      );
       logError(
         `Audit ${source} gagal: ${error instanceof Error ? error.message : "Unexpected error"}.`,
       );
@@ -340,9 +473,38 @@ async function runAuditOnce(config) {
     });
   }
 
+  const duration = formatDuration(startedAt);
+
   logSuccess(
-    `Audit worker selesai dalam ${Math.round((Date.now() - startedAt) / 1000)} detik. checked=${checked}, hidden=${hidden}, restored=${restored}, errors=${errors}.`,
+    `Audit worker selesai dalam ${duration}. checked=${checked}, hidden=${hidden}, restored=${restored}, errors=${errors}.`,
   );
+
+  await notifyIfNeeded(config, {
+    name: "audit",
+    level: errors > 0 ? "error" : "success",
+    lines: [
+      errors > 0 ? "Laporan audit selesai dengan error" : "Laporan audit selesai",
+      "",
+      `Base URL: ${config.baseUrl}`,
+      `Sources: ${config.sources.join(", ")}`,
+      `Checked: ${checked}`,
+      `Hidden: ${hidden}`,
+      `Restored: ${restored}`,
+      `Errors: ${errors}`,
+      `Durasi: ${duration}`,
+      ...(failedSources.length > 0
+        ? ["", "Error utama:", ...truncateLines(failedSources).map((item) => `- ${item}`)]
+        : []),
+    ],
+  });
+
+  return {
+    checked,
+    hidden,
+    restored,
+    errors,
+    duration,
+  };
 }
 
 function createLoopRunner(name, intervalMs, task) {
@@ -382,32 +544,56 @@ function createLoopRunner(name, intervalMs, task) {
   };
 }
 
+function createExclusiveJobRunner() {
+  let activeJob = null;
+
+  return async function runExclusive(name, task) {
+    if (activeJob) {
+      logInfo(`Job ${name} dilewati karena ${activeJob} masih berjalan.`);
+      return false;
+    }
+
+    activeJob = name;
+
+    try {
+      await task();
+      return true;
+    } finally {
+      activeJob = null;
+    }
+  };
+}
+
 async function runScheduler(config) {
   logInfo(
-    `Scheduler aktif. sync=${config.syncIntervalMinutes}m, audit=${config.auditIntervalMinutes}m.`,
+    `Scheduler aktif. sync=${config.syncIntervalMinutes}m, audit=${config.auditIntervalMinutes}m, auditDelay=${config.auditInitialDelayMinutes}m.`,
   );
 
+  const runExclusive = createExclusiveJobRunner();
+
   if (config.syncOnStart) {
-    await runSyncOnce(config);
+    await runExclusive("sync", () => runSyncOnce(config));
   }
 
   if (config.auditOnStart) {
-    await runAuditOnce(config);
+    await runExclusive("audit", () => runAuditOnce(config));
   }
 
   const syncLoop = createLoopRunner(
     "sync",
     config.syncIntervalMinutes * 60 * 1000,
-    () => runSyncOnce(config),
+    () => runExclusive("sync", () => runSyncOnce(config)),
   );
   const auditLoop = createLoopRunner(
     "audit",
     config.auditIntervalMinutes * 60 * 1000,
-    () => runAuditOnce(config),
+    () => runExclusive("audit", () => runAuditOnce(config)),
   );
 
   syncLoop.start();
-  auditLoop.start();
+  setTimeout(() => {
+    auditLoop.start();
+  }, config.auditInitialDelayMinutes * 60 * 1000);
 
   const shutdown = (signal) => {
     logInfo(`Menerima ${signal}, menghentikan scheduler worker.`);

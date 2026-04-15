@@ -24,10 +24,29 @@ WORKER_SYNC_PAGES=2
 WORKER_AUDIT_BATCH_SIZE=10
 WORKER_SYNC_INTERVAL_MINUTES=30
 WORKER_AUDIT_INTERVAL_MINUTES=60
+WORKER_AUDIT_INITIAL_DELAY_MINUTES=15
 WORKER_REQUEST_TIMEOUT_MS=120000
 WORKER_REFRESH_AFTER_RUN=true
 WORKER_SYNC_ON_START=true
 WORKER_AUDIT_ON_START=false
+WORKER_NOTIFY_TELEGRAM_BOT_TOKEN=
+WORKER_NOTIFY_TELEGRAM_CHAT_ID=
+WORKER_NOTIFY_TELEGRAM_MESSAGE_THREAD_ID=
+WORKER_NOTIFY_ON_SUCCESS=true
+WORKER_NOTIFY_ON_FAILURE=true
+```
+
+Kalau mau kirim laporan ke Telegram, cukup isi:
+
+```bash
+WORKER_NOTIFY_TELEGRAM_BOT_TOKEN=isi-token-bot
+WORKER_NOTIFY_TELEGRAM_CHAT_ID=isi-chat-id
+```
+
+Kalau laporan dikirim ke topik forum group Telegram, isi juga:
+
+```bash
+WORKER_NOTIFY_TELEGRAM_MESSAGE_THREAD_ID=isi-thread-id
 ```
 
 ## Mode 1: Cron VPS
@@ -55,6 +74,13 @@ pm2 save
 pm2 startup
 ```
 
+Atau langsung pakai file PM2 bawaan repo:
+
+```bash
+pm2 start ecosystem.config.cjs
+pm2 save
+```
+
 ## Apa yang dikerjakan worker
 
 - `worker:sync`
@@ -73,6 +99,9 @@ pm2 startup
 
 - `worker:scheduler`
   - menjalankan `sync` dan `audit` berdasarkan interval worker
+  - audit dimulai dengan delay awal agar tidak tabrakan dengan sync
+  - kalau ada job lain yang masih berjalan, worker akan skip putaran itu agar tidak overlap
+  - bisa kirim laporan selesai proses ke Telegram jika env notifikasi diisi
 
 ## Catatan
 

@@ -1,0 +1,31 @@
+module.exports = {
+  apps: [
+    {
+      name: "layardrama-ops",
+      cwd: "/root/dramapro",
+      script: "scripts/ops-worker.mjs",
+      args: "scheduler",
+      interpreter: "node",
+      exec_mode: "fork",
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: "300M",
+      time: true,
+      merge_logs: true,
+      env: {
+        NODE_ENV: "production",
+        WORKER_SYNC_INTERVAL_MINUTES: "30",
+        WORKER_AUDIT_INTERVAL_MINUTES: "60",
+        WORKER_AUDIT_INITIAL_DELAY_MINUTES: "15",
+        WORKER_SYNC_ON_START: "true",
+        WORKER_AUDIT_ON_START: "false",
+        WORKER_REFRESH_AFTER_RUN: "true",
+        WORKER_SYNC_PAGES: "2",
+        WORKER_AUDIT_BATCH_SIZE: "10",
+        WORKER_NOTIFY_ON_SUCCESS: "true",
+        WORKER_NOTIFY_ON_FAILURE: "true",
+      },
+    },
+  ],
+};
