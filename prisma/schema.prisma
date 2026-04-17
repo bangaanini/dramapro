@@ -81,6 +81,7 @@ model Drama {
   streamCheckMessage String    @default("")
   streamCheckedAt  DateTime?
   feedEntries     DramaFeed[]
+  channelBroadcasts DramaChannelBroadcast[]
   favorites       FavoriteDrama[]
   savedEpisodes   SavedEpisode[]
   watchHistory    WatchHistory[]
@@ -156,6 +157,7 @@ model User {
   affiliateWithdrawals       AffiliateWithdrawal[]
   affiliatePayoutProfile     AffiliatePayoutProfile?
   ownedTelegramPartnerBots   TelegramPartnerBot[]
+  channelBroadcasts          DramaChannelBroadcast[]
   createdAt                  DateTime              @default(now())
   updatedAt                  DateTime              @updatedAt
 
@@ -300,16 +302,43 @@ model TelegramPartnerBot {
   botUsername             String   @unique
   botTokenCiphertext      String
   webhookSecretCiphertext String?
+  defaultChannelUsername  String   @default("")
   ownerUserId             String   @db.Uuid
   owner                   User     @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
   referredUsers           User[]   @relation("PartnerBotReferrals")
   affiliateCommissions    AffiliateCommission[]
+  channelBroadcasts       DramaChannelBroadcast[]
   isEnabled               Boolean  @default(true)
   notes                   String   @default("")
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
   @@index([ownerUserId, isEnabled])
+}
+
+model DramaChannelBroadcast {
+  id               String              @id @default(uuid()) @db.Uuid
+  dramaId          String              @db.Uuid
+  ownerUserId      String?             @db.Uuid
+  partnerBotId     String?             @db.Uuid
+  botKind          String              @default("default")
+  botUsername      String
+  channelUsername  String
+  buttonLabel      String
+  caption          String
+  telegramMessageId Int?
+  pinned           Boolean             @default(false)
+  postedAt         DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  drama            Drama               @relation(fields: [dramaId], references: [id], onDelete: Cascade)
+  owner            User?               @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
+  partnerBot       TelegramPartnerBot? @relation(fields: [partnerBotId], references: [id], onDelete: SetNull)
+
+  @@index([dramaId, createdAt])
+  @@index([ownerUserId, createdAt])
+  @@index([partnerBotId, createdAt])
+  @@index([botKind, createdAt])
 }
 
 model PaymentGatewayConfig {

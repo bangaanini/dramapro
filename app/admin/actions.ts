@@ -11,7 +11,9 @@ import {
   getCurrentAdmin,
   deleteCurrentAdminSession,
 } from "@/lib/admin-auth";
-import { encryptPaymentSecret } from "@/lib/payment-crypto";
+import { getAppSettings } from "@/lib/app-settings";
+import { publishDramaChannelBroadcast } from "@/lib/drama-channel-broadcasts";
+import { decryptPaymentSecret, encryptPaymentSecret } from "@/lib/payment-crypto";
 import {
   getPaymentGatewayDefinition,
   isPaymentGatewayProvider,
@@ -657,6 +659,9 @@ function parseTelegramPartnerBotPayload(formData: FormData) {
   );
   const ownerUserId = String(formData.get("ownerUserId") ?? "").trim();
   const botToken = String(formData.get("botToken") ?? "").trim();
+  const defaultChannelUsername = String(
+    formData.get("defaultChannelUsername") ?? "",
+  ).trim();
   const webhookSecret = String(formData.get("webhookSecret") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
   const isEnabled = String(formData.get("isEnabled") ?? "") === "on";
@@ -665,6 +670,7 @@ function parseTelegramPartnerBotPayload(formData: FormData) {
     botUsername,
     ownerUserId,
     botToken,
+    defaultChannelUsername,
     webhookSecret,
     notes,
     isEnabled,
@@ -710,6 +716,7 @@ export async function createTelegramPartnerBotAction(formData: FormData) {
       data: {
         botUsername: payload.botUsername,
         botTokenCiphertext: encryptPaymentSecret(payload.botToken),
+        defaultChannelUsername: payload.defaultChannelUsername,
         webhookSecretCiphertext: payload.webhookSecret
           ? encryptPaymentSecret(payload.webhookSecret)
           : null,
@@ -774,6 +781,7 @@ export async function updateTelegramPartnerBotAction(formData: FormData) {
         botTokenCiphertext: payload.botToken
           ? encryptPaymentSecret(payload.botToken)
           : existing.botTokenCiphertext,
+        defaultChannelUsername: payload.defaultChannelUsername,
         webhookSecretCiphertext: payload.webhookSecret
           ? encryptPaymentSecret(payload.webhookSecret)
           : existing.webhookSecretCiphertext,
@@ -829,6 +837,170 @@ export async function deleteTelegramPartnerBotAction(formData: FormData) {
 
   revalidatePath("/admin/telegram-bots");
   redirect("/admin/telegram-bots?saved=deleted");
+}
+
+export async function publishAdminDramaChannelBroadcastAction(formData: FormData) {
+  await requireAdminSession();
+
+  const channelUsername = parseOptionalText(formData.get("channelUsername"));
+  const dramaId = parseOptionalText(formData.get("dramaId"));
+  const caption = parseOptionalText(formData.get("caption"));
+  const buttonLabel = parseOptionalText(formData.get("buttonLabel"));
+  const extraButtonEnabled = String(formData.get("extraButtonEnabled") ?? "") === "on";
+  const extraButtonLabel = parseOptionalText(formData.get("extraButtonLabel"));
+  const extraButtonUrl = parseOptionalText(formData.get("extraButtonUrl"));
+  const pinMessage = String(formData.get("pinMessage") ?? "") === "on";
+  const searchButtonLabel = parseOptionalText(formData.get("searchButtonLabel"));
+  const includeMainBot = String(formData.get("includeMainBot") ?? "") === "on";
+  const selectedPartnerBotIds = formData
+    .getAll("partnerBotIds")
+    .map((value) => String(value).trim())
+    .filter(Boolean);
+
+  if (!dramaId) {
+    redirect(
+      "/admin/channel-broadcasts?broadcast=error&message=Pilih%20drama%20yang%20ingin%20dibroadcast%20dulu.",
+    );
+  }
+
+  if (!includeMainBot && selectedPartnerBotIds.length === 0) {
+    redirect(
+      "/admin/channel-broadcasts?broadcast=error&message=Pilih%20minimal%20satu%20target%20broadcast.",
+    );
+  }
+
+  const settings = await getAppSettings();
+  const selectedPartnerBots = selectedPartnerBotIds.length
+    ? await prisma.telegramPartnerBot.findMany({
+        where: {
+          id: {
+            in: selectedPartnerBotIds,
+          },
+          isEnabled: true,
+        },
+        select: {
+          botTokenCiphertext: true,
+          botUsername: true,
+          defaultChannelUsername: true,
+          id: true,
+          ownerUserId: true,
+        },
+      })
+    : [];
+
+  const targetErrors: string[] = [];
+  const successLabels: string[] = [];
+
+  if (includeMainBot) {
+    if (!settings.telegram.botToken?.trim() || !settings.telegram.botUsername?.trim()) {
+      targetErrors.push("Bot utama belum lengkap. Isi bot token dan username lebih dulu.");
+    } else if (!channelUsername) {
+      targetErrors.push("Channel default bot utama belum diisi di form broadcast.");
+    } else {
+      try {
+        const result = await publishDramaChannelBroadcast({
+          botKind: "default",
+          botToken: settings.telegram.botToken,
+          botUsername: settings.telegram.botUsername,
+          buttonLabel,
+          caption,
+          channelUsername,
+          extraButtonEnabled,
+          extraButtonLabel,
+          extraButtonUrl,
+          dramaId,
+          pinMessage,
+          searchButtonLabel,
+        });
+
+        successLabels.push(
+          result.pinError
+            ? "bot utama terkirim, tapi pin gagal"
+            : "bot utama terkirim",
+        );
+      } catch (error) {
+        targetErrors.push(
+          `Bot utama: ${
+            error instanceof Error ? error.message : "Broadcast gagal dikirim."
+          }`,
+        );
+      }
+    }
+  }
+
+  for (const partnerBot of selectedPartnerBots) {
+    if (!partnerBot.defaultChannelUsername?.trim()) {
+      targetErrors.push(
+        `@${partnerBot.botUsername} belum punya channel default.`,
+      );
+      continue;
+    }
+
+    let botToken = "";
+
+    try {
+      botToken = decryptPaymentSecret(partnerBot.botTokenCiphertext)?.trim() || "";
+    } catch {
+      targetErrors.push(
+        `@${partnerBot.botUsername}: token bot partner gagal dibaca.`,
+      );
+      continue;
+    }
+
+    if (!botToken) {
+      targetErrors.push(`@${partnerBot.botUsername}: token bot partner belum valid.`);
+      continue;
+    }
+
+    try {
+      const result = await publishDramaChannelBroadcast({
+        botKind: "partner",
+        botToken,
+        botUsername: partnerBot.botUsername,
+        buttonLabel,
+        caption,
+        channelUsername: partnerBot.defaultChannelUsername,
+        extraButtonEnabled,
+        extraButtonLabel,
+        extraButtonUrl,
+        dramaId,
+        ownerUserId: partnerBot.ownerUserId,
+        partnerBotId: partnerBot.id,
+        pinMessage,
+        searchButtonLabel,
+      });
+
+      successLabels.push(
+        result.pinError
+          ? `@${partnerBot.botUsername} terkirim, tapi pin gagal`
+          : `@${partnerBot.botUsername} terkirim`,
+      );
+    } catch (error) {
+      targetErrors.push(
+        `@${partnerBot.botUsername}: ${
+          error instanceof Error ? error.message : "Broadcast gagal dikirim."
+        }`,
+      );
+    }
+  }
+
+  revalidatePath("/admin/channel-broadcasts");
+
+  if (!successLabels.length) {
+    redirect(
+      `/admin/channel-broadcasts?broadcast=error&message=${encodeURIComponent(
+        targetErrors[0] ?? "Broadcast gagal dikirim.",
+      )}`,
+    );
+  }
+
+  const summaryMessage = targetErrors.length
+    ? `${successLabels.join(", ")}. Sebagian target gagal: ${targetErrors.join(" | ")}`
+    : successLabels.join(", ");
+
+  redirect(
+    `/admin/channel-broadcasts?broadcast=ok&message=${encodeURIComponent(summaryMessage)}`,
+  );
 }
 
 export async function updateAffiliateWithdrawalStatusAction(formData: FormData) {

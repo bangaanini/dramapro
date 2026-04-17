@@ -21,6 +21,21 @@ type TelegramSendMessagePayload = {
   };
 };
 
+type TelegramSendPhotoPayload = {
+  chat_id: number | string;
+  photo: string;
+  caption?: string;
+  reply_markup?: {
+    inline_keyboard: TelegramInlineKeyboardButton[][];
+  };
+};
+
+type TelegramPinChatMessagePayload = {
+  chat_id: number | string;
+  message_id: number;
+  disable_notification?: boolean;
+};
+
 type TelegramWebhookMessage = {
   message?: {
     chat: {
@@ -82,7 +97,20 @@ export async function buildTelegramMiniAppStartAppLink(startParam: string) {
     throw new Error("Telegram bot username belum diatur.");
   }
 
-  return `https://t.me/${username}?startapp=${encodeURIComponent(startParam)}`;
+  return buildTelegramMiniAppStartAppLinkForUsername(username, startParam);
+}
+
+export function buildTelegramMiniAppStartAppLinkForUsername(
+  botUsername: string,
+  startParam: string,
+) {
+  const normalizedUsername = botUsername.trim().replace(/^@/, "");
+
+  if (!normalizedUsername) {
+    throw new Error("Telegram bot username belum diatur.");
+  }
+
+  return `https://t.me/${normalizedUsername}?startapp=${encodeURIComponent(startParam)}`;
 }
 
 export function buildDramaShareStartParam(input: {
@@ -207,11 +235,12 @@ export async function sendTelegramMessage(payload: TelegramSendMessagePayload) {
   return sendTelegramMessageWithToken(token, payload);
 }
 
-export async function sendTelegramMessageWithToken(
+async function callTelegramBotApi<TPayload>(
   token: string,
-  payload: TelegramSendMessagePayload,
+  method: string,
+  payload: TPayload,
 ) {
-  const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+  const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -220,12 +249,44 @@ export async function sendTelegramMessageWithToken(
     cache: "no-store",
   });
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`Telegram sendMessage gagal: ${response.status} ${text}`.trim());
+  const text = await response.text().catch(() => "");
+  let parsed: { ok?: boolean; description?: string } | null = null;
+
+  if (text.trim()) {
+    try {
+      parsed = JSON.parse(text) as { ok?: boolean; description?: string };
+    } catch {
+      parsed = null;
+    }
   }
 
-  return response.json().catch(() => null);
+  if (!response.ok || parsed?.ok === false) {
+    const detail = parsed?.description || text;
+    throw new Error(`Telegram ${method} gagal: ${response.status} ${detail}`.trim());
+  }
+
+  return parsed;
+}
+
+export async function sendTelegramMessageWithToken(
+  token: string,
+  payload: TelegramSendMessagePayload,
+) {
+  return callTelegramBotApi(token, "sendMessage", payload);
+}
+
+export async function sendTelegramPhotoWithToken(
+  token: string,
+  payload: TelegramSendPhotoPayload,
+) {
+  return callTelegramBotApi(token, "sendPhoto", payload);
+}
+
+export async function pinTelegramChatMessageWithToken(
+  token: string,
+  payload: TelegramPinChatMessagePayload,
+) {
+  return callTelegramBotApi(token, "pinChatMessage", payload);
 }
 
 export async function isTelegramWebhookAuthorized(secretHeader: string | null) {

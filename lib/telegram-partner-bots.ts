@@ -107,6 +107,7 @@ export async function getTelegramPartnerBotAdminRows() {
       ...row,
       botToken,
       webhookSecret,
+      defaultChannelUsername: row.defaultChannelUsername,
       credentialError,
       miniAppUrl: buildPartnerMiniAppUrlFromSiteUrl(
         settings.telegram.miniAppUrl || settings.site.url,

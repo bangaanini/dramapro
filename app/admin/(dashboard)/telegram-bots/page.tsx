@@ -123,6 +123,14 @@ export default async function AdminTelegramBotsPage(
                 placeholder="Token dari BotFather"
               />
               <Field
+                label="Channel default partner"
+                name="defaultChannelUsername"
+                placeholder="@channelpartner atau https://t.me/channelpartner"
+              />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field
                 label="Webhook secret"
                 name="webhookSecret"
                 type="password"
@@ -184,6 +192,9 @@ export default async function AdminTelegramBotsPage(
                     <p className="mt-2 text-sm text-[var(--muted)]">
                       {getUserSecondaryLabel(bot.owner)} · kode affiliate{" "}
                       {bot.owner.affiliateCode ?? "belum tersedia"}
+                    </p>
+                    <p className="mt-2 text-sm text-[var(--muted)]">
+                      Channel default: {bot.defaultChannelUsername || "belum diatur"}
                     </p>
                     {bot.notes ? (
                       <p className="mt-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[var(--muted)]">
@@ -264,6 +275,14 @@ export default async function AdminTelegramBotsPage(
                       type="password"
                       placeholder="Kosongkan untuk mempertahankan token"
                     />
+                    <Field
+                      label="Channel default partner"
+                      name="defaultChannelUsername"
+                      defaultValue={bot.defaultChannelUsername}
+                      placeholder="@channelpartner atau https://t.me/channelpartner"
+                    />
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
                     <Field
                       label="Webhook secret"
                       name="webhookSecret"

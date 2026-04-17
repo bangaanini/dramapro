@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { ensureUserAffiliateCode, readAffiliateCookieCode } from "@/lib/affiliate";
 import { getTelegramSettings } from "@/lib/app-settings";
+import { decryptPaymentSecret } from "@/lib/payment-crypto";
 import { prisma } from "@/lib/prisma";
 import {
   getEnabledTelegramPartnerBot,
@@ -24,6 +25,12 @@ type VerifiedTelegramInitData = {
   authDate: number;
   queryId: string | null;
   user: TelegramInitDataUser;
+};
+
+type ResolvedTelegramPartnerBotContext = {
+  botToken: string;
+  id: string;
+  ownerUserId: string;
 };
 
 function parseTelegramInitData(initData: string) {
@@ -105,27 +112,99 @@ export async function createTelegramUserSessionFromInitData(
   botUsername?: string | null,
 ) {
   const normalizedBotUsername = normalizeTelegramBotUsername(botUsername);
-  const partnerBot = normalizedBotUsername
-    ? await getEnabledTelegramPartnerBot(normalizedBotUsername)
+  let partnerBot: ResolvedTelegramPartnerBotContext | null = normalizedBotUsername
+    ? await getEnabledTelegramPartnerBot(normalizedBotUsername).then((resolved) =>
+        resolved
+          ? {
+              botToken: resolved.botToken,
+              id: resolved.id,
+              ownerUserId: resolved.ownerUserId,
+            }
+          : null,
+      )
     : null;
 
   if (normalizedBotUsername && !partnerBot) {
     throw new Error("Bot partner tidak ditemukan atau sedang nonaktif.");
   }
 
-  const botToken = partnerBot
-    ? partnerBot.botToken
-    : (await getTelegramSettings()).botToken?.trim();
+  let verified: VerifiedTelegramInitData | null = null;
 
-  if (!botToken) {
-    throw new Error(
-      partnerBot
-        ? "Token bot partner belum valid."
-        : "Telegram bot token belum diatur di server.",
-    );
+  if (partnerBot) {
+    verified = verifyTelegramInitData(initData, partnerBot.botToken);
+  } else {
+    const defaultToken = (await getTelegramSettings()).botToken?.trim() || null;
+    const partnerCandidates = await prisma.telegramPartnerBot.findMany({
+      where: {
+        isEnabled: true,
+      },
+      select: {
+        botTokenCiphertext: true,
+        botUsername: true,
+        id: true,
+        ownerUserId: true,
+      },
+    });
+
+    const candidateErrors: Error[] = [];
+
+    if (defaultToken) {
+      try {
+        verified = verifyTelegramInitData(initData, defaultToken);
+      } catch (error) {
+        if (error instanceof Error) {
+          candidateErrors.push(error);
+        }
+      }
+    }
+
+    if (!verified) {
+      for (const candidate of partnerCandidates) {
+        let candidateToken = "";
+
+        try {
+          candidateToken =
+            decryptPaymentSecret(candidate.botTokenCiphertext)?.trim() || "";
+        } catch {
+          continue;
+        }
+
+        if (!candidateToken) {
+          continue;
+        }
+
+        try {
+          verified = verifyTelegramInitData(initData, candidateToken);
+          partnerBot = {
+            ...candidate,
+            botToken: candidateToken,
+          };
+          break;
+        } catch (error) {
+          if (error instanceof Error) {
+            candidateErrors.push(error);
+          }
+        }
+      }
+    }
+
+    if (!verified) {
+      if (!defaultToken && partnerCandidates.length === 0) {
+        throw new Error("Telegram bot token belum diatur di server.");
+      }
+
+      throw (
+        candidateErrors.find((error) =>
+          /signature|hash|initData|telegram/i.test(error.message),
+        ) ?? new Error("Signature Telegram tidak valid.")
+      );
+    }
   }
 
-  const verified = verifyTelegramInitData(initData, botToken);
+  if (!verified) {
+    throw new Error("Payload Telegram tidak valid.");
+  }
+
   const telegramId = String(verified.user.id);
   const displayName = buildTelegramDisplayName({
     firstName: verified.user.first_name,

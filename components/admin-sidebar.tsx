@@ -11,6 +11,7 @@ import {
   Download,
   KeyRound,
   LayoutGrid,
+  Megaphone,
   Menu,
   SlidersHorizontal,
   Settings2,
@@ -47,6 +48,12 @@ const adminNavItems = [
     label: "Download Promo",
     description: "Cari episode untuk materi promosi",
     icon: Download,
+  },
+  {
+    href: "/admin/channel-broadcasts",
+    label: "Broadcast Drama",
+    description: "Kirim detail drama ke channel",
+    icon: Megaphone,
   },
   {
     href: "/admin/affiliate-settings",
