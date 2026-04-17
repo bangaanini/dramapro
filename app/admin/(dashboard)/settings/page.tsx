@@ -214,6 +214,15 @@ export default async function AdminSettingsPage(
                 />
               </div>
 
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="Link Box Office bot utama"
+                  name="telegramBoxOfficeBotUrl"
+                  defaultValue={telegram.boxOfficeBotUrl}
+                  placeholder="https://t.me/BoxOficebot?startapp=..."
+                />
+              </div>
+
               <Button type="submit" className="w-full sm:w-fit">
                 Simpan pengaturan bot
               </Button>
@@ -227,6 +236,7 @@ export default async function AdminSettingsPage(
                   `Mini App: ${telegram.miniAppUrl}`,
                   `Support: ${telegram.supportUrl}`,
                   `Broadcast channel: ${telegram.defaultBroadcastChannel || "belum diatur"}`,
+                  `Box Office: ${telegram.boxOfficeBotUrl || "belum diatur"}`,
                   `Webhook: ${telegram.webhookUrl}`,
                   telegram.botUsername
                     ? `Bot link: https://t.me/${telegram.botUsername}`

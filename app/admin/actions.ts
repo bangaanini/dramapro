@@ -504,6 +504,10 @@ export async function saveTelegramSettingsAction(formData: FormData) {
       formData.get("telegramMiniAppUrl"),
       "Telegram mini app URL",
     );
+    const boxOfficeBotUrl = parseOptionalUrl(
+      formData.get("telegramBoxOfficeBotUrl"),
+      "Link Box Office bot utama",
+    );
     const defaultBroadcastChannel = parseOptionalText(
       formData.get("telegramDefaultBroadcastChannel"),
     );
@@ -538,6 +542,7 @@ export async function saveTelegramSettingsAction(formData: FormData) {
         telegramSupportUrl: supportUrl,
         telegramMiniAppUrl: miniAppUrl,
         telegramDefaultBroadcastChannel: defaultBroadcastChannel,
+        telegramBoxOfficeBotUrl: boxOfficeBotUrl,
       },
       create: {
         id: "global",
@@ -547,6 +552,7 @@ export async function saveTelegramSettingsAction(formData: FormData) {
         telegramSupportUrl: supportUrl,
         telegramMiniAppUrl: miniAppUrl,
         telegramDefaultBroadcastChannel: defaultBroadcastChannel,
+        telegramBoxOfficeBotUrl: boxOfficeBotUrl,
       },
     });
   } catch (error) {
@@ -945,7 +951,7 @@ export async function publishAdminDramaChannelBroadcastAction(formData: FormData
           channelUsername,
           includeBoxOfficeButton,
           includeSearchButton,
-          boxOfficeButtonUrl: settings.telegram.menu.movieChannelUrl || null,
+          boxOfficeButtonUrl: settings.telegram.boxOfficeBotUrl || null,
           dramaId,
           pinMessage,
         });

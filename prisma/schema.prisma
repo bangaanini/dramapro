@@ -261,6 +261,7 @@ model AppSettings {
   telegramSupportUrl           String   @default("")
   telegramMiniAppUrl           String   @default("")
   telegramDefaultBroadcastChannel String @default("")
+  telegramBoxOfficeBotUrl      String   @default("")
   telegramInlineButtons        Json?    @db.JsonB
   telegramWelcomeMessage        String   @default("")
   telegramOpenButtonText        String   @default("")

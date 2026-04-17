@@ -222,6 +222,9 @@ export const getAppSettings = cache(async () => {
   const telegramDefaultBroadcastChannel = readTrimmed(
     row?.telegramDefaultBroadcastChannel,
   );
+  const telegramBoxOfficeBotUrl = readTrimmed(
+    row?.telegramBoxOfficeBotUrl,
+  );
   const telegramMenu = {
     welcomeMessage:
       readTrimmed(row?.telegramWelcomeMessage) ||
@@ -286,6 +289,8 @@ export const getAppSettings = cache(async () => {
       supportUrl: telegramSupportUrl,
       miniAppUrl: telegramMiniAppUrl,
       defaultBroadcastChannel: telegramDefaultBroadcastChannel,
+      boxOfficeBotUrl:
+        telegramBoxOfficeBotUrl || telegramMenu.movieChannelUrl || "",
       inlineButtons: telegramInlineButtons,
       webhookUrl: absoluteUrlFromSiteUrl(siteUrl, "/api/telegram/webhook"),
       menu: telegramMenu,
