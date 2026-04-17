@@ -55,18 +55,24 @@ export default async function AdminBotMessagePage(
         </div>
         <p className="mt-2">
           Gunakan <span className="font-medium text-white">{"{name}"}</span>{" "}
-          untuk nama Telegram user dan{" "}
+          untuk nama Telegram user,{" "}
+          <span className="font-medium text-white">{"{botName}"}</span> untuk
+          nama bot yang sedang dipakai user, dan{" "}
           <span className="font-medium text-white">{"{siteName}"}</span> untuk
-          brand aplikasi. Untuk tombol Mini App internal, cukup isi URL halaman
-          web kamu seperti <span className="font-medium text-white">/search</span>{" "}
-          versi lengkap, nanti bot akan membukanya sebagai Mini App.
+          brand aplikasi. Jadi format yang paling enak biasanya:{" "}
+          <span className="font-medium text-white">
+            👋 Hai {"{name}"}! Selamat datang di {"{botName}"}
+          </span>
+          . Untuk tombol Mini App internal, cukup isi URL halaman web kamu
+          seperti <span className="font-medium text-white">/search</span> versi
+          lengkap, nanti bot akan membukanya sebagai Mini App.
         </p>
       </div>
 
       <TelegramMessageEditor
         initialButtons={settings.telegram.inlineButtons}
         initialWelcomeMessage={settings.telegram.menu.welcomeMessage}
-        previewBotName={settings.site.name}
+        previewBotName={settings.telegram.botUsername || settings.site.name}
         previewDescription={settings.site.description}
         previewHost={settings.site.url.replace(/^https?:\/\//, "")}
         previewTitle={settings.site.title}

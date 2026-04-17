@@ -14,7 +14,7 @@ export const DEFAULT_OG_IMAGE = "/opengraph.jpg";
 export const DEFAULT_TELEGRAM_DRAMA_CHANNEL_URL = "https://t.me/LayarDramaID";
 export const DEFAULT_TELEGRAM_MOVIE_CHANNEL_URL = "https://t.me/layarboxoffice";
 export const DEFAULT_TELEGRAM_WELCOME_MESSAGE = [
-  "👋 Hai {name}! Selamat datang di {siteName}",
+  "👋 Hai {name}! Selamat datang di {botName}",
   "",
   "🎬 Nonton Drama China & Film Box Office langsung dari Telegram!",
   "🔥 Tanpa ribet • Full HD • Update setiap hari",

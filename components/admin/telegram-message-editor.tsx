@@ -110,7 +110,11 @@ export function TelegramMessageEditor({
               <code className="rounded bg-black/30 px-1.5 py-0.5 text-neutral-200">
                 {"{name}"}
               </code>{" "}
-              untuk nama Telegram user dan{" "}
+              untuk nama Telegram user,{" "}
+              <code className="rounded bg-black/30 px-1.5 py-0.5 text-neutral-200">
+                {"{botName}"}
+              </code>{" "}
+              untuk nama bot yang sedang aktif, dan{" "}
               <code className="rounded bg-black/30 px-1.5 py-0.5 text-neutral-200">
                 {"{siteName}"}
               </code>{" "}
@@ -210,6 +214,7 @@ export function TelegramMessageEditor({
           <div className="rounded-[18px] bg-[#2c3947] p-4 text-sm leading-7 text-white">
             {welcomeMessage
               .replace(/\{name\}/gi, "Zen Kusuma")
+              .replace(/\{botName\}|\{bot_name\}|\{nama bot\}|\{nama_bot\}/gi, previewBotName)
               .replace(/\{siteName\}/gi, previewBotName)}
           </div>
 

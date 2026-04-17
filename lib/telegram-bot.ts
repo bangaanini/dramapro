@@ -189,11 +189,23 @@ export function buildDramaShareStartParam(input: {
     : `drama_${dramaId}`;
 }
 
-export async function buildTelegramStartMessage(firstName?: string) {
+export async function buildTelegramStartMessage(
+  firstName?: string,
+  options?: {
+    botName?: string | null;
+    botUsername?: string | null;
+  },
+) {
   const safeName = firstName?.trim() || "Sobat Drama";
   const settings = await getAppSettings();
+  const resolvedBotName =
+    options?.botName?.trim() ||
+    options?.botUsername?.trim().replace(/^@/, "") ||
+    settings.telegram.botUsername?.trim().replace(/^@/, "") ||
+    settings.site.name;
 
   return formatTelegramTemplate(settings.telegram.menu.welcomeMessage, {
+    botName: resolvedBotName,
     name: safeName,
     siteName: settings.site.name,
   });
@@ -280,11 +292,16 @@ export async function buildTelegramStartKeyboard(
 function formatTelegramTemplate(
   template: string,
   values: {
+    botName: string;
     name: string;
     siteName: string;
   },
 ) {
   return template
+    .replaceAll("{botName}", values.botName)
+    .replaceAll("{bot_name}", values.botName)
+    .replaceAll("{nama bot}", values.botName)
+    .replaceAll("{nama_bot}", values.botName)
     .replaceAll("{name}", values.name)
     .replaceAll("{siteName}", values.siteName);
 }

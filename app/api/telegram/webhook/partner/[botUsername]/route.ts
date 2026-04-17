@@ -50,7 +50,10 @@ export async function POST(
 
   await sendTelegramMessageWithToken(partnerBot.botToken, {
     chat_id: startPayload.chatId,
-    text: await buildTelegramStartMessage(startPayload.firstName),
+    text: await buildTelegramStartMessage(startPayload.firstName, {
+      botName: partnerBot.botUsername,
+      botUsername: normalizedBotUsername,
+    }),
     reply_markup: await buildTelegramStartKeyboard(null, {
       botUsername: normalizedBotUsername,
     }),
