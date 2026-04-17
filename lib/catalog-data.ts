@@ -18,6 +18,15 @@ export type HomeFeedEntry = {
   popularityScore: number;
 };
 
+export type BroadcastDramaEntry = {
+  description: string | null;
+  episodeCount: number;
+  id: string;
+  providerName: string;
+  thumbUrl: string;
+  title: string;
+};
+
 type HomeCatalogPayload = {
   totalDramas: number;
   homeEntries: HomeFeedEntry[];
@@ -213,6 +222,67 @@ const getCachedHomepageCatalogData = unstable_cache(
 
 export async function getHomepageCatalogData() {
   return getCachedHomepageCatalogData();
+}
+
+const getHomepageBroadcastDramaEntriesCached = unstable_cache(
+  async (limit: number): Promise<BroadcastDramaEntry[]> => {
+    const resolvedLimit = Math.min(Math.max(1, limit), 30);
+    const visibleProviders = await getHomepageVisibleProviders();
+    const prioritizedSources: SyncSource[] = ["home", "popular", "new"];
+    const seenDramaIds = new Set<string>();
+    const result: BroadcastDramaEntry[] = [];
+
+    for (const source of prioritizedSources) {
+      const rows = await prisma.dramaFeed.findMany({
+        where: {
+          source,
+          drama: {
+            providerName: {
+              in: visibleProviders,
+            },
+            isStreamPlayable: true,
+            thumbUrl: {
+              not: "",
+            },
+          },
+        },
+        include: { drama: true },
+        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }, { id: "asc" }],
+        take: resolvedLimit,
+      });
+
+      for (const row of rows) {
+        if (seenDramaIds.has(row.drama.id)) {
+          continue;
+        }
+
+        seenDramaIds.add(row.drama.id);
+        result.push({
+          description: row.drama.description,
+          episodeCount: row.drama.episodeCount,
+          id: row.drama.id,
+          providerName: row.drama.providerName,
+          thumbUrl: row.drama.thumbUrl,
+          title: row.drama.title,
+        });
+
+        if (result.length >= resolvedLimit) {
+          return result;
+        }
+      }
+    }
+
+    return result;
+  },
+  ["homepage-broadcast-drama-entries"],
+  {
+    revalidate: 300,
+    tags: ["catalog-home"],
+  },
+);
+
+export async function getHomepageBroadcastDramaEntries(limit = 20) {
+  return getHomepageBroadcastDramaEntriesCached(limit);
 }
 
 export async function getHomepageFeedPage(

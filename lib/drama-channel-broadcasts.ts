@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getHomepageBroadcastDramaEntries } from "@/lib/catalog-data";
 import {
   buildDramaShareStartParam,
   buildTelegramMiniAppStartAppLinkForUsername,
@@ -7,8 +8,10 @@ import {
 } from "@/lib/telegram-bot";
 
 const DEFAULT_BROADCAST_BUTTON_LABEL = "▶️ Tonton Sekarang";
-const DEFAULT_SEARCH_BUTTON_LABEL = "🔎 Cari Judul";
 const MAX_CAPTION_LENGTH = 1024;
+const VIP_LINK_LABEL = "🛍️ Langganan VIP Sekarang";
+const GUIDE_LINK_LABEL = "📚 Panduan Pengguna";
+const SUPPORT_LINK_LABEL = "📞 Hubungi Admin Sekarang";
 
 type PublishDramaChannelBroadcastInput = {
   botKind: "default" | "partner";
@@ -17,14 +20,10 @@ type PublishDramaChannelBroadcastInput = {
   buttonLabel: string;
   caption: string;
   channelUsername: string;
-  extraButtonEnabled?: boolean;
-  extraButtonLabel?: string;
-  extraButtonUrl?: string;
   dramaId: string;
   ownerUserId?: string | null;
   partnerBotId?: string | null;
   pinMessage?: boolean;
-  searchButtonLabel?: string;
 };
 
 function truncateText(value: string, maxLength: number) {
@@ -39,10 +38,6 @@ function truncateText(value: string, maxLength: number) {
 
 export function getDefaultDramaChannelBroadcastButtonLabel() {
   return DEFAULT_BROADCAST_BUTTON_LABEL;
-}
-
-export function getDefaultDramaChannelBroadcastSearchButtonLabel() {
-  return DEFAULT_SEARCH_BUTTON_LABEL;
 }
 
 export function normalizeTelegramChannelUsername(value: string) {
@@ -75,26 +70,75 @@ export function normalizeTelegramChannelUsername(value: string) {
   return normalized;
 }
 
+function buildTelegramBotChatUrlForUsername(botUsername: string) {
+  const normalizedUsername = botUsername.trim().replace(/^@/, "");
+
+  if (!normalizedUsername) {
+    throw new Error("Telegram bot username belum diatur.");
+  }
+
+  return `https://t.me/${normalizedUsername}`;
+}
+
 export function buildDefaultDramaChannelBroadcastCaption(input: {
-  botName: string;
+  botUsername: string;
   description?: string | null;
   title: string;
 }) {
-  const title = input.title.trim();
-  const description = truncateText(input.description ?? "", 420);
-  const lines = [title];
-
-  if (description) {
-    lines.push("", description);
-  }
-
-  lines.push("", `🎬 Buka sekarang di ${input.botName.trim()}.`);
+  const description = truncateText(input.description ?? "", 360) || "Sinopsis belum tersedia.";
+  const lines = [
+    "SINOPSIS",
+    "",
+    description,
+    "",
+    "———————————————",
+    "💎 AKSES VIP - NONTON SEPUASNYA",
+    "Dapatkan akses ke semua episode premium short drama hanya mulai Rp2.000 per hari.",
+    VIP_LINK_LABEL,
+    "",
+    "☎️ BANTUAN & PERTANYAAN",
+    "Jika mengalami kendala atau butuh bantuan:",
+    GUIDE_LINK_LABEL,
+    SUPPORT_LINK_LABEL,
+    "",
+    "Klik tombol di bawah untuk mulai👇",
+  ];
 
   return lines.join("\n");
 }
 
+function buildCaptionTextLinkEntities(caption: string, url: string) {
+  const entities: Array<{
+    length: number;
+    offset: number;
+    type: "text_link";
+    url: string;
+  }> = [];
+
+  for (const label of [VIP_LINK_LABEL, GUIDE_LINK_LABEL, SUPPORT_LINK_LABEL]) {
+    const offset = caption.indexOf(label);
+
+    if (offset < 0) {
+      continue;
+    }
+
+    entities.push({
+      length: label.length,
+      offset,
+      type: "text_link",
+      url,
+    });
+  }
+
+  return entities;
+}
+
 export async function searchDramasForChannelBroadcast(query: string) {
   const trimmedQuery = query.trim();
+
+  if (!trimmedQuery) {
+    return getHomepageBroadcastDramaEntries(20);
+  }
 
   return prisma.drama.findMany({
     where: {
@@ -138,7 +182,7 @@ export async function searchDramasForChannelBroadcast(query: string) {
       title: true,
       updatedAt: true,
     },
-    take: 24,
+    take: 20,
   });
 }
 
@@ -211,12 +255,7 @@ export async function publishDramaChannelBroadcast(
   }
 
   const buttonLabel = input.buttonLabel.trim() || DEFAULT_BROADCAST_BUTTON_LABEL;
-  const searchButtonLabel =
-    input.searchButtonLabel?.trim() || DEFAULT_SEARCH_BUTTON_LABEL;
   const caption = input.caption.trim();
-  const extraButtonEnabled = input.extraButtonEnabled === true;
-  const extraButtonLabel = input.extraButtonLabel?.trim() ?? "";
-  const extraButtonUrl = input.extraButtonUrl?.trim() ?? "";
 
   if (!caption) {
     throw new Error("Caption broadcast wajib diisi.");
@@ -226,26 +265,6 @@ export async function publishDramaChannelBroadcast(
     throw new Error("Caption terlalu panjang. Maksimal 1024 karakter untuk post bergambar Telegram.");
   }
 
-  if (extraButtonEnabled) {
-    if (!extraButtonLabel) {
-      throw new Error("Label tombol tambahan wajib diisi kalau tombol tambahan diaktifkan.");
-    }
-
-    if (!extraButtonUrl) {
-      throw new Error("URL tombol tambahan wajib diisi kalau tombol tambahan diaktifkan.");
-    }
-
-    try {
-      const url = new URL(extraButtonUrl);
-
-      if (url.protocol !== "https:" && url.protocol !== "http:") {
-        throw new Error("invalid_protocol");
-      }
-    } catch {
-      throw new Error("URL tombol tambahan wajib berupa URL yang valid.");
-    }
-  }
-
   const detailStartParam = buildDramaShareStartParam({
     dramaId: drama.id,
   });
@@ -253,10 +272,8 @@ export async function publishDramaChannelBroadcast(
     input.botUsername,
     detailStartParam,
   );
-  const searchDeepLinkUrl = buildTelegramMiniAppStartAppLinkForUsername(
-    input.botUsername,
-    "search",
-  );
+  const botChatUrl = buildTelegramBotChatUrlForUsername(input.botUsername);
+  const captionEntities = buildCaptionTextLinkEntities(caption, botChatUrl);
 
   const inlineKeyboard: Array<Array<{ text: string; url: string }>> = [
     [
@@ -266,22 +283,6 @@ export async function publishDramaChannelBroadcast(
       },
     ],
   ];
-
-  const secondaryRow: Array<{ text: string; url: string }> = [
-    {
-      text: searchButtonLabel,
-      url: searchDeepLinkUrl,
-    },
-  ];
-
-  if (extraButtonEnabled && extraButtonLabel && extraButtonUrl) {
-    secondaryRow.push({
-      text: extraButtonLabel,
-      url: extraButtonUrl,
-    });
-  }
-
-  inlineKeyboard.push(secondaryRow);
 
   const draft = await prisma.dramaChannelBroadcast.create({
     data: {
@@ -300,6 +301,7 @@ export async function publishDramaChannelBroadcast(
   try {
     const sent = (await sendTelegramPhotoWithToken(input.botToken, {
       caption,
+      caption_entities: captionEntities,
       chat_id: `@${normalizedChannelUsername}`,
       photo: drama.thumbUrl,
       reply_markup: {

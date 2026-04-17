@@ -33,11 +33,7 @@ type DramaChannelBroadcastComposerProps = {
   initialButtonLabel: string;
   initialCaption: string;
   initialChannelUsername?: string;
-  initialExtraButtonEnabled?: boolean;
-  initialExtraButtonLabel?: string;
-  initialExtraButtonUrl?: string;
   initialDramaId: string;
-  initialSearchButtonLabel?: string;
   pendingLabel: string;
   dramas: BroadcastDramaOption[];
   submitLabel: string;
@@ -70,10 +66,6 @@ export function DramaChannelBroadcastComposer({
   initialCaption,
   initialChannelUsername = "",
   initialDramaId,
-  initialExtraButtonEnabled = false,
-  initialExtraButtonLabel = "",
-  initialExtraButtonUrl = "",
-  initialSearchButtonLabel = "🔎 Cari Judul",
   pendingLabel,
   submitLabel,
 }: DramaChannelBroadcastComposerProps) {
@@ -87,19 +79,7 @@ export function DramaChannelBroadcastComposer({
   );
   const [buttonLabel, setButtonLabel] = React.useState(initialButtonLabel);
   const [caption, setCaption] = React.useState(initialCaption);
-  const [extraButtonEnabled, setExtraButtonEnabled] = React.useState(
-    initialExtraButtonEnabled,
-  );
-  const [extraButtonLabel, setExtraButtonLabel] = React.useState(
-    initialExtraButtonLabel,
-  );
-  const [extraButtonUrl, setExtraButtonUrl] = React.useState(
-    initialExtraButtonUrl,
-  );
   const [pinMessage, setPinMessage] = React.useState(true);
-  const [searchButtonLabel, setSearchButtonLabel] = React.useState(
-    initialSearchButtonLabel,
-  );
   const selectedDrama = dramaMap.get(selectedDramaId) ?? dramas[0] ?? null;
   const previousDramaIdRef = React.useRef(initialDramaId);
 
@@ -181,6 +161,10 @@ export function DramaChannelBroadcastComposer({
             <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
               Telegram membatasi caption foto sampai 1024 karakter.
             </p>
+            <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+              Baris VIP, Panduan Pengguna, dan Hubungi Admin akan otomatis jadi
+              inline link ke bot pengirim selama labelnya tetap dipakai.
+            </p>
           </div>
 
           <div className="space-y-4">
@@ -195,65 +179,6 @@ export function DramaChannelBroadcastComposer({
                 className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/6 px-4 text-sm text-white outline-none placeholder:text-[var(--muted-foreground)] focus:border-accent/50"
                 placeholder="▶️ Tonton Sekarang"
               />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-white">
-                Label tombol cari
-              </label>
-              <input
-                name="searchButtonLabel"
-                value={searchButtonLabel}
-                onChange={(event) => setSearchButtonLabel(event.target.value)}
-                className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/6 px-4 text-sm text-white outline-none placeholder:text-[var(--muted-foreground)] focus:border-accent/50"
-                placeholder="🔎 Cari Judul"
-              />
-              <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
-                Tombol ini wajib dan akan membuka halaman pencarian di Mini App.
-              </p>
-            </div>
-
-            <div className="rounded-[1.6rem] border border-white/10 bg-white/5 p-4">
-              <label className="flex items-center gap-3 text-sm text-white">
-                <input
-                  type="checkbox"
-                  name="extraButtonEnabled"
-                  checked={extraButtonEnabled}
-                  onChange={(event) => setExtraButtonEnabled(event.target.checked)}
-                  className="size-4 rounded border-white/20 bg-transparent accent-[var(--accent)]"
-                />
-                Aktifkan tombol tambahan
-              </label>
-
-              <div className="mt-4 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-white">
-                    Label tombol tambahan
-                  </label>
-                  <input
-                    name="extraButtonLabel"
-                    value={extraButtonLabel}
-                    onChange={(event) => setExtraButtonLabel(event.target.value)}
-                    disabled={!extraButtonEnabled}
-                    className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/6 px-4 text-sm text-white outline-none placeholder:text-[var(--muted-foreground)] disabled:cursor-not-allowed disabled:opacity-50"
-                    placeholder="🔥 Join VIP Sekarang"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-white">
-                    URL tombol tambahan
-                  </label>
-                  <input
-                    name="extraButtonUrl"
-                    value={extraButtonUrl}
-                    onChange={(event) => setExtraButtonUrl(event.target.value)}
-                    disabled={!extraButtonEnabled}
-                    className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/6 px-4 text-sm text-white outline-none placeholder:text-[var(--muted-foreground)] disabled:cursor-not-allowed disabled:opacity-50"
-                    placeholder="https://layardrama.id/vip"
-                  />
-                </div>
-              </div>
             </div>
 
             <label className="flex items-center gap-3 rounded-[1.6rem] border border-white/10 bg-white/5 px-4 py-3 text-sm text-white">
@@ -329,21 +254,6 @@ export function DramaChannelBroadcastComposer({
             <div className="grid gap-2">
               <div className="rounded-[1rem] border border-white/10 bg-[#253140] px-4 py-3 text-center text-sm font-semibold text-white">
                 {buttonLabel.trim() || "▶️ Tonton Sekarang"}
-              </div>
-              <div
-                className={cn(
-                  "grid gap-2",
-                  extraButtonEnabled ? "grid-cols-2" : "grid-cols-1",
-                )}
-              >
-                <div className="rounded-[1rem] border border-white/10 bg-[#253140] px-4 py-3 text-center text-sm font-semibold text-white">
-                  {searchButtonLabel.trim() || "🔎 Cari Judul"}
-                </div>
-                {extraButtonEnabled ? (
-                  <div className="rounded-[1rem] border border-white/10 bg-[#253140] px-4 py-3 text-center text-sm font-semibold text-white">
-                    {extraButtonLabel.trim() || "Tombol tambahan"}
-                  </div>
-                ) : null}
               </div>
             </div>
           </div>

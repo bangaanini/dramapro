@@ -25,6 +25,12 @@ type TelegramSendPhotoPayload = {
   chat_id: number | string;
   photo: string;
   caption?: string;
+  caption_entities?: Array<{
+    length: number;
+    offset: number;
+    type: "text_link";
+    url: string;
+  }>;
   reply_markup?: {
     inline_keyboard: TelegramInlineKeyboardButton[][];
   };

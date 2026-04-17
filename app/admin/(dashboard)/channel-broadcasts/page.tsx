@@ -16,7 +16,6 @@ import { getAppSettings } from "@/lib/app-settings";
 import {
   buildDefaultDramaChannelBroadcastCaption,
   getDefaultDramaChannelBroadcastButtonLabel,
-  getDefaultDramaChannelBroadcastSearchButtonLabel,
   listRecentDramaChannelBroadcasts,
   searchDramasForChannelBroadcast,
 } from "@/lib/drama-channel-broadcasts";
@@ -64,7 +63,8 @@ export default async function AdminChannelBroadcastsPage({
           Admin bisa broadcast halaman detail drama ke channel bot utama dan
           partner bot sekaligus. Tombol utama akan membuka detail drama, bukan
           episode langsung, supaya user tetap melihat poster, ringkasan, dan CTA
-          tonton yang utuh di Mini App.
+          tonton yang utuh di Mini App. Semua link di caption akan mengarah ke
+          bot yang mengirim broadcast tersebut.
         </p>
       </section>
 
@@ -92,8 +92,9 @@ export default async function AdminChannelBroadcastsPage({
                 Cari katalog lokal
               </Badge>
               <p className="mt-3 max-w-2xl text-sm leading-7 text-[var(--muted)]">
-                Pilih drama dari database lokal yang sudah playable. Hasil ini
-                akan dipakai untuk poster, judul, dan caption otomatis.
+                Pilih drama dari database lokal yang sudah playable. Kalau kolom
+                cari kosong, daftar di bawah otomatis mengambil 20 drama dari
+                feed homepage terbaru.
               </p>
             </div>
 
@@ -137,17 +138,16 @@ export default async function AdminChannelBroadcastsPage({
           helperText="Isi channel bot utama jika target utama ikut broadcast. Partner bot akan memakai channel default masing-masing."
           initialButtonLabel={getDefaultDramaChannelBroadcastButtonLabel()}
           initialCaption={buildDefaultDramaChannelBroadcastCaption({
-            botName: settings.site.name,
+            botUsername: settings.telegram.botUsername ?? "bot_kamu",
             description: selectedDrama.description,
             title: selectedDrama.title,
           })}
           initialDramaId={selectedDrama.id}
-          initialSearchButtonLabel={getDefaultDramaChannelBroadcastSearchButtonLabel()}
           pendingLabel="Mengirim broadcast..."
           submitLabel="Kirim broadcast drama"
           dramas={fallbackDramas.map((drama) => ({
             defaultCaption: buildDefaultDramaChannelBroadcastCaption({
-              botName: settings.site.name,
+              botUsername: settings.telegram.botUsername ?? "bot_kamu",
               description: drama.description,
               title: drama.title,
             }),
@@ -304,9 +304,9 @@ export default async function AdminChannelBroadcastsPage({
             </div>
             <ul className="space-y-3 text-sm leading-7 text-[var(--muted)]">
               <li>Broadcast selalu membuka halaman detail drama, bukan episode langsung.</li>
-              <li>Tombol utama ada di baris pertama supaya CTA tetap dominan.</li>
-              <li>Tombol Cari Judul selalu aktif di baris kedua untuk fallback eksplorasi.</li>
-              <li>Partner bot memakai deep link bot masing-masing agar konteks referral tetap aman.</li>
+              <li>Tombol utama tetap satu saja supaya CTA paling jelas dan tidak pecah fokus.</li>
+              <li>Link VIP, panduan, dan hubungi admin di caption akan otomatis jadi inline link.</li>
+              <li>Partner bot memakai link bot masing-masing agar konteks referral tetap aman.</li>
             </ul>
           </CardContent>
         </Card>

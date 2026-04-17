@@ -846,11 +846,7 @@ export async function publishAdminDramaChannelBroadcastAction(formData: FormData
   const dramaId = parseOptionalText(formData.get("dramaId"));
   const caption = parseOptionalText(formData.get("caption"));
   const buttonLabel = parseOptionalText(formData.get("buttonLabel"));
-  const extraButtonEnabled = String(formData.get("extraButtonEnabled") ?? "") === "on";
-  const extraButtonLabel = parseOptionalText(formData.get("extraButtonLabel"));
-  const extraButtonUrl = parseOptionalText(formData.get("extraButtonUrl"));
   const pinMessage = String(formData.get("pinMessage") ?? "") === "on";
-  const searchButtonLabel = parseOptionalText(formData.get("searchButtonLabel"));
   const includeMainBot = String(formData.get("includeMainBot") ?? "") === "on";
   const selectedPartnerBotIds = formData
     .getAll("partnerBotIds")
@@ -905,12 +901,8 @@ export async function publishAdminDramaChannelBroadcastAction(formData: FormData
           buttonLabel,
           caption,
           channelUsername,
-          extraButtonEnabled,
-          extraButtonLabel,
-          extraButtonUrl,
           dramaId,
           pinMessage,
-          searchButtonLabel,
         });
 
         successLabels.push(
@@ -960,14 +952,10 @@ export async function publishAdminDramaChannelBroadcastAction(formData: FormData
         buttonLabel,
         caption,
         channelUsername: partnerBot.defaultChannelUsername,
-        extraButtonEnabled,
-        extraButtonLabel,
-        extraButtonUrl,
         dramaId,
         ownerUserId: partnerBot.ownerUserId,
         partnerBotId: partnerBot.id,
         pinMessage,
-        searchButtonLabel,
       });
 
       successLabels.push(
