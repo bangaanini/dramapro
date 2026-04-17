@@ -201,6 +201,7 @@ export function DramaChannelBroadcastComposer({
         </div>
 
         <FormSubmitButton
+          type="submit"
           idleLabel={submitLabel}
           pendingLabel={pendingLabel}
           className="h-12 w-full"
