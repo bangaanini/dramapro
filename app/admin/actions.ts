@@ -662,6 +662,10 @@ function parseTelegramPartnerBotPayload(formData: FormData) {
   const defaultChannelUsername = String(
     formData.get("defaultChannelUsername") ?? "",
   ).trim();
+  const boxOfficeBotUrl = parseOptionalUrl(
+    formData.get("boxOfficeBotUrl"),
+    "Link bot Box Office",
+  );
   const webhookSecret = String(formData.get("webhookSecret") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
   const isEnabled = String(formData.get("isEnabled") ?? "") === "on";
@@ -671,6 +675,7 @@ function parseTelegramPartnerBotPayload(formData: FormData) {
     ownerUserId,
     botToken,
     defaultChannelUsername,
+    boxOfficeBotUrl,
     webhookSecret,
     notes,
     isEnabled,
@@ -717,6 +722,7 @@ export async function createTelegramPartnerBotAction(formData: FormData) {
         botUsername: payload.botUsername,
         botTokenCiphertext: encryptPaymentSecret(payload.botToken),
         defaultChannelUsername: payload.defaultChannelUsername,
+        boxOfficeBotUrl: payload.boxOfficeBotUrl,
         webhookSecretCiphertext: payload.webhookSecret
           ? encryptPaymentSecret(payload.webhookSecret)
           : null,
@@ -782,6 +788,7 @@ export async function updateTelegramPartnerBotAction(formData: FormData) {
           ? encryptPaymentSecret(payload.botToken)
           : existing.botTokenCiphertext,
         defaultChannelUsername: payload.defaultChannelUsername,
+        boxOfficeBotUrl: payload.boxOfficeBotUrl,
         webhookSecretCiphertext: payload.webhookSecret
           ? encryptPaymentSecret(payload.webhookSecret)
           : existing.webhookSecretCiphertext,
@@ -846,6 +853,9 @@ export async function publishAdminDramaChannelBroadcastAction(formData: FormData
   const dramaId = parseOptionalText(formData.get("dramaId"));
   const caption = parseOptionalText(formData.get("caption"));
   const buttonLabel = parseOptionalText(formData.get("buttonLabel"));
+  const includeSearchButton = String(formData.get("includeSearchButton") ?? "") === "on";
+  const includeBoxOfficeButton =
+    String(formData.get("includeBoxOfficeButton") ?? "") === "on";
   const pinMessage = String(formData.get("pinMessage") ?? "") === "on";
   const includeMainBot = String(formData.get("includeMainBot") ?? "") === "on";
   const selectedPartnerBotIds = formData
@@ -877,6 +887,7 @@ export async function publishAdminDramaChannelBroadcastAction(formData: FormData
         select: {
           botTokenCiphertext: true,
           botUsername: true,
+          boxOfficeBotUrl: true,
           defaultChannelUsername: true,
           id: true,
           ownerUserId: true,
@@ -901,6 +912,9 @@ export async function publishAdminDramaChannelBroadcastAction(formData: FormData
           buttonLabel,
           caption,
           channelUsername,
+          includeBoxOfficeButton,
+          includeSearchButton,
+          boxOfficeButtonUrl: settings.telegram.menu.movieChannelUrl || null,
           dramaId,
           pinMessage,
         });
@@ -952,6 +966,9 @@ export async function publishAdminDramaChannelBroadcastAction(formData: FormData
         buttonLabel,
         caption,
         channelUsername: partnerBot.defaultChannelUsername,
+        includeBoxOfficeButton,
+        includeSearchButton,
+        boxOfficeButtonUrl: partnerBot.boxOfficeBotUrl || null,
         dramaId,
         ownerUserId: partnerBot.ownerUserId,
         partnerBotId: partnerBot.id,

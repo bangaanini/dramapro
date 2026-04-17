@@ -33,7 +33,9 @@ type DramaChannelBroadcastComposerProps = {
   initialButtonLabel: string;
   initialCaption: string;
   initialChannelUsername?: string;
+  initialIncludeBoxOfficeButton?: boolean;
   initialDramaId: string;
+  initialIncludeSearchButton?: boolean;
   pendingLabel: string;
   dramas: BroadcastDramaOption[];
   submitLabel: string;
@@ -65,7 +67,9 @@ export function DramaChannelBroadcastComposer({
   initialButtonLabel,
   initialCaption,
   initialChannelUsername = "",
+  initialIncludeBoxOfficeButton = false,
   initialDramaId,
+  initialIncludeSearchButton = true,
   pendingLabel,
   submitLabel,
 }: DramaChannelBroadcastComposerProps) {
@@ -79,6 +83,12 @@ export function DramaChannelBroadcastComposer({
   );
   const [buttonLabel, setButtonLabel] = React.useState(initialButtonLabel);
   const [caption, setCaption] = React.useState(initialCaption);
+  const [includeSearchButton, setIncludeSearchButton] = React.useState(
+    initialIncludeSearchButton,
+  );
+  const [includeBoxOfficeButton, setIncludeBoxOfficeButton] = React.useState(
+    initialIncludeBoxOfficeButton,
+  );
   const [pinMessage, setPinMessage] = React.useState(true);
   const selectedDrama = dramaMap.get(selectedDramaId) ?? dramas[0] ?? null;
   const previousDramaIdRef = React.useRef(initialDramaId);
@@ -181,6 +191,44 @@ export function DramaChannelBroadcastComposer({
               />
             </div>
 
+            <div className="rounded-[1.6rem] border border-white/10 bg-white/5 p-4">
+              <p className="text-sm font-semibold text-white">Tombol tambahan</p>
+              <div className="mt-4 space-y-3">
+                <label className="flex items-start gap-3 text-sm text-white">
+                  <input
+                    type="checkbox"
+                    name="includeSearchButton"
+                    checked={includeSearchButton}
+                    onChange={(event) => setIncludeSearchButton(event.target.checked)}
+                    className="mt-0.5 size-4 rounded border-white/20 bg-transparent accent-[var(--accent)]"
+                  />
+                  <span>
+                    <span className="block font-medium">🔎 Cari Judul</span>
+                    <span className="mt-1 block text-xs leading-5 text-[var(--muted)]">
+                      Link dibuat otomatis ke halaman search Mini App bot pengirim.
+                    </span>
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-3 text-sm text-white">
+                  <input
+                    type="checkbox"
+                    name="includeBoxOfficeButton"
+                    checked={includeBoxOfficeButton}
+                    onChange={(event) => setIncludeBoxOfficeButton(event.target.checked)}
+                    className="mt-0.5 size-4 rounded border-white/20 bg-transparent accent-[var(--accent)]"
+                  />
+                  <span>
+                    <span className="block font-medium">🎬 Nonton Box Office</span>
+                    <span className="mt-1 block text-xs leading-5 text-[var(--muted)]">
+                      Otomatis memakai link Box Office dari pengaturan bot. Jika
+                      link belum diatur, tombol ini akan dilewati.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </div>
+
             <label className="flex items-center gap-3 rounded-[1.6rem] border border-white/10 bg-white/5 px-4 py-3 text-sm text-white">
               <input
                 type="checkbox"
@@ -256,6 +304,27 @@ export function DramaChannelBroadcastComposer({
               <div className="rounded-[1rem] border border-white/10 bg-[#253140] px-4 py-3 text-center text-sm font-semibold text-white">
                 {buttonLabel.trim() || "▶️ Tonton Sekarang"}
               </div>
+              {includeSearchButton || includeBoxOfficeButton ? (
+                <div
+                  className={cn(
+                    "grid gap-2",
+                    includeSearchButton && includeBoxOfficeButton
+                      ? "grid-cols-2"
+                      : "grid-cols-1",
+                  )}
+                >
+                  {includeSearchButton ? (
+                    <div className="rounded-[1rem] border border-white/10 bg-[#253140] px-4 py-3 text-center text-sm font-semibold text-white">
+                      🔎 Cari Judul
+                    </div>
+                  ) : null}
+                  {includeBoxOfficeButton ? (
+                    <div className="rounded-[1rem] border border-white/10 bg-[#253140] px-4 py-3 text-center text-sm font-semibold text-white">
+                      🎬 Nonton Box Office
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

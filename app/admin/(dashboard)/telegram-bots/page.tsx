@@ -136,6 +136,11 @@ export default async function AdminTelegramBotsPage(
                 type="password"
                 placeholder="Secret khusus bot partner"
               />
+              <Field
+                label="Link bot Box Office"
+                name="boxOfficeBotUrl"
+                placeholder="https://t.me/BoxOficebot?startapp=..."
+              />
             </div>
 
             <Textarea
@@ -195,6 +200,9 @@ export default async function AdminTelegramBotsPage(
                     </p>
                     <p className="mt-2 text-sm text-[var(--muted)]">
                       Channel default: {bot.defaultChannelUsername || "belum diatur"}
+                    </p>
+                    <p className="mt-2 text-sm text-[var(--muted)]">
+                      Link Box Office: {bot.boxOfficeBotUrl || "belum diatur"}
                     </p>
                     {bot.notes ? (
                       <p className="mt-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[var(--muted)]">
@@ -288,6 +296,12 @@ export default async function AdminTelegramBotsPage(
                       name="webhookSecret"
                       type="password"
                       placeholder="Kosongkan untuk mempertahankan secret"
+                    />
+                    <Field
+                      label="Link bot Box Office"
+                      name="boxOfficeBotUrl"
+                      defaultValue={bot.boxOfficeBotUrl}
+                      placeholder="https://t.me/BoxOficebot?startapp=..."
                     />
                   </div>
                   <Textarea

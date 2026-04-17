@@ -20,6 +20,9 @@ type PublishDramaChannelBroadcastInput = {
   buttonLabel: string;
   caption: string;
   channelUsername: string;
+  includeBoxOfficeButton?: boolean;
+  includeSearchButton?: boolean;
+  boxOfficeButtonUrl?: string | null;
   dramaId: string;
   ownerUserId?: string | null;
   partnerBotId?: string | null;
@@ -272,6 +275,10 @@ export async function publishDramaChannelBroadcast(
     input.botUsername,
     detailStartParam,
   );
+  const searchDeepLinkUrl = buildTelegramMiniAppStartAppLinkForUsername(
+    input.botUsername,
+    "search",
+  );
   const botChatUrl = buildTelegramBotChatUrlForUsername(input.botUsername);
   const captionEntities = buildCaptionTextLinkEntities(caption, botChatUrl);
 
@@ -283,6 +290,28 @@ export async function publishDramaChannelBroadcast(
       },
     ],
   ];
+
+  const secondaryRow: Array<{ text: string; url: string }> = [];
+
+  if (input.includeSearchButton) {
+    secondaryRow.push({
+      text: "🔎 Cari Judul",
+      url: searchDeepLinkUrl,
+    });
+  }
+
+  const boxOfficeButtonUrl = input.boxOfficeButtonUrl?.trim() ?? "";
+
+  if (input.includeBoxOfficeButton && boxOfficeButtonUrl) {
+    secondaryRow.push({
+      text: "🎬 Nonton Box Office",
+      url: boxOfficeButtonUrl,
+    });
+  }
+
+  if (secondaryRow.length > 0) {
+    inlineKeyboard.push(secondaryRow);
+  }
 
   const draft = await prisma.dramaChannelBroadcast.create({
     data: {

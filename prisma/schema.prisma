@@ -303,6 +303,7 @@ model TelegramPartnerBot {
   botTokenCiphertext      String
   webhookSecretCiphertext String?
   defaultChannelUsername  String   @default("")
+  boxOfficeBotUrl         String   @default("")
   ownerUserId             String   @db.Uuid
   owner                   User     @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
   referredUsers           User[]   @relation("PartnerBotReferrals")
