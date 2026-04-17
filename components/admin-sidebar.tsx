@@ -13,6 +13,7 @@ import {
   LayoutGrid,
   Megaphone,
   Menu,
+  SearchCheck,
   SlidersHorizontal,
   Settings2,
   ShieldCheck,
@@ -75,9 +76,21 @@ const adminNavItems = [
   },
   {
     href: "/admin/settings",
-    label: "Settings",
-    description: "Atur Telegram dan SEO web",
+    label: "Bot Settings",
+    description: "Bot utama, webhook, dan Mini App",
     icon: SlidersHorizontal,
+  },
+  {
+    href: "/admin/bot-message",
+    label: "Pesan Bot",
+    description: "Sambutan dan 10 tombol inline",
+    icon: Bot,
+  },
+  {
+    href: "/admin/seo",
+    label: "SEO Web",
+    description: "Branding dan metadata situs",
+    icon: SearchCheck,
   },
   {
     href: "/admin/telegram-bots",

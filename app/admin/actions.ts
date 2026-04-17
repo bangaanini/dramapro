@@ -11,7 +11,11 @@ import {
   getCurrentAdmin,
   deleteCurrentAdminSession,
 } from "@/lib/admin-auth";
-import { getAppSettings } from "@/lib/app-settings";
+import {
+  buildLegacyTelegramInlineButtons,
+  getAppSettings,
+  type TelegramInlineButtonConfig,
+} from "@/lib/app-settings";
 import { publishDramaChannelBroadcast } from "@/lib/drama-channel-broadcasts";
 import { decryptPaymentSecret, encryptPaymentSecret } from "@/lib/payment-crypto";
 import {
@@ -211,6 +215,40 @@ function parseOptionalButtonUrl(
   }
 
   return parseOptionalUrl(rawValue, fieldLabel);
+}
+
+function readTelegramInlineButtons(formData: FormData) {
+  const buttons: TelegramInlineButtonConfig[] = [];
+
+  for (let index = 0; index < 10; index += 1) {
+    const buttonNumber = index + 1;
+    const enabled =
+      String(formData.get(`buttonEnabled_${buttonNumber}`) ?? "") === "on";
+    const label = parseLimitedText(formData.get(`buttonLabel_${buttonNumber}`), 40);
+    const rawUrl = parseOptionalText(formData.get(`buttonUrl_${buttonNumber}`));
+
+    if (enabled && !label) {
+      throw new Error(`Label tombol ${buttonNumber} wajib diisi jika tombol diaktifkan.`);
+    }
+
+    if (enabled && !rawUrl) {
+      throw new Error(`URL tombol ${buttonNumber} wajib diisi jika tombol diaktifkan.`);
+    }
+
+    buttons.push({
+      enabled,
+      id: `button${buttonNumber}`,
+      label,
+      url: rawUrl
+        ? parseOptionalButtonUrl(
+            rawUrl,
+            `URL tombol ${buttonNumber}`,
+          )
+        : "",
+    });
+  }
+
+  return buttons;
 }
 
 export async function saveVipSettingsAction(formData: FormData) {
@@ -466,66 +504,8 @@ export async function saveTelegramSettingsAction(formData: FormData) {
       formData.get("telegramMiniAppUrl"),
       "Telegram mini app URL",
     );
-    const siteUrl = parseOptionalUrl(formData.get("siteUrl"), "Site URL");
-    const telegramWelcomeMessage = parseLimitedText(
-      formData.get("telegramWelcomeMessage"),
-      3000,
-    );
-    const telegramOpenButtonText = parseLimitedText(
-      formData.get("telegramOpenButtonText"),
-      40,
-    );
-    const telegramOpenButtonUrl = parseOptionalButtonUrl(
-      formData.get("telegramOpenButtonUrl"),
-      "URL tombol Buka",
-    );
-    const telegramSearchButtonText = parseLimitedText(
-      formData.get("telegramSearchButtonText"),
-      40,
-    );
-    const telegramSearchButtonUrl = parseOptionalButtonUrl(
-      formData.get("telegramSearchButtonUrl"),
-      "URL tombol Cari Judul",
-    );
-    const telegramAffiliateButtonText = parseLimitedText(
-      formData.get("telegramAffiliateButtonText"),
-      40,
-    );
-    const telegramAffiliateButtonUrl = parseOptionalButtonUrl(
-      formData.get("telegramAffiliateButtonUrl"),
-      "URL tombol Gabung Affiliate",
-    );
-    const telegramDramaChannelButtonText = parseLimitedText(
-      formData.get("telegramDramaChannelButtonText"),
-      40,
-    );
-    const telegramDramaChannelUrl = parseOptionalButtonUrl(
-      formData.get("telegramDramaChannelUrl"),
-      "URL Channel Drama",
-    );
-    const telegramMovieChannelButtonText = parseLimitedText(
-      formData.get("telegramMovieChannelButtonText"),
-      40,
-    );
-    const telegramMovieChannelUrl = parseOptionalButtonUrl(
-      formData.get("telegramMovieChannelUrl"),
-      "URL Channel Movie",
-    );
-    const telegramSupportButtonText = parseLimitedText(
-      formData.get("telegramSupportButtonText"),
-      40,
-    );
-    const telegramSupportButtonUrl = parseOptionalButtonUrl(
-      formData.get("telegramSupportButtonUrl"),
-      "URL tombol Support",
-    );
-    const telegramVipButtonText = parseLimitedText(
-      formData.get("telegramVipButtonText"),
-      40,
-    );
-    const telegramVipButtonUrl = parseOptionalButtonUrl(
-      formData.get("telegramVipButtonUrl"),
-      "URL tombol VIP",
+    const defaultBroadcastChannel = parseOptionalText(
+      formData.get("telegramDefaultBroadcastChannel"),
     );
 
     const existing = await prisma.appSettings.findUnique({
@@ -557,22 +537,7 @@ export async function saveTelegramSettingsAction(formData: FormData) {
         telegramWebhookSecretCiphertext,
         telegramSupportUrl: supportUrl,
         telegramMiniAppUrl: miniAppUrl,
-        siteUrl,
-        telegramWelcomeMessage,
-        telegramOpenButtonText,
-        telegramOpenButtonUrl,
-        telegramSearchButtonText,
-        telegramSearchButtonUrl,
-        telegramAffiliateButtonText,
-        telegramAffiliateButtonUrl,
-        telegramDramaChannelButtonText,
-        telegramDramaChannelUrl,
-        telegramMovieChannelButtonText,
-        telegramMovieChannelUrl,
-        telegramSupportButtonText,
-        telegramSupportButtonUrl,
-        telegramVipButtonText,
-        telegramVipButtonUrl,
+        telegramDefaultBroadcastChannel: defaultBroadcastChannel,
       },
       create: {
         id: "global",
@@ -581,22 +546,7 @@ export async function saveTelegramSettingsAction(formData: FormData) {
         telegramWebhookSecretCiphertext,
         telegramSupportUrl: supportUrl,
         telegramMiniAppUrl: miniAppUrl,
-        siteUrl,
-        telegramWelcomeMessage,
-        telegramOpenButtonText,
-        telegramOpenButtonUrl,
-        telegramSearchButtonText,
-        telegramSearchButtonUrl,
-        telegramAffiliateButtonText,
-        telegramAffiliateButtonUrl,
-        telegramDramaChannelButtonText,
-        telegramDramaChannelUrl,
-        telegramMovieChannelButtonText,
-        telegramMovieChannelUrl,
-        telegramSupportButtonText,
-        telegramSupportButtonUrl,
-        telegramVipButtonText,
-        telegramVipButtonUrl,
+        telegramDefaultBroadcastChannel: defaultBroadcastChannel,
       },
     });
   } catch (error) {
@@ -640,9 +590,10 @@ export async function saveSeoSettingsAction(formData: FormData) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Pengaturan SEO gagal disimpan.";
-    redirect(`/admin/settings?error=${encodeURIComponent(message)}`);
+    redirect(`/admin/seo?error=${encodeURIComponent(message)}`);
   }
 
+  revalidatePath("/admin/seo");
   revalidatePath("/admin/settings");
   revalidatePath("/");
   revalidatePath("/search");
@@ -650,7 +601,85 @@ export async function saveSeoSettingsAction(formData: FormData) {
   revalidatePath("/affiliate");
   revalidatePath("/profile");
   revalidatePath("/vip");
-  redirect("/admin/settings?saved=seo");
+  redirect("/admin/seo?saved=1");
+}
+
+export async function updateTelegramBotPresentationSettings(formData: FormData) {
+  await requireAdminSession();
+
+  try {
+    const welcomeMessage = parseLimitedText(formData.get("welcomeMessage"), 3000);
+
+    if (welcomeMessage.length < 20) {
+      throw new Error("Pesan sambutan minimal 20 karakter.");
+    }
+
+    const inlineButtons = readTelegramInlineButtons(formData);
+
+    if (!inlineButtons.some((button) => button.enabled && button.label && button.url)) {
+      throw new Error("Minimal aktifkan satu tombol inline.");
+    }
+
+    const settings = await getAppSettings();
+    const legacyButtons = buildLegacyTelegramInlineButtons(settings.telegram.menu);
+    const getLegacyLabel = (index: number) => legacyButtons[index]?.label ?? "";
+    const getLegacyUrl = (index: number) => legacyButtons[index]?.url ?? "";
+
+    await prisma.appSettings.upsert({
+      where: { id: "global" },
+      update: {
+        telegramInlineButtons: inlineButtons as unknown as Prisma.InputJsonValue,
+        telegramWelcomeMessage: welcomeMessage,
+        telegramOpenButtonText: inlineButtons[0]?.label || getLegacyLabel(0),
+        telegramOpenButtonUrl: inlineButtons[0]?.url || getLegacyUrl(0),
+        telegramSearchButtonText: inlineButtons[1]?.label || getLegacyLabel(1),
+        telegramSearchButtonUrl: inlineButtons[1]?.url || getLegacyUrl(1),
+        telegramAffiliateButtonText: inlineButtons[2]?.label || getLegacyLabel(2),
+        telegramAffiliateButtonUrl: inlineButtons[2]?.url || getLegacyUrl(2),
+        telegramDramaChannelButtonText:
+          inlineButtons[3]?.label || getLegacyLabel(3),
+        telegramDramaChannelUrl: inlineButtons[3]?.url || getLegacyUrl(3),
+        telegramMovieChannelButtonText:
+          inlineButtons[4]?.label || getLegacyLabel(4),
+        telegramMovieChannelUrl: inlineButtons[4]?.url || getLegacyUrl(4),
+        telegramSupportButtonText: inlineButtons[5]?.label || getLegacyLabel(5),
+        telegramSupportButtonUrl: inlineButtons[5]?.url || getLegacyUrl(5),
+        telegramVipButtonText: inlineButtons[6]?.label || getLegacyLabel(6),
+        telegramVipButtonUrl: inlineButtons[6]?.url || getLegacyUrl(6),
+      },
+      create: {
+        id: "global",
+        telegramInlineButtons: inlineButtons as unknown as Prisma.InputJsonValue,
+        telegramWelcomeMessage: welcomeMessage,
+        telegramOpenButtonText: inlineButtons[0]?.label || getLegacyLabel(0),
+        telegramOpenButtonUrl: inlineButtons[0]?.url || getLegacyUrl(0),
+        telegramSearchButtonText: inlineButtons[1]?.label || getLegacyLabel(1),
+        telegramSearchButtonUrl: inlineButtons[1]?.url || getLegacyUrl(1),
+        telegramAffiliateButtonText: inlineButtons[2]?.label || getLegacyLabel(2),
+        telegramAffiliateButtonUrl: inlineButtons[2]?.url || getLegacyUrl(2),
+        telegramDramaChannelButtonText:
+          inlineButtons[3]?.label || getLegacyLabel(3),
+        telegramDramaChannelUrl: inlineButtons[3]?.url || getLegacyUrl(3),
+        telegramMovieChannelButtonText:
+          inlineButtons[4]?.label || getLegacyLabel(4),
+        telegramMovieChannelUrl: inlineButtons[4]?.url || getLegacyUrl(4),
+        telegramSupportButtonText: inlineButtons[5]?.label || getLegacyLabel(5),
+        telegramSupportButtonUrl: inlineButtons[5]?.url || getLegacyUrl(5),
+        telegramVipButtonText: inlineButtons[6]?.label || getLegacyLabel(6),
+        telegramVipButtonUrl: inlineButtons[6]?.url || getLegacyUrl(6),
+      },
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Pengaturan pesan bot gagal disimpan.";
+    redirect(`/admin/bot-message?botUi=error&message=${encodeURIComponent(message)}`);
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/bot-message");
+  revalidatePath("/");
+  redirect("/admin/bot-message?botUi=ok&message=Pesan%20bot%20berhasil%20diperbarui.");
 }
 
 function parseTelegramPartnerBotPayload(formData: FormData) {
@@ -849,7 +878,7 @@ export async function deleteTelegramPartnerBotAction(formData: FormData) {
 export async function publishAdminDramaChannelBroadcastAction(formData: FormData) {
   await requireAdminSession();
 
-  const channelUsername = parseOptionalText(formData.get("channelUsername"));
+  const inputChannelUsername = parseOptionalText(formData.get("channelUsername"));
   const dramaId = parseOptionalText(formData.get("dramaId"));
   const caption = parseOptionalText(formData.get("caption"));
   const buttonLabel = parseOptionalText(formData.get("buttonLabel"));
@@ -876,6 +905,8 @@ export async function publishAdminDramaChannelBroadcastAction(formData: FormData
   }
 
   const settings = await getAppSettings();
+  const channelUsername =
+    inputChannelUsername || settings.telegram.defaultBroadcastChannel || "";
   const selectedPartnerBots = selectedPartnerBotIds.length
     ? await prisma.telegramPartnerBot.findMany({
         where: {

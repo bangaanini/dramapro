@@ -2,6 +2,7 @@ import {
   absoluteUrlFromSiteUrl,
   getAppSettings,
   getTelegramSettings,
+  type TelegramInlineButtonConfig,
 } from "@/lib/app-settings";
 import { normalizeTelegramBotUsername } from "@/lib/telegram-partner-bots";
 
@@ -55,6 +56,59 @@ type TelegramWebhookMessage = {
 };
 
 type TelegramMiniAppTarget = "home" | "search" | "vip" | "profile" | "affiliate";
+
+function sanitizeInlineButtonUrl(value: string) {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const url = new URL(trimmed);
+
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+      return null;
+    }
+
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function shouldUseWebAppButton(miniAppUrl: string, urlValue: string) {
+  try {
+    return new URL(urlValue).origin === new URL(miniAppUrl).origin;
+  } catch {
+    return false;
+  }
+}
+
+function appendMiniAppContext(
+  urlValue: string,
+  options: {
+    botUsername?: string | null;
+    referralCode?: string | null;
+  },
+) {
+  try {
+    const url = new URL(urlValue);
+    const botUsername = normalizeTelegramBotUsername(options.botUsername);
+
+    if (botUsername) {
+      url.searchParams.set("tg_bot", botUsername);
+    }
+
+    if (options.referralCode?.trim()) {
+      url.searchParams.set("tg_ref", options.referralCode.trim().toUpperCase());
+    }
+
+    return url.toString();
+  } catch {
+    return urlValue;
+  }
+}
 
 async function getTelegramBotToken() {
   const token = (await getTelegramSettings()).botToken?.trim();
@@ -151,11 +205,34 @@ export async function buildTelegramStartKeyboard(
     botUsername?: string | null;
   },
 ) {
+  const settings = await getTelegramSettings();
   const miniAppOptions = {
     referralCode,
     botUsername: options?.botUsername,
   };
-  const menu = (await getTelegramSettings()).menu;
+  const rows: TelegramInlineKeyboardButton[][] = [];
+
+  for (let index = 0; index < settings.inlineButtons.length; index += 2) {
+    const row = settings.inlineButtons
+      .slice(index, index + 2)
+      .filter((button) => button.enabled && button.label.trim() && button.url.trim())
+      .map((button) =>
+        buildTelegramInlineButton(button, settings.miniAppUrl, miniAppOptions),
+      )
+      .filter((button): button is TelegramInlineKeyboardButton => button !== null);
+
+    if (row.length) {
+      rows.push(row);
+    }
+  }
+
+  if (rows.length > 0) {
+    return {
+      inline_keyboard: rows,
+    };
+  }
+
+  const menu = settings.menu;
 
   return {
     inline_keyboard: [
@@ -233,6 +310,35 @@ async function buildTelegramMenuButton(
     web_app: {
       url: await getTelegramMiniAppUrl(target, options),
     },
+  };
+}
+
+function buildTelegramInlineButton(
+  button: TelegramInlineButtonConfig,
+  miniAppUrl: string,
+  options: {
+    botUsername?: string | null;
+    referralCode?: string | null;
+  },
+): TelegramInlineKeyboardButton | null {
+  const normalizedUrl = sanitizeInlineButtonUrl(button.url);
+
+  if (!normalizedUrl) {
+    return null;
+  }
+
+  if (shouldUseWebAppButton(miniAppUrl, normalizedUrl)) {
+    return {
+      text: button.label,
+      web_app: {
+        url: appendMiniAppContext(normalizedUrl, options),
+      },
+    };
+  }
+
+  return {
+    text: button.label,
+    url: normalizedUrl,
   };
 }
 

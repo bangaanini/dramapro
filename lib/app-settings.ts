@@ -31,8 +31,114 @@ export const DEFAULT_TELEGRAM_WELCOME_MESSAGE = [
   "👇 Pilih menu di bawah dan mulai sekarang",
 ].join("\n");
 
+export type TelegramInlineButtonConfig = {
+  enabled: boolean;
+  id: string;
+  label: string;
+  url: string;
+};
+
+const TELEGRAM_INLINE_BUTTON_SLOT_IDS = Array.from(
+  { length: 10 },
+  (_, index) => `button${index + 1}`,
+);
+
+const LEGACY_INLINE_BUTTON_FIELD_MAP = [
+  ["openButtonText", "openButtonUrl"],
+  ["searchButtonText", "searchButtonUrl"],
+  ["affiliateButtonText", "affiliateButtonUrl"],
+  ["dramaChannelButtonText", "dramaChannelUrl"],
+  ["movieChannelButtonText", "movieChannelUrl"],
+  ["supportButtonText", "supportButtonUrl"],
+  ["vipButtonText", "vipButtonUrl"],
+] as const;
+
 function readTrimmed(value?: string | null) {
   return value?.trim() ?? "";
+}
+
+function createEmptyInlineButton(index: number): TelegramInlineButtonConfig {
+  return {
+    enabled: false,
+    id: TELEGRAM_INLINE_BUTTON_SLOT_IDS[index] ?? `button${index + 1}`,
+    label: "",
+    url: "",
+  };
+}
+
+export function buildLegacyTelegramInlineButtons(
+  menu: {
+    affiliateButtonText: string;
+    affiliateButtonUrl: string;
+    dramaChannelButtonText: string;
+    dramaChannelUrl: string;
+    movieChannelButtonText: string;
+    movieChannelUrl: string;
+    openButtonText: string;
+    openButtonUrl: string;
+    searchButtonText: string;
+    searchButtonUrl: string;
+    supportButtonText: string;
+    supportButtonUrl: string;
+    vipButtonText: string;
+    vipButtonUrl: string;
+  },
+) {
+  return TELEGRAM_INLINE_BUTTON_SLOT_IDS.map((buttonId, index) => {
+    const fieldMap = LEGACY_INLINE_BUTTON_FIELD_MAP[index];
+
+    if (!fieldMap) {
+      return createEmptyInlineButton(index);
+    }
+
+    const [labelKey, urlKey] = fieldMap;
+    const label = menu[labelKey]?.trim() ?? "";
+    const url = menu[urlKey]?.trim() ?? "";
+
+    return {
+      enabled: Boolean(label && url),
+      id: buttonId,
+      label,
+      url,
+    };
+  });
+}
+
+function normalizeTelegramInlineButtons(
+  value: unknown,
+  fallbackButtons: TelegramInlineButtonConfig[],
+) {
+  if (!Array.isArray(value)) {
+    return fallbackButtons;
+  }
+
+  return TELEGRAM_INLINE_BUTTON_SLOT_IDS.map((buttonId, index) => {
+    const fallback = fallbackButtons[index] ?? createEmptyInlineButton(index);
+    const rawButton = value[index];
+
+    if (!rawButton || typeof rawButton !== "object" || Array.isArray(rawButton)) {
+      return fallback;
+    }
+
+    const input = rawButton as Record<string, unknown>;
+    const label =
+      typeof input.label === "string" ? input.label.trim() : fallback.label;
+    const url = typeof input.url === "string" ? input.url.trim() : fallback.url;
+    const hasContent = Boolean(label && url);
+
+    return {
+      enabled:
+        typeof input.enabled === "boolean"
+          ? input.enabled && hasContent
+          : fallback.enabled && hasContent,
+      id:
+        typeof input.id === "string" && input.id.trim()
+          ? input.id.trim()
+          : buttonId,
+      label,
+      url,
+    };
+  });
 }
 
 export function normalizeSiteUrl(rawUrl?: string | null) {
@@ -113,6 +219,9 @@ export const getAppSettings = cache(async () => {
   const telegramMiniAppUrl = normalizeSiteUrl(
     row?.telegramMiniAppUrl || process.env.TELEGRAM_MINI_APP_URL || siteUrl,
   );
+  const telegramDefaultBroadcastChannel = readTrimmed(
+    row?.telegramDefaultBroadcastChannel,
+  );
   const telegramMenu = {
     welcomeMessage:
       readTrimmed(row?.telegramWelcomeMessage) ||
@@ -141,6 +250,23 @@ export const getAppSettings = cache(async () => {
     vipButtonText: readTrimmed(row?.telegramVipButtonText) || "💎 Join VIP",
     vipButtonUrl: readTrimmed(row?.telegramVipButtonUrl),
   };
+  const telegramButtonFallbackMenu = {
+    ...telegramMenu,
+    affiliateButtonUrl:
+      telegramMenu.affiliateButtonUrl ||
+      absoluteUrlFromSiteUrl(telegramMiniAppUrl, "/affiliate"),
+    openButtonUrl:
+      telegramMenu.openButtonUrl || absoluteUrlFromSiteUrl(telegramMiniAppUrl, "/"),
+    searchButtonUrl:
+      telegramMenu.searchButtonUrl ||
+      absoluteUrlFromSiteUrl(telegramMiniAppUrl, "/search"),
+    vipButtonUrl:
+      telegramMenu.vipButtonUrl || absoluteUrlFromSiteUrl(telegramMiniAppUrl, "/vip"),
+  };
+  const telegramInlineButtons = normalizeTelegramInlineButtons(
+    row?.telegramInlineButtons,
+    buildLegacyTelegramInlineButtons(telegramButtonFallbackMenu),
+  );
 
   return {
     raw: row,
@@ -159,6 +285,8 @@ export const getAppSettings = cache(async () => {
       webhookSecret: telegramWebhookSecret,
       supportUrl: telegramSupportUrl,
       miniAppUrl: telegramMiniAppUrl,
+      defaultBroadcastChannel: telegramDefaultBroadcastChannel,
+      inlineButtons: telegramInlineButtons,
       webhookUrl: absoluteUrlFromSiteUrl(siteUrl, "/api/telegram/webhook"),
       menu: telegramMenu,
     },

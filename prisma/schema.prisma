@@ -260,6 +260,8 @@ model AppSettings {
   telegramWebhookSecretCiphertext String?
   telegramSupportUrl           String   @default("")
   telegramMiniAppUrl           String   @default("")
+  telegramDefaultBroadcastChannel String @default("")
+  telegramInlineButtons        Json?    @db.JsonB
   telegramWelcomeMessage        String   @default("")
   telegramOpenButtonText        String   @default("")
   telegramOpenButtonUrl         String   @default("")

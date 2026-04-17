@@ -1,19 +1,16 @@
+import Link from "next/link";
 import {
   Bot,
   CheckCircle2,
-  Globe,
-  ImageIcon,
   Link2,
   MessageCircleMore,
   SearchCheck,
+  Settings2,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
 
-import {
-  saveSeoSettingsAction,
-  saveTelegramSettingsAction,
-} from "@/app/admin/actions";
+import { saveTelegramSettingsAction } from "@/app/admin/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -76,23 +73,20 @@ export default async function AdminSettingsPage(
     ? `curl "https://api.telegram.org/bot${telegram.botToken}/getWebhookInfo"`
     : "Lengkapi bot token untuk menampilkan command getWebhookInfo.";
 
-  const brandPreviewLogo = settings.raw?.siteLogoUrl?.trim() || null;
-
   return (
     <div className="space-y-6">
       <section className="glass-panel rounded-[2rem] border border-white/10 p-6">
         <Badge className="border-accent/30 bg-accent-soft text-accent">
           <Sparkles className="mr-2 size-3.5" />
-          Settings
+          Bot settings
         </Badge>
         <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white">
-          Telegram + SEO Settings
+          Bot utama, webhook, dan Mini App
         </h1>
         <p className="mt-2 max-w-3xl text-sm leading-7 text-[var(--muted)]">
-          Panel ini menyimpan konfigurasi aplikasi di database, jadi admin bisa
-          mengatur branding web dan integrasi Telegram tanpa mengedit file{" "}
-          <span className="font-medium text-white">.env</span> server. Nilai dari
-          database akan dipakai lebih dulu, lalu fallback ke env, lalu default app.
+          Halaman ini sekarang fokus hanya untuk runtime bot utama. Pesan
+          sambutan dan 10 tombol inline sudah dipisah ke halaman khusus supaya
+          pengaturan bot lebih cepat dibaca dan tidak bercampur dengan SEO.
         </p>
         <div className="mt-4 rounded-[1.4rem] border border-white/10 bg-white/4 px-4 py-3 text-sm text-[var(--muted)]">
           Secret Telegram tetap disimpan terenkripsi. Server masih membutuhkan{" "}
@@ -103,9 +97,7 @@ export default async function AdminSettingsPage(
 
       {saved ? (
         <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-          {saved === "telegram"
-            ? "Pengaturan Telegram berhasil disimpan."
-            : "Pengaturan SEO berhasil disimpan."}
+          Pengaturan bot utama berhasil disimpan.
         </div>
       ) : null}
 
@@ -115,7 +107,24 @@ export default async function AdminSettingsPage(
         </div>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+      <div className="grid gap-4 md:grid-cols-2">
+        <ShortcutCard
+          href="/admin/bot-message"
+          icon={MessageCircleMore}
+          badge="Pesan bot"
+          title="Sambutan dan 10 tombol inline"
+          description="Edit /start, tombol keyboard, dan preview live seperti pola BoxOffice."
+        />
+        <ShortcutCard
+          href="/admin/seo"
+          icon={SearchCheck}
+          badge="SEO web"
+          title="Branding dan metadata"
+          description={`Atur nama situs, logo, deskripsi, dan URL publik ${site.name}.`}
+        />
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <Card className="glass-panel rounded-[2rem] border-white/10">
           <CardContent className="space-y-6 p-6">
             <div>
@@ -124,11 +133,12 @@ export default async function AdminSettingsPage(
                 Integrasi Telegram
               </Badge>
               <h2 className="mt-4 text-2xl font-semibold text-white">
-                Bot, webhook, dan Mini App
+                Bot utama dan command webhook
               </h2>
               <p className="mt-2 text-sm leading-7 text-[var(--muted)]">
                 Isi data dari BotFather sekali, lalu panel ini akan menyiapkan
-                URL Mini App, support, dan command webhook yang siap dipakai.
+                Mini App URL, support URL, channel default broadcast, dan
+                command webhook yang siap dipakai.
               </p>
             </div>
 
@@ -197,105 +207,15 @@ export default async function AdminSettingsPage(
                   placeholder="https://domainmu.com/"
                 />
                 <Field
-                  label="Site/Public URL"
-                  name="siteUrl"
-                  defaultValue={site.url}
-                  placeholder="https://domainmu.com"
+                  label="Channel default broadcast bot utama"
+                  name="telegramDefaultBroadcastChannel"
+                  defaultValue={telegram.defaultBroadcastChannel}
+                  placeholder="@channelutama atau https://t.me/channelutama"
                 />
               </div>
 
-              <div className="rounded-[1.6rem] border border-white/10 bg-black/20 p-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-white">
-                    Sambutan dan tombol inline bot
-                  </h3>
-                  <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                    Teks ini dipakai saat user mengetik{" "}
-                    <span className="font-medium text-white">/start</span>.
-                    Gunakan placeholder{" "}
-                    <span className="font-medium text-white">{"{name}"}</span>{" "}
-                    dan{" "}
-                    <span className="font-medium text-white">{"{siteName}"}</span>.
-                    URL tombol Mini App boleh dikosongkan agar sistem memakai
-                    target internal otomatis.
-                  </p>
-                </div>
-
-                <label className="mt-4 block space-y-2">
-                  <span className="text-sm font-medium text-white">
-                    Kalimat sambutan
-                  </span>
-                  <textarea
-                    name="telegramWelcomeMessage"
-                    rows={10}
-                    defaultValue={telegram.menu.welcomeMessage}
-                    placeholder="Tulis pesan sambutan bot..."
-                    className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-[var(--muted-foreground)] focus:border-accent/60 focus:ring-2 focus:ring-[var(--ring)]"
-                  />
-                </label>
-
-                <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                  <BotButtonFields
-                    title="Tombol Buka"
-                    textName="telegramOpenButtonText"
-                    textDefaultValue={telegram.menu.openButtonText}
-                    urlName="telegramOpenButtonUrl"
-                    urlDefaultValue={telegram.menu.openButtonUrl}
-                    urlPlaceholder="Kosongkan untuk Mini App home"
-                  />
-                  <BotButtonFields
-                    title="Tombol Cari Judul"
-                    textName="telegramSearchButtonText"
-                    textDefaultValue={telegram.menu.searchButtonText}
-                    urlName="telegramSearchButtonUrl"
-                    urlDefaultValue={telegram.menu.searchButtonUrl}
-                    urlPlaceholder="Kosongkan untuk Mini App search"
-                  />
-                  <BotButtonFields
-                    title="Tombol Affiliate"
-                    textName="telegramAffiliateButtonText"
-                    textDefaultValue={telegram.menu.affiliateButtonText}
-                    urlName="telegramAffiliateButtonUrl"
-                    urlDefaultValue={telegram.menu.affiliateButtonUrl}
-                    urlPlaceholder="Kosongkan untuk Mini App affiliate"
-                  />
-                  <BotButtonFields
-                    title="Tombol VIP"
-                    textName="telegramVipButtonText"
-                    textDefaultValue={telegram.menu.vipButtonText}
-                    urlName="telegramVipButtonUrl"
-                    urlDefaultValue={telegram.menu.vipButtonUrl}
-                    urlPlaceholder="Kosongkan untuk Mini App VIP"
-                  />
-                  <BotButtonFields
-                    title="Channel Drama"
-                    textName="telegramDramaChannelButtonText"
-                    textDefaultValue={telegram.menu.dramaChannelButtonText}
-                    urlName="telegramDramaChannelUrl"
-                    urlDefaultValue={telegram.menu.dramaChannelUrl}
-                    urlPlaceholder="https://t.me/channel-drama"
-                  />
-                  <BotButtonFields
-                    title="Channel Movie"
-                    textName="telegramMovieChannelButtonText"
-                    textDefaultValue={telegram.menu.movieChannelButtonText}
-                    urlName="telegramMovieChannelUrl"
-                    urlDefaultValue={telegram.menu.movieChannelUrl}
-                    urlPlaceholder="https://t.me/channel-movie"
-                  />
-                  <BotButtonFields
-                    title="Support Admin"
-                    textName="telegramSupportButtonText"
-                    textDefaultValue={telegram.menu.supportButtonText}
-                    urlName="telegramSupportButtonUrl"
-                    urlDefaultValue={telegram.menu.supportButtonUrl}
-                    urlPlaceholder="https://t.me/admin-support"
-                  />
-                </div>
-              </div>
-
               <Button type="submit" className="w-full sm:w-fit">
-                Simpan pengaturan Telegram
+                Simpan pengaturan bot
               </Button>
             </form>
 
@@ -306,6 +226,7 @@ export default async function AdminSettingsPage(
                 lines={[
                   `Mini App: ${telegram.miniAppUrl}`,
                   `Support: ${telegram.supportUrl}`,
+                  `Broadcast channel: ${telegram.defaultBroadcastChannel || "belum diatur"}`,
                   `Webhook: ${telegram.webhookUrl}`,
                   telegram.botUsername
                     ? `Bot link: https://t.me/${telegram.botUsername}`
@@ -324,127 +245,62 @@ export default async function AdminSettingsPage(
                 ]}
               />
             </div>
-
-            <CodeBlock
-              title="Command setWebhook"
-              value={setWebhookCommand}
-            />
-            <CodeBlock
-              title="Command getWebhookInfo"
-              value={getWebhookInfoCommand}
-            />
           </CardContent>
         </Card>
 
-        <Card className="glass-panel rounded-[2rem] border-white/10">
-          <CardContent className="space-y-6 p-6">
-            <div>
-              <Badge className="border-accent/30 bg-accent-soft text-accent">
-                <SearchCheck className="mr-2 size-3.5" />
-                SEO Web
-              </Badge>
-              <h2 className="mt-4 text-2xl font-semibold text-white">
-                Branding dan metadata utama
-              </h2>
-              <p className="mt-2 text-sm leading-7 text-[var(--muted)]">
-                Nilai di panel ini dipakai untuk metadata, Open Graph, sitemap,
-                robots, dan branding header web biasa.
-              </p>
-            </div>
-
-            <form action={saveSeoSettingsAction} className="space-y-4">
-              <Field
-                label="URL situs"
-                name="siteUrl"
-                defaultValue={site.url}
-                placeholder="https://domainmu.com"
-              />
-              <Field
-                label="Nama situs"
-                name="siteName"
-                defaultValue={site.name}
-                placeholder="Layar Drama"
-              />
-              <label className="block space-y-2">
-                <span className="text-sm font-medium text-white">
-                  Deskripsi situs
-                </span>
-                <textarea
-                  name="siteDescription"
-                  rows={4}
-                  defaultValue={site.description}
-                  placeholder="Deskripsi singkat situs untuk SEO"
-                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition placeholder:text-[var(--muted-foreground)] focus:border-accent/60 focus:ring-2 focus:ring-[var(--ring)]"
-                />
-              </label>
-              <Field
-                label="Logo situs URL"
-                name="siteLogoUrl"
-                defaultValue={settings.raw?.siteLogoUrl ?? ""}
-                placeholder="https://domainmu.com/logo.png"
-              />
-
-              <Button type="submit" className="w-full sm:w-fit">
-                Simpan pengaturan SEO
-              </Button>
-            </form>
-
-            <div className="space-y-4">
-              <div className="rounded-[1.7rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,145,46,0.15),rgba(255,255,255,0.03))] p-4">
-                <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-foreground)]">
-                  Preview brand header
-                </p>
-                <div className="mt-4 flex items-center gap-3">
-                  <div className="flex size-12 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/25 text-white">
-                    {brandPreviewLogo ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={brandPreviewLogo}
-                        alt={site.name}
-                        className="size-full object-cover"
-                      />
-                    ) : (
-                      <ImageIcon className="size-5" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-lg font-semibold text-white">
-                      {site.name}
-                    </p>
-                    <p className="text-xs text-[var(--muted-foreground)]">
-                      {site.url}
-                    </p>
-                  </div>
-                </div>
+        <div className="space-y-6">
+          <Card className="glass-panel rounded-[2rem] border-white/10">
+            <CardContent className="space-y-4 p-6">
+              <div>
+                <Badge className="border-accent/30 bg-accent-soft text-accent">
+                  <Settings2 className="mr-2 size-3.5" />
+                  Runtime overview
+                </Badge>
+                <h2 className="mt-4 text-2xl font-semibold text-white">
+                  Nilai aktif saat ini
+                </h2>
               </div>
 
-              <div className="rounded-[1.7rem] border border-white/10 bg-black/20 p-4">
-                <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-foreground)]">
-                  Preview metadata
-                </p>
-                <div className="mt-4 space-y-3">
-                  <div>
-                    <p className="text-sm font-semibold text-white">
-                      {site.title}
-                    </p>
-                    <p className="text-xs text-emerald-300">{site.url}</p>
-                  </div>
-                  <p className="text-sm leading-6 text-[var(--muted)]">
-                    {site.description}
-                  </p>
-                  <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-[var(--muted-foreground)]">
-                    Open Graph image: {site.logoUrl}
-                  </div>
-                </div>
-              </div>
+              <InfoBlock
+                icon={CheckCircle2}
+                title="Bot utama"
+                lines={[
+                  `Brand: ${site.name}`,
+                  `Bot aktif: ${telegram.botUsername ? `@${telegram.botUsername}` : "belum diatur"}`,
+                  `Main App URL: ${telegram.miniAppUrl}`,
+                  `Webhook URL: ${telegram.webhookUrl}`,
+                ]}
+              />
 
               <div className="rounded-[1.4rem] border border-white/10 bg-white/4 px-4 py-3 text-sm text-[var(--muted)]">
-                Logo v1 memakai URL + preview. Di fase berikutnya kita bisa
-                tambah upload file tanpa perlu mengubah struktur pengaturan ini.
+                Pesan sambutan dan keyboard sekarang dipisah ke{" "}
+                <Link
+                  href="/admin/bot-message"
+                  className="font-medium text-white underline decoration-white/20 underline-offset-4"
+                >
+                  halaman Pesan Bot
+                </Link>
+                . Metadata web pindah ke{" "}
+                <Link
+                  href="/admin/seo"
+                  className="font-medium text-white underline decoration-white/20 underline-offset-4"
+                >
+                  halaman SEO
+                </Link>
+                .
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+
+          <CodeBlock
+            title="Command setWebhook"
+            value={setWebhookCommand}
+          />
+          <CodeBlock
+            title="Command getWebhookInfo"
+            value={getWebhookInfoCommand}
+          />
+        </div>
       </div>
     </div>
   );
@@ -477,54 +333,6 @@ function Field({
   );
 }
 
-function BotButtonFields({
-  title,
-  textName,
-  textDefaultValue,
-  urlName,
-  urlDefaultValue,
-  urlPlaceholder,
-}: {
-  title: string;
-  textName: string;
-  textDefaultValue: string;
-  urlName: string;
-  urlDefaultValue: string;
-  urlPlaceholder: string;
-}) {
-  return (
-    <div className="rounded-[1.35rem] border border-white/10 bg-white/4 p-4">
-      <p className="text-sm font-semibold text-white">{title}</p>
-      <div className="mt-3 grid gap-3">
-        <label className="block space-y-2">
-          <span className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
-            Label tombol
-          </span>
-          <input
-            name={textName}
-            defaultValue={textDefaultValue}
-            maxLength={40}
-            placeholder={title}
-            className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition placeholder:text-[var(--muted-foreground)] focus:border-accent/60 focus:ring-2 focus:ring-[var(--ring)]"
-          />
-        </label>
-        <label className="block space-y-2">
-          <span className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
-            URL tombol
-          </span>
-          <input
-            name={urlName}
-            type="url"
-            defaultValue={urlDefaultValue}
-            placeholder={urlPlaceholder}
-            className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition placeholder:text-[var(--muted-foreground)] focus:border-accent/60 focus:ring-2 focus:ring-[var(--ring)]"
-          />
-        </label>
-      </div>
-    </div>
-  );
-}
-
 function StatusTile({
   label,
   value,
@@ -534,27 +342,52 @@ function StatusTile({
   label: string;
   value: string;
   description: string;
-  tone: "success" | "muted";
+  tone: "muted" | "success";
 }) {
   return (
-    <div className="rounded-[1.4rem] border border-white/10 bg-white/4 p-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium text-white">{label}</p>
-        <Badge
-          className={
-            tone === "success"
-              ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-200"
-              : "border-white/10 bg-white/6 text-[var(--muted)]"
-          }
-        >
-          {tone === "success" ? <CheckCircle2 className="mr-1.5 size-3.5" /> : null}
-          {value}
-        </Badge>
-      </div>
-      <p className="mt-2 text-xs leading-5 text-[var(--muted-foreground)]">
+    <div className="rounded-[1.35rem] border border-white/10 bg-white/4 p-4">
+      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
+        {label}
+      </p>
+      <p
+        className={`mt-3 text-base font-semibold ${
+          tone === "success" ? "text-emerald-200" : "text-white"
+        }`}
+      >
+        {value}
+      </p>
+      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{description}</p>
+    </div>
+  );
+}
+
+function ShortcutCard({
+  href,
+  icon: Icon,
+  badge,
+  title,
+  description,
+}: {
+  href: string;
+  icon: typeof Bot;
+  badge: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="glass-panel block rounded-[2rem] border border-white/10 p-5 transition hover:border-white/20 hover:bg-white/[0.04]"
+    >
+      <Badge className="border-accent/30 bg-accent-soft text-accent">
+        <Icon className="mr-2 size-3.5" />
+        {badge}
+      </Badge>
+      <h2 className="mt-4 text-xl font-semibold text-white">{title}</h2>
+      <p className="mt-2 text-sm leading-7 text-[var(--muted)]">
         {description}
       </p>
-    </div>
+    </Link>
   );
 }
 
@@ -563,19 +396,17 @@ function InfoBlock({
   title,
   lines,
 }: {
-  icon: typeof Globe;
+  icon: typeof Bot;
   title: string;
   lines: string[];
 }) {
   return (
-    <div className="rounded-[1.5rem] border border-white/10 bg-white/4 p-4">
+    <div className="rounded-[1.6rem] border border-white/10 bg-black/20 p-4">
       <div className="flex items-center gap-2">
-        <div className="rounded-2xl border border-white/10 bg-black/25 p-2 text-accent">
-          <Icon className="size-4" />
-        </div>
+        <Icon className="size-4 text-accent" />
         <p className="text-sm font-semibold text-white">{title}</p>
       </div>
-      <div className="mt-3 space-y-2 text-sm leading-6 text-[var(--muted)]">
+      <div className="mt-4 space-y-2 text-sm leading-6 text-[var(--muted)]">
         {lines.map((line) => (
           <p key={line}>{line}</p>
         ))}
@@ -584,16 +415,24 @@ function InfoBlock({
   );
 }
 
-function CodeBlock({ title, value }: { title: string; value: string }) {
+function CodeBlock({
+  title,
+  value,
+}: {
+  title: string;
+  value: string;
+}) {
   return (
-    <div className="rounded-[1.6rem] border border-white/10 bg-black/30 p-4">
-      <div className="flex items-center gap-2">
-        <MessageCircleMore className="size-4 text-accent" />
-        <p className="text-sm font-semibold text-white">{title}</p>
-      </div>
-      <pre className="mt-3 overflow-x-auto rounded-[1.2rem] border border-white/10 bg-black/35 px-4 py-3 text-xs leading-6 text-[var(--muted)]">
-        <code>{value}</code>
-      </pre>
-    </div>
+    <Card className="glass-panel rounded-[2rem] border-white/10">
+      <CardContent className="space-y-4 p-6">
+        <div className="flex items-center gap-2">
+          <Bot className="size-4 text-accent" />
+          <h2 className="text-lg font-semibold text-white">{title}</h2>
+        </div>
+        <pre className="overflow-x-auto rounded-[1.4rem] border border-white/10 bg-black/25 p-4 text-xs leading-6 text-neutral-200">
+          <code>{value}</code>
+        </pre>
+      </CardContent>
+    </Card>
   );
 }

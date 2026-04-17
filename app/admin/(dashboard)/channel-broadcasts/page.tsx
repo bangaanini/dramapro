@@ -142,6 +142,7 @@ export default async function AdminChannelBroadcastsPage({
             description: selectedDrama.description,
             title: selectedDrama.title,
           })}
+          initialChannelUsername={settings.telegram.defaultBroadcastChannel}
           initialDramaId={selectedDrama.id}
           pendingLabel="Mengirim broadcast..."
           submitLabel="Kirim broadcast drama"
