@@ -1,0 +1,529 @@
+const DEFAULT_BASE_URL = Deno.env.get("DRAMADASH_BASE_URL") ?? "https://dramadash.app/api/";
+const DEFAULT_APP_VERSION = Deno.env.get("DRAMADASH_APP_VERSION") ?? "70";
+const DEFAULT_LANG = Deno.env.get("DRAMADASH_LANG") ?? "id";
+const DEFAULT_TIMEZONE = Deno.env.get("DRAMADASH_TIMEZONE") ?? "Asia/Bangkok";
+const DEFAULT_PLATFORM = Deno.env.get("DRAMADASH_PLATFORM") ?? "android";
+const DEFAULT_DEVICE_TYPE = Deno.env.get("DRAMADASH_DEVICE_TYPE") ?? "phone";
+const DEFAULT_USER_AGENT = Deno.env.get("DRAMADASH_USER_AGENT") ?? "okhttp/5.1.0";
+const DEFAULT_ACCEPT_ENCODING = Deno.env.get("DRAMADASH_ACCEPT_ENCODING") ?? "gzip";
+
+const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+};
+
+function ensureTrailingSlash(value: string) {
+    return value.endsWith("/") ? value : `${value}/`;
+}
+
+function toDisplayNames(items: unknown) {
+    if (!Array.isArray(items)) {
+        return [];
+    }
+
+    return items
+        .map((item) => {
+            if (typeof item === "string") {
+                return item;
+            }
+
+            if (item && typeof item === "object") {
+                if ("displayName" in item && typeof item.displayName === "string") {
+                    return item.displayName;
+                }
+
+                if ("name" in item && typeof item.name === "string") {
+                    return item.name;
+                }
+            }
+
+            return null;
+        })
+        .filter((item): item is string => Boolean(item));
+}
+
+function mapDramaSummary(item: Record<string, unknown> | null | undefined) {
+    if (!item) {
+        return null;
+    }
+
+    return {
+        id: typeof item.id === "number" ? item.id : null,
+        name: typeof item.name === "string" ? item.name : "",
+        poster: typeof item.poster === "string" ? item.poster : null,
+        description:
+            typeof item.description === "string"
+                ? item.description
+                : typeof item.desc === "string"
+                    ? item.desc
+                    : "",
+        viewCount: item.viewCount ?? 0,
+        tags: toDisplayNames(item.tags),
+        genres: toDisplayNames(item.genres),
+    };
+}
+
+function mapEpisode(item: Record<string, unknown> | null | undefined) {
+    if (!item) {
+        return null;
+    }
+
+    return {
+        id: typeof item.id === "number" ? item.id : null,
+        episodeNumber: typeof item.episodeNumber === "number" ? item.episodeNumber : null,
+        isLocked: Boolean(item.isLocked),
+        isLiked: Boolean(item.isLiked),
+        isWatched: Boolean(item.isWatched),
+        duration: typeof item.duration === "number" ? item.duration : 0,
+        current: Boolean(item.current),
+        videoUrl: typeof item.videoUrl === "string" ? item.videoUrl : null,
+        subtitles: Array.isArray(item.subtitles)
+            ? item.subtitles.map((subtitle) => {
+                if (!subtitle || typeof subtitle !== "object") {
+                    return null;
+                }
+
+                return {
+                    language:
+                        "language" in subtitle && typeof subtitle.language === "string"
+                            ? subtitle.language
+                            : null,
+                    languageDisplayName:
+                        "languageDisplayName" in subtitle &&
+                            typeof subtitle.languageDisplayName === "string"
+                            ? subtitle.languageDisplayName
+                            : "",
+                    url: "url" in subtitle && typeof subtitle.url === "string" ? subtitle.url : null,
+                };
+            }).filter(Boolean)
+            : [],
+    };
+}
+
+function mapTab(item: Record<string, unknown> | null | undefined) {
+    return {
+        id: item && typeof item.id === "number" ? item.id : null,
+        name: item && typeof item.name === "string" ? item.name : "",
+    };
+}
+
+function jsonResponse(body: unknown, init: ResponseInit = {}) {
+    const headers = new Headers(init.headers);
+    headers.set("Content-Type", "application/json; charset=utf-8");
+
+    for (const [key, value] of Object.entries(corsHeaders)) {
+        headers.set(key, value);
+    }
+
+    return new Response(JSON.stringify(body, null, 2), {
+        ...init,
+        headers,
+    });
+}
+
+function errorResponse(status: number, message: string, details?: unknown) {
+    return jsonResponse(
+        {
+            error: message,
+            ...(details !== undefined ? { details } : {}),
+        },
+        { status },
+    );
+}
+
+class DramaDashRequestError extends Error {
+    endpoint: string | null;
+    method: string | null;
+    status: number | null;
+    responseData: unknown;
+
+    constructor(
+        message: string,
+        {
+            endpoint,
+            method,
+            status,
+            responseData,
+        }: {
+            endpoint?: string;
+            method?: string;
+            status?: number | null;
+            responseData?: unknown;
+        } = {},
+    ) {
+        super(message);
+        this.name = "DramaDashRequestError";
+        this.endpoint = endpoint ?? null;
+        this.method = method ?? null;
+        this.status = status ?? null;
+        this.responseData = responseData ?? null;
+    }
+}
+
+class DramaDashClient {
+    baseUrl: string;
+    appVersion: string;
+    lang: string;
+    timezone: string;
+    platform: string;
+    deviceType: string;
+    userAgent: string;
+    acceptEncoding: string;
+    deviceId: string;
+    deviceToken: string | null;
+
+    constructor(options: {
+        baseUrl?: string;
+        appVersion?: string | number;
+        lang?: string;
+        timezone?: string;
+        platform?: string;
+        deviceType?: string;
+        userAgent?: string;
+        acceptEncoding?: string;
+        deviceId?: string;
+        deviceToken?: string | null;
+    } = {}) {
+        this.baseUrl = ensureTrailingSlash(options.baseUrl ?? DEFAULT_BASE_URL);
+        this.appVersion = String(options.appVersion ?? DEFAULT_APP_VERSION);
+        this.lang = options.lang ?? DEFAULT_LANG;
+        this.timezone = options.timezone ?? DEFAULT_TIMEZONE;
+        this.platform = options.platform ?? DEFAULT_PLATFORM;
+        this.deviceType = options.deviceType ?? DEFAULT_DEVICE_TYPE;
+        this.userAgent = options.userAgent ?? DEFAULT_USER_AGENT;
+        this.acceptEncoding = options.acceptEncoding ?? DEFAULT_ACCEPT_ENCODING;
+        this.deviceId = options.deviceId ?? crypto.randomUUID().replaceAll("-", "").slice(0, 16);
+        this.deviceToken = options.deviceToken ?? null;
+    }
+
+    getDefaultHeaders(extraHeaders: HeadersInit = {}) {
+        const headers = new Headers(extraHeaders);
+        headers.set("app-version", this.appVersion);
+        headers.set("lang", this.lang);
+        headers.set("platform", this.platform);
+        headers.set("tz", this.timezone);
+        headers.set("device-type", this.deviceType);
+        headers.set("content-type", "application/json; charset=UTF-8");
+        headers.set("accept-encoding", this.acceptEncoding);
+        headers.set("user-agent", this.userAgent);
+
+        if (this.deviceToken) {
+            headers.set("authorization", `Bearer ${this.deviceToken}`);
+        }
+
+        return headers;
+    }
+
+    async init() {
+        if (!this.deviceToken) {
+            await this.getToken();
+        }
+
+        return this;
+    }
+
+    async request(
+        endpoint: string,
+        init: {
+            method?: string;
+            body?: unknown;
+            headers?: HeadersInit;
+        } = {},
+    ) {
+        const method = (init.method ?? "GET").toUpperCase();
+
+        if (endpoint !== "landing" && !this.deviceToken) {
+            await this.init();
+        }
+
+        const response = await fetch(new URL(endpoint, this.baseUrl), {
+            method,
+            headers: this.getDefaultHeaders(init.headers),
+            body: init.body === undefined ? undefined : JSON.stringify(init.body),
+        });
+
+        const text = await response.text();
+        const data = text ? safeJsonParse(text) : null;
+
+        if (!response.ok) {
+            throw new DramaDashRequestError(`Request failed [${method} ${endpoint}]`, {
+                endpoint,
+                method,
+                status: response.status,
+                responseData: data,
+            });
+        }
+
+        return data;
+    }
+
+    async getToken() {
+        const response = await this.request("landing", {
+            method: "POST",
+            body: { android_id: this.deviceId },
+        });
+
+        if (!response || typeof response !== "object" || !("token" in response)) {
+            throw new DramaDashRequestError("Missing device token in landing response", {
+                endpoint: "landing",
+                method: "POST",
+                responseData: response,
+            });
+        }
+
+        const token = typeof response.token === "string" ? response.token : null;
+
+        if (!token) {
+            throw new DramaDashRequestError("Invalid device token in landing response", {
+                endpoint: "landing",
+                method: "POST",
+                responseData: response,
+            });
+        }
+
+        this.deviceToken = token;
+        return token;
+    }
+
+    async getHome() {
+        const response = await this.request("home");
+        const home = response && typeof response === "object" ? response : {};
+        const dramaList =
+            "dramaList" in home && Array.isArray(home.dramaList)
+                ? home.dramaList
+                : [];
+        const dramaItems = dramaList
+            .filter((section) => section && typeof section === "object" && "list" in section && Array.isArray(section.list))
+            .flatMap((section) => section.list);
+
+        return {
+            status: 200,
+            data: {
+                banner:
+                    "bannerDramaList" in home &&
+                        home.bannerDramaList &&
+                        typeof home.bannerDramaList === "object" &&
+                        "list" in home.bannerDramaList &&
+                        Array.isArray(home.bannerDramaList.list)
+                        ? home.bannerDramaList.list.map((item) => mapDramaSummary(item as Record<string, unknown>)).filter(Boolean)
+                        : [],
+                trending:
+                    "trendingSearches" in home && Array.isArray(home.trendingSearches)
+                        ? home.trendingSearches.map((item) => {
+                            const row = item && typeof item === "object" ? item : {};
+                            return {
+                                id: "id" in row && typeof row.id === "number" ? row.id : null,
+                                name: "name" in row && typeof row.name === "string" ? row.name : "",
+                                poster: "poster" in row && typeof row.poster === "string" ? row.poster : null,
+                                genres: "genres" in row ? toDisplayNames(row.genres) : [],
+                            };
+                        })
+                        : [],
+                drama: dramaItems.map((item) => mapDramaSummary(item as Record<string, unknown>)).filter(Boolean),
+            },
+            tabs:
+                "tabs" in home && Array.isArray(home.tabs)
+                    ? home.tabs.map((item) => mapTab(item as Record<string, unknown>))
+                    : [],
+        };
+    }
+
+    async getTabs(tabId: string | number) {
+        return this.request(`home?tab_id=${encodeURIComponent(String(tabId))}`);
+    }
+
+    async getDrama(dramaId: string | number) {
+        const response = await this.request(`drama/${dramaId}`);
+        const payload = response && typeof response === "object" && "drama" in response ? response.drama : null;
+
+        if (!payload || typeof payload !== "object") {
+            throw new DramaDashRequestError(`Drama ${dramaId} was not found in the API response`, {
+                endpoint: `drama/${dramaId}`,
+                method: "GET",
+                responseData: response,
+            });
+        }
+
+        const drama = payload as Record<string, unknown>;
+
+        return {
+            status: 200,
+            data: {
+                id: typeof drama.id === "number" ? drama.id : Number(dramaId),
+                name: typeof drama.name === "string" ? drama.name : "",
+                poster: typeof drama.poster === "string" ? drama.poster : null,
+                description: typeof drama.description === "string" ? drama.description : "",
+                viewCount: drama.viewCount ?? 0,
+                tags: toDisplayNames(drama.tags),
+                genres: toDisplayNames(drama.genres),
+            },
+            episodes: Array.isArray(drama.episodes)
+                ? drama.episodes.map((item) => mapEpisode(item as Record<string, unknown>)).filter(Boolean)
+                : [],
+        };
+    }
+
+    async searchDrama(search: string) {
+        const response = await this.request("search/text", {
+            method: "POST",
+            body: { search },
+        });
+
+        return {
+            status: 200,
+            data:
+                response && typeof response === "object" && "result" in response && Array.isArray(response.result)
+                    ? response.result.map((item) => mapDramaSummary(item as Record<string, unknown>)).filter(Boolean)
+                    : [],
+        };
+    }
+
+    async getEpisode(dramaId: string | number, episodeNumber: string | number) {
+        const normalizedEpisodeNumber = Number(episodeNumber);
+        const { episodes } = await this.getDrama(dramaId);
+        const episode = episodes.find((item) => item?.episodeNumber === normalizedEpisodeNumber);
+
+        if (!episode) {
+            throw new DramaDashRequestError(
+                `Episode ${episodeNumber} was not found for drama ${dramaId}`,
+                {
+                    endpoint: `drama/${dramaId}`,
+                    method: "GET",
+                },
+            );
+        }
+
+        return {
+            status: 200,
+            data: episode,
+        };
+    }
+}
+
+const FUNCTION_NAME = "dramadash";
+
+Deno.serve(async (req) => {
+    if (req.method === "OPTIONS") {
+        return new Response("ok", { headers: corsHeaders });
+    }
+
+    try {
+        const url = new URL(req.url);
+        const body = req.method === "POST" ? await readJsonBody(req) : {};
+        const route = getRouteSegments(url);
+        const client = new DramaDashClient({
+            deviceToken: getString(body.deviceToken),
+            deviceId: getString(body.deviceId),
+            baseUrl: getString(body.baseUrl),
+            appVersion: getString(body.appVersion),
+            lang: getString(body.lang),
+            timezone: getString(body.timezone),
+            platform: getString(body.platform),
+            deviceType: getString(body.deviceType),
+            userAgent: getString(body.userAgent),
+            acceptEncoding: getString(body.acceptEncoding),
+        });
+
+        const action = resolveAction(route, url, body);
+
+        switch (action) {
+            case "home":
+                return jsonResponse(await client.getHome());
+            case "tabs":
+                return jsonResponse(await client.getTabs(requireParam("tabId", route[1], url, body)));
+            case "drama":
+                return jsonResponse(await client.getDrama(requireParam("dramaId", route[1], url, body, "id")));
+            case "search":
+                return jsonResponse(await client.searchDrama(requireParam("query", route[1], url, body, "q", "query")));
+            case "episode":
+                return jsonResponse(
+                    await client.getEpisode(
+                        requireParam("dramaId", route[1], url, body),
+                        requireParam("episode", route[2], url, body, "episodeNumber"),
+                    ),
+                );
+            default:
+                return errorResponse(
+                    404,
+                    "Unknown route. Use /home, /tabs/:tabId, /drama/:dramaId, /search?q=..., or /episode/:dramaId/:episode.",
+                );
+        }
+    } catch (error) {
+        if (error instanceof DramaDashRequestError) {
+            return errorResponse(error.status ?? 502, error.message, {
+                endpoint: error.endpoint,
+                method: error.method,
+                responseData: error.responseData,
+            });
+        }
+
+        if (error instanceof Error) {
+            return errorResponse(400, error.message);
+        }
+
+        return errorResponse(500, "Unexpected error");
+    }
+});
+
+function getRouteSegments(url: URL) {
+    const segments = url.pathname.split("/").filter(Boolean);
+    const functionIndex = segments.findIndex((segment) => segment === FUNCTION_NAME);
+    return functionIndex >= 0 ? segments.slice(functionIndex + 1) : segments;
+}
+
+function resolveAction(route: string[], url: URL, body: Record<string, unknown>) {
+    if (route.length > 0) {
+        return route[0];
+    }
+
+    return firstDefined(url.searchParams.get("action"), getString(body.action), "home");
+}
+
+function requireParam(
+    key: string,
+    routeValue: string | undefined,
+    url: URL,
+    body: Record<string, unknown>,
+    ...aliases: string[]
+) {
+    const queryKeys = [key, ...aliases];
+    const value = firstDefined(
+        routeValue,
+        ...queryKeys.map((queryKey) => url.searchParams.get(queryKey)),
+        ...queryKeys.map((queryKey) => getString(body[queryKey])),
+    );
+
+    if (!value) {
+        throw new Error(`Missing required parameter: ${key}`);
+    }
+
+    return value;
+}
+
+async function readJsonBody(req: Request) {
+    const contentType = req.headers.get("content-type") ?? "";
+
+    if (!contentType.includes("application/json")) {
+        return {} as Record<string, unknown>;
+    }
+
+    const body = await req.json();
+    return body && typeof body === "object" ? body as Record<string, unknown> : {};
+}
+
+function getString(value: unknown) {
+    return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function firstDefined(...values: Array<string | undefined | null>) {
+    return values.find((value) => typeof value === "string" && value.length > 0);
+}
+
+function safeJsonParse(text: string) {
+    try {
+        return JSON.parse(text);
+    } catch {
+        return text;
+    }
+}

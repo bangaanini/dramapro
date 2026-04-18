@@ -9,6 +9,7 @@ const DEFAULT_PROVIDERS = [
   "goodshort",
   "dramawave",
   "dramabox",
+  "dramadash",
   "reelshort",
   "freereels",
   "flickreels",

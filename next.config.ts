@@ -15,6 +15,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "zshipricf.farsunpteltd.com" },
       { protocol: "https", hostname: "hwztchapter.dramaboxdb.com" },
       { protocol: "https", hostname: "hwztvideo.dramaboxdb.com" },
+      { protocol: "https", hostname: "cdn.dramadash.app" },
     ],
   },
 };

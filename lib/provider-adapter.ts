@@ -6,6 +6,9 @@ const API_BASE_URL =
 const DRAMABOX_EDGE_BASE_URL =
   process.env.DRAMABOX_EDGE_BASE_URL?.trim() ||
   "https://zlcibrpnwgazvwejzjdp.supabase.co/functions/v1/dramabox";
+const DRAMADASH_EDGE_BASE_URL =
+  process.env.DRAMADASH_EDGE_BASE_URL?.trim() ||
+  "https://wdofzqixcnvtfrfjzfzw.supabase.co/functions/v1/dramadash";
 export const DEFAULT_LANG = "id";
 
 export const PROVIDERS = [
@@ -14,6 +17,7 @@ export const PROVIDERS = [
   "goodshort",
   "dramawave",
   "dramabox",
+  "dramadash",
   "reelshort",
   "freereels",
   "flickreels",
@@ -140,6 +144,16 @@ export function buildCollectionUrl(
   const upstreamSource = source === "popular" ? "populer" : source;
 
   switch (provider) {
+    case "dramadash":
+      if (source === "new") {
+        return `${DRAMADASH_EDGE_BASE_URL}/tabs/2`;
+      }
+
+      if (source === "popular") {
+        return `${DRAMADASH_EDGE_BASE_URL}/tabs/3`;
+      }
+
+      return `${DRAMADASH_EDGE_BASE_URL}/home`;
     case "reelshort":
       return `${API_BASE_URL}/reelshort/${upstreamSource}?lang=${encodeURIComponent(resolvedLang)}`;
     default:
@@ -165,6 +179,8 @@ export function buildDetailUrl(
       return `${API_BASE_URL}/dramawave/detail?id=${encodeURIComponent(id)}&lang=${encodeURIComponent(resolvedLang)}`;
     case "dramabox":
       return `${API_BASE_URL}/dramabox/detail/${encodeURIComponent(id)}?lang=${encodeURIComponent(resolvedLang)}`;
+    case "dramadash":
+      return `${DRAMADASH_EDGE_BASE_URL}/drama/${encodeURIComponent(id)}`;
     case "reelshort":
       return `${API_BASE_URL}/reelshort/detail?bookId=${encodeURIComponent(id)}&lang=${encodeURIComponent(resolvedLang)}`;
     case "freereels":
@@ -190,6 +206,8 @@ export function buildStreamUrl(provider: ProviderType, args: StreamBuildArgs) {
       return `${API_BASE_URL}/dramawave/stream?dramaId=${encodeURIComponent(requireStringArg(args.id, "id"))}&episode=${encodeURIComponent(String(requireNumberArg(args.episodeIndex, "episodeIndex")))}&lang=${encodeURIComponent(lang)}`;
     case "dramabox":
       return `${API_BASE_URL}/dramabox/stream?dramaId=${encodeURIComponent(requireStringArg(args.id, "id"))}&episodeIndex=${encodeURIComponent(String(requireNumberArg(args.episodeIndex, "episodeIndex")))}&lang=${encodeURIComponent(lang)}`;
+    case "dramadash":
+      return `${DRAMADASH_EDGE_BASE_URL}/episode/${encodeURIComponent(requireStringArg(args.id, "id"))}/${encodeURIComponent(String(requireNumberArg(args.episodeIndex, "episodeIndex")))}`;
     case "reelshort":
       return `${API_BASE_URL}/reelshort/stream?bookId=${encodeURIComponent(requireStringArg(args.id, "id"))}&chapterId=${encodeURIComponent(requireStringArg(args.chapterId, "chapterId"))}&lang=${encodeURIComponent(lang)}`;
     case "freereels":
@@ -348,6 +366,29 @@ export function normalizeDetailMetadata(
     };
   }
 
+  if (provider === "dramadash") {
+    const root = asRecord(payload);
+    const episodes = readArray(root?.episodes) ?? [];
+    const playableEpisodeCount = episodes
+      .map((episode) => asRecord(episode))
+      .filter((episode) => episode && readString(episode.videoUrl)).length;
+
+    return {
+      providerDramaId: readString(data.id),
+      providerName: provider,
+      title: readString(data.name),
+      description: readString(data.description),
+      thumbUrl: normalizeDisplayImageUrl(readString(data.poster)),
+      episodeCount: playableEpisodeCount,
+      watchValue: readString(data.viewCount),
+      isNewBook: false,
+      tags: mergeStringArrays(
+        readLooseStringArray(data.tags),
+        readLooseStringArray(data.genres),
+      ),
+    };
+  }
+
   if (provider === "flickreels") {
     return {
       providerDramaId: readString(data.playlet_id),
@@ -388,6 +429,12 @@ export function normalizeCollectionPayload(
 
   if (provider === "dramabox") {
     return extractDramaboxCollectionEntries(payload)
+      .map((item) => normalizeDramaMetadata(provider, item))
+      .filter((item): item is NormalizedDramaMetadata => item !== null);
+  }
+
+  if (provider === "dramadash") {
+    return extractDramadashCollectionEntries(payload)
       .map((item) => normalizeDramaMetadata(provider, item))
       .filter((item): item is NormalizedDramaMetadata => item !== null);
   }
@@ -482,6 +529,15 @@ export async function resolveStreamRequest({
         },
       };
     }
+    case "dramadash": {
+      return {
+        streamArgs: {
+          id: providerDramaId,
+          episodeIndex,
+          lang,
+        },
+      };
+    }
     case "reelshort": {
       const detailData = await fetchDetailData(provider, providerDramaId, lang);
       const episode = findEpisodeEntry(detailData, episodeIndex);
@@ -528,6 +584,8 @@ export function normalizeStreamPayload({
     qualities = normalizeGoodshortStream(data, episodeIndex);
   } else if (provider === "dramabox") {
     qualities = normalizeDramaboxStream(data);
+  } else if (provider === "dramadash") {
+    qualities = normalizeDramadashStream(data);
   } else if (provider === "flickreels") {
     qualities = normalizeFlickreelsStream(data, episodeIndex);
   } else {
@@ -683,6 +741,30 @@ function extractDramaboxCollectionEntries(payload: unknown) {
   return dedupeDramaEntries(items);
 }
 
+function extractDramadashCollectionEntries(payload: unknown) {
+  const root = asRecord(payload);
+  const dataRecord = asRecord(root?.data);
+  const items: JsonRecord[] = [];
+
+  const collectionSources = [
+    readArray(root?.list),
+    readArray(dataRecord?.drama),
+    readArray(dataRecord?.trending),
+    readArray(dataRecord?.banner),
+    readArray(root?.trendingSearches),
+  ];
+
+  for (const entries of collectionSources) {
+    items.push(
+      ...(entries ?? [])
+        .map((entry) => asRecord(entry))
+        .filter((entry): entry is JsonRecord => entry !== null),
+    );
+  }
+
+  return dedupeDramaEntries(items);
+}
+
 function dedupeDramaEntries(items: JsonRecord[]) {
   const seen = new Set<string>();
 
@@ -691,6 +773,7 @@ function dedupeDramaEntries(items: JsonRecord[]) {
       readString(item.drama_id) ||
       readString(item.bookId) ||
       readString(item.id) ||
+      readString(item.slug) ||
       readString(item.bookName);
 
     if (!key || seen.has(key)) {
@@ -754,6 +837,27 @@ function normalizeDramaMetadata(
         readLooseStringArray(item.tags),
         readLooseStringArray(item.tagV3s),
         readLooseStringArray(item.markNamesConnectKey),
+      ),
+    };
+
+    return normalized.providerDramaId && normalized.title ? normalized : null;
+  }
+
+  if (provider === "dramadash") {
+    const normalized = {
+      providerDramaId: readString(item.id),
+      providerName: provider,
+      title: readString(item.name),
+      description: readString(item.description),
+      thumbUrl: normalizeDisplayImageUrl(readString(item.poster)),
+      episodeCount: readInt(item.episodeCount) || readInt(item.total_episodes),
+      watchValue: readString(item.viewCount),
+      isNewBook: readLooseStringArray(item.tags).some((tag) =>
+        tag.toLowerCase().includes("baru"),
+      ),
+      tags: mergeStringArrays(
+        readLooseStringArray(item.tags),
+        readLooseStringArray(item.genres),
       ),
     };
 
@@ -965,6 +1069,22 @@ function normalizeDramaboxStream(data: JsonRecord | null) {
   }
 
   return qualities.filter(isCompleteQuality);
+}
+
+function normalizeDramadashStream(data: JsonRecord | null) {
+  const url = readString(data?.videoUrl);
+
+  if (!url) {
+    return [];
+  }
+
+  return [
+    {
+      label: "HLS",
+      url,
+      mimeType: inferMimeType(url),
+    },
+  ].filter(isCompleteQuality);
 }
 
 function normalizeGenericStream(data: JsonRecord | null) {

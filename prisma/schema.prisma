@@ -13,6 +13,7 @@ enum ProviderName {
   goodshort
   dramawave
   dramabox
+  dramadash
   reelshort
   freereels
   flickreels
