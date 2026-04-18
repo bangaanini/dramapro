@@ -280,6 +280,10 @@ function buildProviderRequestUrls(
         ? buildDramaboxEdgeDetailUrl(requireStringArg(args.id, "id"), args.lang)
         : buildDramaboxEdgeStreamUrl(args);
 
+  if (kind === "home" || kind === "new" || kind === "popular") {
+    return Array.from(new Set([fallbackUrl, primaryUrl]));
+  }
+
   return Array.from(new Set([primaryUrl, fallbackUrl]));
 }
 
@@ -733,6 +737,24 @@ function extractDramaboxCollectionEntries(payload: unknown) {
         .filter((entry): entry is JsonRecord => entry !== null),
     );
   }
+
+  for (const column of readArray(dataRecord.columnVoList) ?? []) {
+    const columnRecord = asRecord(column);
+    const entries = readArray(columnRecord?.bookList) ?? [];
+    items.push(
+      ...entries
+        .map((entry) => asRecord(entry))
+        .filter((entry): entry is JsonRecord => entry !== null),
+    );
+  }
+
+  const newTheaterList = asRecord(dataRecord.newTheaterList);
+  const newTheaterEntries = readArray(newTheaterList?.records) ?? [];
+  items.push(
+    ...newTheaterEntries
+      .map((entry) => asRecord(entry))
+      .filter((entry): entry is JsonRecord => entry !== null),
+  );
 
   if (looksLikeDramaboxItem(dataRecord)) {
     items.push(dataRecord);
