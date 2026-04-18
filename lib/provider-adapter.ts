@@ -3,6 +3,9 @@ import { normalizeDisplayImageUrl } from "@/lib/utils";
 const API_BASE_URL =
   process.env.UPSTREAM_API_BASE_URL?.trim() ||
   "https://api.sonzaix.indevs.in";
+const GOODSHORT_API_BASE_URL =
+  process.env.GOODSHORT_API_BASE_URL?.trim() ||
+  "https://goodshort-api.rokeroke41.workers.dev";
 const DRAMABOX_EDGE_BASE_URL =
   process.env.DRAMABOX_EDGE_BASE_URL?.trim() ||
   "https://zlcibrpnwgazvwejzjdp.supabase.co/functions/v1/dramabox";
@@ -144,6 +147,13 @@ export function buildCollectionUrl(
   const upstreamSource = source === "popular" ? "populer" : source;
 
   switch (provider) {
+    case "goodshort": {
+      const params = new URLSearchParams({
+        page: String(page),
+      });
+      params.set(upstreamSource, "1");
+      return `${GOODSHORT_API_BASE_URL}/goodshort?${params.toString()}`;
+    }
     case "dramadash":
       if (source === "new") {
         return `${DRAMADASH_EDGE_BASE_URL}/tabs/2`;
@@ -174,7 +184,7 @@ export function buildDetailUrl(
     case "meloshort":
       return `${API_BASE_URL}/meloshort/detail?dramaId=${encodeURIComponent(id)}&lang=${encodeURIComponent(resolvedLang)}`;
     case "goodshort":
-      return `${API_BASE_URL}/goodshort/detail?bookId=${encodeURIComponent(id)}&lang=${encodeURIComponent(resolvedLang)}`;
+      return `${GOODSHORT_API_BASE_URL}/goodshort/detail?bookId=${encodeURIComponent(id)}`;
     case "dramawave":
       return `${API_BASE_URL}/dramawave/detail?id=${encodeURIComponent(id)}&lang=${encodeURIComponent(resolvedLang)}`;
     case "dramabox":
@@ -201,7 +211,7 @@ export function buildStreamUrl(provider: ProviderType, args: StreamBuildArgs) {
     case "meloshort":
       return `${API_BASE_URL}/meloshort/stream?dramaId=${encodeURIComponent(requireStringArg(args.id, "id"))}&episodeId=${encodeURIComponent(requireStringArg(args.episodeId, "episodeId"))}&lang=${encodeURIComponent(lang)}`;
     case "goodshort":
-      return `${API_BASE_URL}/goodshort/stream?bookId=${encodeURIComponent(requireStringArg(args.id, "id"))}&lang=${encodeURIComponent(lang)}`;
+      return `${GOODSHORT_API_BASE_URL}/goodshort/stream?bookId=${encodeURIComponent(requireStringArg(args.id, "id"))}`;
     case "dramawave":
       return `${API_BASE_URL}/dramawave/stream?dramaId=${encodeURIComponent(requireStringArg(args.id, "id"))}&episode=${encodeURIComponent(String(requireNumberArg(args.episodeIndex, "episodeIndex")))}&lang=${encodeURIComponent(lang)}`;
     case "dramabox":
