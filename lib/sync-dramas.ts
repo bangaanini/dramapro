@@ -81,6 +81,7 @@ export type StoredDramaStreamAuditBatchResult = StoredDramaStreamAuditResult & {
 };
 
 const STREAM_VALIDATION_PROVIDERS = new Set<ProviderType>(PROVIDERS);
+const FAST_METADATA_SYNC_PROVIDERS = new Set<ProviderType>(["dramadash"]);
 
 type StreamValidationResult =
   | { ok: true }
@@ -186,6 +187,36 @@ function mergeDramaMetadata(
     watchValue: detail.watchValue || base.watchValue,
     isNewBook: detail.isNewBook ?? base.isNewBook,
     tags: detail.tags?.length ? detail.tags : base.tags,
+  };
+}
+
+function shouldUseFastMetadataSync(provider: ProviderType) {
+  return FAST_METADATA_SYNC_PROVIDERS.has(provider);
+}
+
+function prepareFastSyncMetadata(
+  drama: {
+    providerDramaId: string;
+    providerName: ProviderType;
+    title: string;
+    description: string;
+    thumbUrl: string;
+    episodeCount: number;
+    watchValue: string;
+    isNewBook: boolean;
+    tags: string[];
+  },
+  existing?: { episodeCount: number } | null,
+) {
+  if (drama.providerName !== "dramadash") {
+    return drama;
+  }
+
+  return {
+    ...drama,
+    // DramaDash collection payload tidak membawa episode list. Detail dan stream
+    // dicek bertahap oleh audit worker supaya sync manual tidak timeout.
+    episodeCount: Math.max(existing?.episodeCount ?? 0, drama.episodeCount, 1),
   };
 }
 
@@ -554,7 +585,22 @@ export async function runProviderSync(
 
   for (const drama of dramas) {
     try {
-      const enrichedDrama = await enrichDramaMetadata(drama);
+      const existing = await prisma.drama.findUnique({
+        where: {
+          providerName_providerDramaId: {
+            providerName: drama.providerName,
+            providerDramaId: drama.providerDramaId,
+          },
+        },
+        select: {
+          id: true,
+          episodeCount: true,
+        },
+      });
+      const useFastMetadataSync = shouldUseFastMetadataSync(drama.providerName);
+      const enrichedDrama = useFastMetadataSync
+        ? prepareFastSyncMetadata(drama, existing)
+        : await enrichDramaMetadata(drama);
 
       if (!enrichedDrama.providerDramaId || !enrichedDrama.title) {
         skipped += 1;
@@ -565,21 +611,33 @@ export async function runProviderSync(
         continue;
       }
 
-      const validation = await validateDramaStreamAvailability(enrichedDrama);
+      const validation = useFastMetadataSync
+        ? ({ ok: true } as const)
+        : await validateDramaStreamAvailability(enrichedDrama);
       const streamCheckedAt = new Date();
       const streamCheckMessage = validation.ok
-        ? "Stream episode 1 normal saat sync terakhir."
+        ? useFastMetadataSync
+          ? "Stream belum dicek saat sync cepat. Audit batch akan memvalidasi provider ini."
+          : "Stream episode 1 normal saat sync terakhir."
         : validation.message;
-
-      const existing = await prisma.drama.findUnique({
-        where: {
-          providerName_providerDramaId: {
-            providerName: enrichedDrama.providerName,
-            providerDramaId: enrichedDrama.providerDramaId,
-          },
-        },
-        select: { id: true },
-      });
+      const createStreamStatus = useFastMetadataSync
+        ? {
+            isStreamPlayable: true,
+            streamCheckMessage,
+            streamCheckedAt: null,
+          }
+        : {
+            isStreamPlayable: validation.ok,
+            streamCheckMessage,
+            streamCheckedAt,
+          };
+      const updateStreamStatus = useFastMetadataSync
+        ? {}
+        : {
+            isStreamPlayable: validation.ok,
+            streamCheckMessage,
+            streamCheckedAt,
+          };
 
       const storedDrama = await prisma.drama.upsert({
         where: {
@@ -590,9 +648,7 @@ export async function runProviderSync(
         },
         create: {
           ...enrichedDrama,
-          isStreamPlayable: validation.ok,
-          streamCheckMessage,
-          streamCheckedAt,
+          ...createStreamStatus,
         },
         update: {
           title: enrichedDrama.title,
@@ -602,9 +658,7 @@ export async function runProviderSync(
           watchValue: enrichedDrama.watchValue,
           isNewBook: enrichedDrama.isNewBook,
           tags: enrichedDrama.tags,
-          isStreamPlayable: validation.ok,
-          streamCheckMessage,
-          streamCheckedAt,
+          ...updateStreamStatus,
         },
         select: { id: true },
       });
