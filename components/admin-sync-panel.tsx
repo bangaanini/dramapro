@@ -36,6 +36,63 @@ type SyncResult = SyncApiResult & {
   detail?: string;
 };
 
+function formatSyncResultHeadline(result: SyncResult) {
+  if (!result.ok) {
+    return `Scan page ${result.page} gagal untuk provider ${result.provider}.`;
+  }
+
+  const parts = [
+    `Scan page ${result.page} selesai.`,
+    `${result.processed} drama discan.`,
+  ];
+
+  if (result.created > 0 && result.updated > 0) {
+    parts.push(
+      `${result.created} judul baru dan ${result.updated} judul diperbarui.`,
+    );
+  } else if (result.created > 0) {
+    parts.push(`${result.created} judul baru ditemukan.`);
+  } else if (result.updated > 0) {
+    parts.push(`${result.updated} judul diperbarui.`);
+  } else if (result.processed > 0) {
+    parts.push("Tidak ada perubahan metadata yang perlu ditulis ulang.");
+  }
+
+  if (result.hidden > 0) {
+    parts.push(`${result.hidden} drama otomatis disembunyikan.`);
+  }
+
+  if (result.skipped > 0) {
+    parts.push(`${result.skipped} item dilewati.`);
+  }
+
+  return parts.join(" ");
+}
+
+function formatSyncResultStatus(result: SyncResult) {
+  if (!result.ok) {
+    return "gagal";
+  }
+
+  if (result.created > 0 && result.updated > 0) {
+    return "judul baru + update";
+  }
+
+  if (result.created > 0) {
+    return "judul baru";
+  }
+
+  if (result.updated > 0) {
+    return "update";
+  }
+
+  if (result.hidden > 0) {
+    return "tersimpan namun disembunyikan";
+  }
+
+  return "tanpa perubahan";
+}
+
 type ProviderControl = {
   providerName: ProviderType;
   isHomepageVisible: boolean;
@@ -540,12 +597,28 @@ export function AdminSyncPanel({
       setResults(nextResults);
       const failedCount = nextResults.filter((result) => !result.ok).length;
       const successCount = nextResults.length - failedCount;
+      const processedCount = nextResults.reduce(
+        (sum, result) => sum + result.processed,
+        0,
+      );
+      const createdCount = nextResults.reduce(
+        (sum, result) => sum + result.created,
+        0,
+      );
+      const updatedCount = nextResults.reduce(
+        (sum, result) => sum + result.updated,
+        0,
+      );
       const hiddenCount = nextResults.reduce((sum, result) => sum + result.hidden, 0);
+      const skippedCount = nextResults.reduce(
+        (sum, result) => sum + result.skipped,
+        0,
+      );
 
       setSummary(
         failedCount > 0
-          ? `Sync selesai. ${successCount} provider berhasil, ${failedCount} provider gagal, ${hiddenCount} drama otomatis disembunyikan. Provider yang gagal tidak menghentikan provider lain.`
-          : `Sync selesai. ${successCount} provider berhasil diproses, ${hiddenCount} drama otomatis disembunyikan.`,
+          ? `Sync selesai. ${successCount} provider berhasil, ${failedCount} provider gagal. Total ${processedCount} drama discan, ${createdCount} judul baru, ${updatedCount} update, ${hiddenCount} otomatis disembunyikan, dan ${skippedCount} dilewati. Provider yang gagal tidak menghentikan provider lain.`
+          : `Sync selesai. ${successCount} provider berhasil diproses. Total ${processedCount} drama discan, ${createdCount} judul baru, ${updatedCount} update, ${hiddenCount} otomatis disembunyikan, dan ${skippedCount} dilewati.`,
       );
     } catch (submitError) {
       setError(
@@ -1104,9 +1177,15 @@ export function AdminSyncPanel({
                     >
                       {result.ok ? "success" : "failed"}
                     </Badge>
+                    <Badge className="border-accent/20 bg-accent/10 text-accent">
+                      {formatSyncResultStatus(result)}
+                    </Badge>
                     <Badge variant="outline">
                       {result.status > 0 ? `status ${result.status}` : "request error"}
                     </Badge>
+                  </div>
+                  <div className="mt-3 rounded-2xl border border-white/10 bg-black/15 px-3 py-3 text-sm leading-6 text-[var(--muted)]">
+                    {formatSyncResultHeadline(result)}
                   </div>
                   <div className="mt-3 grid gap-2 text-sm text-[var(--muted)] sm:grid-cols-5">
                     <div>Processed: <span className="text-white">{result.processed}</span></div>
@@ -1122,9 +1201,21 @@ export function AdminSyncPanel({
                   ) : null}
                   {result.errors.length > 0 ? (
                     <div className="mt-3 rounded-xl border border-yellow-300/15 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-100">
-                      {result.errors.length === 1
-                        ? result.errors[0].message
-                        : `${result.errors.length} item mengalami issue. Contoh: ${result.errors[0].message}`}
+                      <div className="font-medium text-yellow-50">
+                        {result.errors.length === 1
+                          ? "1 item mengalami issue saat sync."
+                          : `${result.errors.length} item mengalami issue saat sync.`}
+                      </div>
+                      <div className="mt-1">
+                        {result.errors.length === 1
+                          ? result.errors[0].message
+                          : `Contoh pertama: ${result.errors[0].message}`}
+                      </div>
+                      {result.errors[0]?.providerDramaId ? (
+                        <div className="mt-1 text-yellow-200/80">
+                          Provider ID: {result.errors[0].providerDramaId}
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
