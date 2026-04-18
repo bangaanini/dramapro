@@ -897,6 +897,7 @@ function normalizeFlickreelsStream(data: JsonRecord | null, episodeIndex: number
 }
 
 function normalizeDramaboxStream(data: JsonRecord | null) {
+  const qualities: StreamResponse["qualities"] = [];
   const chapterList = readArray(data?.chapterList) ?? [];
   const candidates = [
     data,
@@ -905,9 +906,63 @@ function normalizeDramaboxStream(data: JsonRecord | null) {
     ...chapterList.map((entry) => asRecord(asRecord(entry)?.chapterVideoInfo)),
   ].filter((entry): entry is JsonRecord => entry !== null);
 
-  const qualities = candidates.flatMap((candidate) =>
-    normalizeGenericStream(candidate),
-  );
+  for (const chapter of chapterList) {
+    const chapterRecord = asRecord(chapter);
+
+    if (!chapterRecord) {
+      continue;
+    }
+
+    const cdnList = readArray(chapterRecord.cdnList) ?? [];
+
+    for (const cdn of cdnList) {
+      const cdnRecord = asRecord(cdn);
+
+      if (!cdnRecord) {
+        continue;
+      }
+
+      const pathList = readArray(cdnRecord.videoPathList) ?? [];
+
+      for (const pathItem of pathList) {
+        const pathRecord = asRecord(pathItem);
+
+        if (!pathRecord) {
+          continue;
+        }
+
+        const qualityValue = readInt(pathRecord.quality);
+        const encode =
+          readString(pathRecord.format) ||
+          readString(pathRecord.codec) ||
+          readString(pathRecord.profile);
+        const fallbackLabel =
+          qualityValue > 0 && encode
+            ? `${qualityValue}p ${encode}`
+            : qualityValue > 0
+              ? `${qualityValue}p`
+              : "MP4";
+        const url =
+          readString(pathRecord.videoPath) ||
+          readString(pathRecord.playUrl) ||
+          readString(pathRecord.url);
+
+        if (!url) {
+          continue;
+        }
+
+        qualities.push({
+          label: fallbackLabel,
+          url,
+          mimeType: inferMimeType(url),
+        });
+      }
+    }
+  }
+
+  for (const candidate of candidates) {
+    qualities.push(...normalizeGenericStream(candidate));
+  }
 
   return qualities.filter(isCompleteQuality);
 }
