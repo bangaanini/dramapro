@@ -1,6 +1,11 @@
 import { normalizeDisplayImageUrl } from "@/lib/utils";
 
-const API_BASE_URL = "https://api.sonzaix.indevs.in";
+const API_BASE_URL =
+  process.env.UPSTREAM_API_BASE_URL?.trim() ||
+  "https://api.sonzaix.indevs.in";
+const DRAMABOX_EDGE_BASE_URL =
+  process.env.DRAMABOX_EDGE_BASE_URL?.trim() ||
+  "https://zlcibrpnwgazvwejzjdp.supabase.co/functions/v1/dramabox";
 export const DEFAULT_LANG = "id";
 
 export const PROVIDERS = [
@@ -87,6 +92,8 @@ type NormalizeStreamPayloadArgs = {
   episodeIndex: number;
   payload: unknown;
 };
+
+type UpstreamRequestKind = SyncSource | "detail" | "stream";
 
 export class UpstreamHttpError extends Error {
   constructor(
@@ -194,20 +201,109 @@ export function buildStreamUrl(provider: ProviderType, args: StreamBuildArgs) {
   }
 }
 
-export async function fetchProviderJson(
-  kind: SyncSource | "detail" | "stream",
+function buildDramaboxEdgeCollectionUrl(
+  source: SyncSource,
+  page: number,
+  lang = DEFAULT_LANG,
+) {
+  const resolvedLang = resolveProviderLang("dramabox", lang);
+  const params = new URLSearchParams({
+    page: String(page),
+    lang: resolvedLang,
+  });
+
+  const sourceKey = source === "popular" ? "populer" : source;
+  params.set(sourceKey, "1");
+
+  return `${DRAMABOX_EDGE_BASE_URL}?${params.toString()}`;
+}
+
+function buildDramaboxEdgeDetailUrl(id: string, lang = DEFAULT_LANG) {
+  const resolvedLang = resolveProviderLang("dramabox", lang);
+  const params = new URLSearchParams({
+    bookId: id,
+    lang: resolvedLang,
+  });
+
+  return `${DRAMABOX_EDGE_BASE_URL}/detail?${params.toString()}`;
+}
+
+function buildDramaboxEdgeStreamUrl(args: StreamBuildArgs) {
+  const lang = resolveProviderLang("dramabox", args.lang ?? DEFAULT_LANG);
+  const params = new URLSearchParams({
+    bookId: requireStringArg(args.id, "id"),
+    episodeIndex: String(requireNumberArg(args.episodeIndex, "episodeIndex")),
+    lang,
+  });
+
+  return `${DRAMABOX_EDGE_BASE_URL}/stream?${params.toString()}`;
+}
+
+function buildProviderRequestUrls(
+  kind: UpstreamRequestKind,
   provider: ProviderType,
   args: StreamBuildArgs,
-  options?: FetchJsonOptions,
 ) {
-  const url =
+  const primaryUrl =
     kind === "home" || kind === "new" || kind === "popular"
       ? buildCollectionUrl(provider, kind, args.page ?? 1, args.lang)
       : kind === "detail"
         ? buildDetailUrl(provider, requireStringArg(args.id, "id"), args.lang)
         : buildStreamUrl(provider, args);
 
-  return fetchJson(url, options);
+  if (provider !== "dramabox") {
+    return [primaryUrl];
+  }
+
+  const fallbackUrl =
+    kind === "home" || kind === "new" || kind === "popular"
+      ? buildDramaboxEdgeCollectionUrl(kind, args.page ?? 1, args.lang)
+      : kind === "detail"
+        ? buildDramaboxEdgeDetailUrl(requireStringArg(args.id, "id"), args.lang)
+        : buildDramaboxEdgeStreamUrl(args);
+
+  return Array.from(new Set([primaryUrl, fallbackUrl]));
+}
+
+function shouldTryNextUpstreamUrl(error: unknown) {
+  if (error instanceof UpstreamHttpError) {
+    return (
+      error.status >= 500 ||
+      error.status === 403 ||
+      error.status === 404 ||
+      error.status === 429
+    );
+  }
+
+  return error instanceof Error;
+}
+
+export async function fetchProviderJson(
+  kind: SyncSource | "detail" | "stream",
+  provider: ProviderType,
+  args: StreamBuildArgs,
+  options?: FetchJsonOptions,
+) {
+  const urls = buildProviderRequestUrls(kind, provider, args);
+  let lastError: unknown = null;
+
+  for (let index = 0; index < urls.length; index += 1) {
+    const url = urls[index];
+
+    try {
+      return await fetchJson(url, options);
+    } catch (error) {
+      lastError = error;
+
+      if (index === urls.length - 1 || !shouldTryNextUpstreamUrl(error)) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Provider request failed without a concrete error.");
 }
 
 export function normalizeDetailMetadata(
@@ -215,6 +311,42 @@ export function normalizeDetailMetadata(
   payload: unknown,
 ): ProviderDetailMetadata {
   const data = getDataRecord(payload);
+
+  if (provider === "dramabox") {
+    return {
+      providerDramaId:
+        readString(data.drama_id) ||
+        readString(data.bookId) ||
+        readString(data.id),
+      providerName: provider,
+      title: readString(data.drama_name) || readString(data.bookName),
+      description:
+        readString(data.description) || readString(data.introduction),
+      thumbUrl: normalizeDisplayImageUrl(
+        readString(data.thumb_url) ||
+          readString(data.bookCover) ||
+          readString(data.cover),
+      ),
+      episodeCount:
+        readInt(data.episode_count) ||
+        readInt(data.chapterCount) ||
+        readInt(data.total_episodes),
+      watchValue:
+        readString(data.watch_value) ||
+        readString(data.playCount) ||
+        readString(data.follow_count),
+      isNewBook:
+        readBoolean(data.is_new_book) ||
+        readBoolean(data.is_finished) ||
+        readBoolean(data.vip) ||
+        false,
+      tags: mergeStringArrays(
+        readLooseStringArray(data.tags),
+        readLooseStringArray(data.tagV3s),
+        readLooseStringArray(data.markNamesConnectKey),
+      ),
+    };
+  }
 
   if (provider === "flickreels") {
     return {
@@ -253,6 +385,12 @@ export function normalizeCollectionPayload(
 ): NormalizedDramaMetadata[] {
   const root = asRecord(payload);
   const data = Array.isArray(root?.data) ? root.data : [];
+
+  if (provider === "dramabox") {
+    return extractDramaboxCollectionEntries(payload)
+      .map((item) => normalizeDramaMetadata(provider, item))
+      .filter((item): item is NormalizedDramaMetadata => item !== null);
+  }
 
   if (provider === "flickreels") {
     return data
@@ -388,6 +526,8 @@ export function normalizeStreamPayload({
 
   if (provider === "goodshort") {
     qualities = normalizeGoodshortStream(data, episodeIndex);
+  } else if (provider === "dramabox") {
+    qualities = normalizeDramaboxStream(data);
   } else if (provider === "flickreels") {
     qualities = normalizeFlickreelsStream(data, episodeIndex);
   } else {
@@ -485,12 +625,139 @@ function getDataRecord(payload: unknown) {
   return data;
 }
 
+function extractDramaboxCollectionEntries(payload: unknown) {
+  const root = asRecord(payload);
+  const rootData = root?.data;
+  const items: JsonRecord[] = [];
+
+  if (Array.isArray(rootData)) {
+    for (const block of rootData) {
+      const blockRecord = asRecord(block);
+
+      if (!blockRecord) {
+        continue;
+      }
+
+      const blockBooks = readArray(blockRecord.books) ?? [];
+      items.push(
+        ...blockBooks
+          .map((entry) => asRecord(entry))
+          .filter((entry): entry is JsonRecord => entry !== null),
+      );
+
+      if (looksLikeDramaboxItem(blockRecord)) {
+        items.push(blockRecord);
+      }
+    }
+  }
+
+  const dataRecord = asRecord(rootData);
+
+  if (!dataRecord) {
+    return dedupeDramaEntries(items);
+  }
+
+  const collectionKeys = [
+    "books",
+    "list",
+    "records",
+    "rankList",
+    "recommendBookList",
+    "bookList",
+    "theaterList",
+  ] as const;
+
+  for (const key of collectionKeys) {
+    const entries = readArray(dataRecord[key]) ?? [];
+    items.push(
+      ...entries
+        .map((entry) => asRecord(entry))
+        .filter((entry): entry is JsonRecord => entry !== null),
+    );
+  }
+
+  if (looksLikeDramaboxItem(dataRecord)) {
+    items.push(dataRecord);
+  }
+
+  return dedupeDramaEntries(items);
+}
+
+function dedupeDramaEntries(items: JsonRecord[]) {
+  const seen = new Set<string>();
+
+  return items.filter((item) => {
+    const key =
+      readString(item.drama_id) ||
+      readString(item.bookId) ||
+      readString(item.id) ||
+      readString(item.bookName);
+
+    if (!key || seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
+function looksLikeDramaboxItem(item: JsonRecord | null) {
+  if (!item) {
+    return false;
+  }
+
+  return Boolean(
+    readString(item.bookId) ||
+      readString(item.bookName) ||
+      readString(item.bookCover) ||
+      readString(item.introduction),
+  );
+}
+
 function normalizeDramaMetadata(
   provider: ProviderType,
   item: JsonRecord | null,
 ): NormalizedDramaMetadata | null {
   if (!item) {
     return null;
+  }
+
+  if (provider === "dramabox") {
+    const normalized = {
+      providerDramaId:
+        readString(item.drama_id) ||
+        readString(item.bookId) ||
+        readString(item.id),
+      providerName: provider,
+      title: readString(item.drama_name) || readString(item.bookName),
+      description:
+        readString(item.description) || readString(item.introduction),
+      thumbUrl: normalizeDisplayImageUrl(
+        readString(item.thumb_url) ||
+          readString(item.bookCover) ||
+          readString(item.cover),
+      ),
+      episodeCount:
+        readInt(item.episode_count) ||
+        readInt(item.chapterCount) ||
+        readInt(item.total_episodes),
+      watchValue:
+        readString(item.watch_value) ||
+        readString(item.playCount) ||
+        readString(item.play_count),
+      isNewBook:
+        readBoolean(item.is_new_book) ||
+        readBoolean(item.is_finished) ||
+        false,
+      tags: mergeStringArrays(
+        readLooseStringArray(item.tags),
+        readLooseStringArray(item.tagV3s),
+        readLooseStringArray(item.markNamesConnectKey),
+      ),
+    };
+
+    return normalized.providerDramaId && normalized.title ? normalized : null;
   }
 
   if (provider === "flickreels") {
@@ -627,6 +894,22 @@ function normalizeFlickreelsStream(data: JsonRecord | null, episodeIndex: number
       mimeType: inferMimeType(url),
     },
   ];
+}
+
+function normalizeDramaboxStream(data: JsonRecord | null) {
+  const chapterList = readArray(data?.chapterList) ?? [];
+  const candidates = [
+    data,
+    ...chapterList.map((entry) => asRecord(entry)),
+    ...chapterList.map((entry) => asRecord(asRecord(entry)?.videoInfo)),
+    ...chapterList.map((entry) => asRecord(asRecord(entry)?.chapterVideoInfo)),
+  ].filter((entry): entry is JsonRecord => entry !== null);
+
+  const qualities = candidates.flatMap((candidate) =>
+    normalizeGenericStream(candidate),
+  );
+
+  return qualities.filter(isCompleteQuality);
 }
 
 function normalizeGenericStream(data: JsonRecord | null) {
@@ -965,6 +1248,42 @@ function readStringArray(value: unknown) {
   return value
     .map((entry) => readString(entry))
     .filter((entry) => Boolean(entry));
+}
+
+function readLooseStringArray(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => {
+      if (
+        typeof entry === "string" ||
+        typeof entry === "number" ||
+        typeof entry === "bigint"
+      ) {
+        return readString(entry);
+      }
+
+      const record = asRecord(entry);
+
+      if (!record) {
+        return "";
+      }
+
+      return (
+        readString(record.name) ||
+        readString(record.label) ||
+        readString(record.tagName) ||
+        readString(record.value) ||
+        readString(record.display_name)
+      );
+    })
+    .filter((entry) => Boolean(entry));
+}
+
+function mergeStringArrays(...parts: string[][]) {
+  return Array.from(new Set(parts.flat().filter(Boolean)));
 }
 
 function isCompleteQuality(
