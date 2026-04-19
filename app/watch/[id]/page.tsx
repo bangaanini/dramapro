@@ -41,6 +41,7 @@ import {
   isEpisodeVipLocked,
   isVipActive,
 } from "@/lib/vip";
+import { ACTIVE_PROVIDERS } from "@/lib/provider-adapter";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,9 @@ const getDramaById = cache(async (id: string) =>
     where: {
       id,
       isStreamPlayable: true,
+      providerName: {
+        in: ACTIVE_PROVIDERS,
+      },
     },
   }),
 );
@@ -181,6 +185,9 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
     where: {
       id: { not: drama.id },
       isStreamPlayable: true,
+      providerName: {
+        in: ACTIVE_PROVIDERS,
+      },
       OR: relatedFilters,
     },
     orderBy: [{ updatedAt: "desc" }],

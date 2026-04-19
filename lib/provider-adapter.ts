@@ -31,6 +31,27 @@ export type ProviderType = (typeof PROVIDERS)[number];
 export const SYNC_SOURCES = ["home", "new", "popular"] as const;
 export type SyncSource = (typeof SYNC_SOURCES)[number];
 
+function parseProviderList(
+  rawValue: string | null | undefined,
+  fallback: readonly ProviderType[] = PROVIDERS,
+): ProviderType[] {
+  const raw = rawValue?.trim() ?? "";
+
+  if (!raw) {
+    return [...fallback];
+  }
+
+  const parsed = raw
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value): value is ProviderType => PROVIDERS.includes(value as ProviderType));
+
+  return parsed.length ? parsed : [...fallback];
+}
+
+export const ACTIVE_PROVIDERS = parseProviderList(process.env.ACTIVE_PROVIDERS);
+const ACTIVE_PROVIDER_SET = new Set<ProviderType>(ACTIVE_PROVIDERS);
+
 type JsonRecord = Record<string, unknown>;
 
 type FetchJsonOptions = {
@@ -115,6 +136,17 @@ export class UpstreamHttpError extends Error {
 
 export function isProviderType(value: string): value is ProviderType {
   return PROVIDERS.includes(value as ProviderType);
+}
+
+export function isActiveProviderType(value: string): value is ProviderType {
+  return ACTIVE_PROVIDER_SET.has(value as ProviderType);
+}
+
+export function parseActiveProviderList(rawValue: string | null | undefined) {
+  const parsed = parseProviderList(rawValue, ACTIVE_PROVIDERS);
+  const filtered = parsed.filter((provider) => ACTIVE_PROVIDER_SET.has(provider));
+
+  return filtered.length ? filtered : [...ACTIVE_PROVIDERS];
 }
 
 export function isSyncSource(value: string): value is SyncSource {

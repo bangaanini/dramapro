@@ -1,24 +1,12 @@
 import {
-  PROVIDERS,
+  parseActiveProviderList,
   SYNC_SOURCES,
-  isProviderType,
   isSyncSource,
 } from "../../lib/provider-adapter";
 import { runBatchSync } from "../../lib/sync-dramas";
 
 function parseProviders() {
-  const raw = process.env.SYNC_PROVIDERS?.trim();
-
-  if (!raw) {
-    return [...PROVIDERS];
-  }
-
-  const parsed = raw
-    .split(",")
-    .map((value) => value.trim())
-    .filter((value): value is (typeof PROVIDERS)[number] => isProviderType(value));
-
-  return parsed.length ? parsed : [...PROVIDERS];
+  return parseActiveProviderList(process.env.SYNC_PROVIDERS);
 }
 
 function parsePages() {

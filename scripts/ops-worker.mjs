@@ -118,10 +118,14 @@ function createConfig() {
     throw new Error("CRON_SECRET wajib diisi untuk worker.");
   }
 
+  const configuredProviders =
+    parseOptionalString(process.env.WORKER_PROVIDERS) ||
+    parseOptionalString(process.env.ACTIVE_PROVIDERS);
+
   return {
     baseUrl: baseUrl.replace(/\/+$/u, ""),
     secret,
-    providers: parseCsv(process.env.WORKER_PROVIDERS, DEFAULT_PROVIDERS),
+    providers: parseCsv(configuredProviders, DEFAULT_PROVIDERS),
     sources: parseCsv(process.env.WORKER_SOURCES, DEFAULT_SOURCES),
     pages: parsePositiveInt(process.env.WORKER_SYNC_PAGES, 2),
     auditBatchSize: parsePositiveInt(process.env.WORKER_AUDIT_BATCH_SIZE, 10),

@@ -73,7 +73,7 @@ export default async function HomePage(props: PageProps<"/">) {
               <span className="inline-flex size-3 rounded-full bg-current opacity-90" />
             </div>
             <p className="mt-5 text-xs uppercase tracking-[0.24em] text-accent/80">
-              Telegram Mini App
+              Mini App Drama
             </p>
             <h1 className="mt-3 text-2xl font-semibold tracking-tight text-white">
               Menyiapkan halaman tujuanmu

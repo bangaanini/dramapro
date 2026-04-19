@@ -16,7 +16,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { PROVIDERS, SYNC_SOURCES, type ProviderType, type SyncSource } from "@/lib/provider-adapter";
+import {
+  PROVIDERS,
+  SYNC_SOURCES,
+  type ProviderType,
+  type SyncSource,
+} from "@/lib/provider-adapter";
 
 type SyncApiResult = {
   provider: string;
@@ -152,7 +157,6 @@ async function readResponsePayload(response: Response) {
   }
 }
 
-const providerOptions = ["all", ...PROVIDERS] as const;
 const auditSourceButtons: Array<{
   source: SyncSource;
   label: string;
@@ -178,13 +182,20 @@ const auditSourceButtons: Array<{
 type AdminSyncPanelProps = {
   adminName: string;
   adminEmail: string;
+  activeProviders: ProviderType[];
 };
 
 export function AdminSyncPanel({
   adminName,
   adminEmail,
+  activeProviders,
 }: AdminSyncPanelProps) {
-  const [provider, setProvider] = useState<(typeof providerOptions)[number]>("all");
+  const availableProviders = useMemo(
+    () => (activeProviders.length ? activeProviders : [...PROVIDERS]),
+    [activeProviders],
+  );
+  const providerOptions: Array<"all" | ProviderType> = ["all", ...availableProviders];
+  const [provider, setProvider] = useState<"all" | ProviderType>("all");
   const [source, setSource] = useState<SyncSource>("home");
   const [page, setPage] = useState("1");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -212,9 +223,9 @@ export function AdminSyncPanel({
   const providersToRun = useMemo(
     () =>
       provider === "all"
-        ? [...PROVIDERS]
-        : [provider as ProviderType],
-    [provider],
+        ? [...availableProviders]
+        : [provider],
+    [availableProviders, provider],
   );
 
   async function loadProviderControls() {
@@ -1024,7 +1035,7 @@ export function AdminSyncPanel({
           ) : null}
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {(providerControls.length ? providerControls : PROVIDERS.map((providerName) => ({
+            {(providerControls.length ? providerControls : availableProviders.map((providerName) => ({
               providerName,
               isHomepageVisible: true,
               healthStatus: "unknown" as const,

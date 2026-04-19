@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { Prisma } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
-import { isProviderType } from "@/lib/provider-adapter";
+import { ACTIVE_PROVIDERS, isActiveProviderType } from "@/lib/provider-adapter";
 
 export const runtime = "nodejs";
 
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
     request.nextUrl.searchParams.get("provider"),
   );
   const tag = normalizeQuery(request.nextUrl.searchParams.get("tag"));
-  const provider = isProviderType(providerParam) ? providerParam : "";
+  const provider = isActiveProviderType(providerParam) ? providerParam : "";
   const limitParam = Number.parseInt(
     request.nextUrl.searchParams.get("limit") ?? "",
     10,
@@ -80,6 +80,11 @@ export async function GET(request: NextRequest) {
     AND: [
       {
         isStreamPlayable: true,
+      },
+      {
+        providerName: {
+          in: ACTIVE_PROVIDERS,
+        },
       },
       provider
         ? {

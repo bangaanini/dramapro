@@ -72,6 +72,7 @@ Provider saat ini:
 - `goodshort`
 - `dramawave`
 - `dramabox`
+- `dramadash`
 - `reelshort`
 - `freereels`
 - `flickreels`
@@ -155,6 +156,9 @@ TELEGRAM_WEBHOOK_SECRET=""
 TELEGRAM_SUPPORT_URL=""
 TELEGRAM_MINI_APP_URL=""
 
+# Global provider toggle, opsional
+ACTIVE_PROVIDERS="melolo,meloshort,goodshort,dramawave,dramabox,dramadash,reelshort,freereels,flickreels,netshort"
+
 # Netlify scheduled sync, opsional
 SYNC_PROVIDERS="melolo,meloshort,goodshort,dramawave,dramabox,reelshort,freereels,flickreels,netshort"
 SYNC_SOURCES="new"
@@ -166,6 +170,7 @@ Catatan penting:
 - Jangan commit file `.env` atau `.env.local`.
 - `PAYMENT_CREDENTIALS_KEY` wajib stabil. Jika diganti, credential terenkripsi lama di database tidak bisa dibaca.
 - Setelah admin mengisi setting dari dashboard, value database dipakai lebih dulu daripada env untuk Telegram, SEO, dan payment gateway.
+- `ACTIVE_PROVIDERS` adalah saklar global. Provider di luar daftar ini tidak ikut sync, search, sitemap, health check, homepage, atau halaman detail/player.
 
 ### 4. Jalankan migration
 

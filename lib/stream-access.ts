@@ -2,6 +2,7 @@ import { buildMediaProxyUrl, shouldProxyMediaUrl } from "@/lib/media-proxy";
 import { prisma } from "@/lib/prisma";
 import {
   getProviderPayloadError,
+  isActiveProviderType,
   ProviderType,
   StreamResponse,
   UpstreamHttpError,
@@ -71,6 +72,14 @@ export async function resolveDramaStreamSources({
   }
 
   const provider = drama.providerName as ProviderType;
+
+  if (!isActiveProviderType(provider)) {
+    throw new DramaStreamResolutionError(
+      "Provider untuk drama ini sedang dinonaktifkan.",
+      410,
+    );
+  }
+
   const resolved = await resolveStreamRequest({
     provider,
     providerDramaId: drama.providerDramaId,

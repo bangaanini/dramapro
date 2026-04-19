@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 
 import { Prisma } from "@/app/generated/prisma/client";
+import { ACTIVE_PROVIDERS } from "@/lib/provider-adapter";
 import { prisma } from "@/lib/prisma";
 
 export async function getSearchShortcuts() {
@@ -11,6 +12,9 @@ export async function getSearchShortcuts() {
           by: ["providerName"],
           where: {
             isStreamPlayable: true,
+            providerName: {
+              in: ACTIVE_PROVIDERS,
+            },
           },
           _count: {
             _all: true,
@@ -25,6 +29,7 @@ export async function getSearchShortcuts() {
             SELECT UNNEST(tags) AS tag
             FROM "Drama"
             WHERE "isStreamPlayable" = true
+              AND "providerName" IN (${Prisma.join(ACTIVE_PROVIDERS)})
           ) AS tags_expanded
           WHERE tag <> ''
           GROUP BY tag

@@ -1,5 +1,9 @@
 import { ProviderHealthStatus, ProviderName } from "@/app/generated/prisma/enums";
-import { PROVIDERS, type ProviderType } from "@/lib/provider-adapter";
+import {
+  ACTIVE_PROVIDERS,
+  isActiveProviderType,
+  type ProviderType,
+} from "@/lib/provider-adapter";
 import { prisma } from "@/lib/prisma";
 import {
   DramaStreamResolutionError,
@@ -45,7 +49,7 @@ async function fetchProviderRuntimeControls() {
   const rows = await prisma.providerRuntimeControl.findMany();
   const mapped = new Map(rows.map((row) => [row.providerName, row]));
 
-  return PROVIDERS.map((providerName) =>
+  return ACTIVE_PROVIDERS.map((providerName) =>
     normalizeSummary(providerName, mapped.get(providerName as ProviderName)),
   );
 }
@@ -66,6 +70,10 @@ export async function setProviderHomepageVisibility(
   providerName: ProviderType,
   isHomepageVisible: boolean,
 ) {
+  if (!isActiveProviderType(providerName)) {
+    throw new Error(`Provider ${providerName} tidak aktif di konfigurasi.`);
+  }
+
   return prisma.providerRuntimeControl.upsert({
     where: {
       providerName: providerName as ProviderName,
@@ -193,7 +201,7 @@ export async function checkProviderStreamHealth(
 export async function checkAllProviderStreamHealth() {
   const summaries: ProviderRuntimeSummary[] = [];
 
-  for (const providerName of PROVIDERS) {
+  for (const providerName of ACTIVE_PROVIDERS) {
     summaries.push(await checkProviderStreamHealth(providerName));
   }
 

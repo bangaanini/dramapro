@@ -18,6 +18,7 @@ Isi environment berikut di VPS:
 ```bash
 CRON_SECRET=isi-secret-sama-dengan-app
 WORKER_BASE_URL=https://layardrama.id
+ACTIVE_PROVIDERS=melolo,meloshort,goodshort,dramawave,dramabox,dramadash,reelshort,freereels,flickreels,netshort
 WORKER_PROVIDERS=melolo,meloshort,goodshort,dramawave,dramabox,dramadash,reelshort,freereels,flickreels,netshort
 WORKER_SOURCES=home,new,popular
 WORKER_SYNC_PAGES=2
@@ -86,7 +87,7 @@ pm2 save
 - `worker:sync`
   - sync source `home`, `new`, `popular`
   - page `1..WORKER_SYNC_PAGES`
-  - semua provider aktif di config
+  - provider mengikuti `WORKER_PROVIDERS`, atau fallback ke `ACTIVE_PROVIDERS`
   - otomatis refresh cache katalog setelah selesai
 
 - `worker:audit`

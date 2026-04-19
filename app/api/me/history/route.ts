@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { ACTIVE_PROVIDERS } from "@/lib/provider-adapter";
 import { prisma } from "@/lib/prisma";
 import { getUserFromRequest } from "@/lib/user-auth";
 
@@ -13,7 +14,14 @@ export async function GET(request: NextRequest) {
   }
 
   const historyEntries = await prisma.watchHistory.findMany({
-    where: { userId: user.id },
+    where: {
+      userId: user.id,
+      drama: {
+        providerName: {
+          in: ACTIVE_PROVIDERS,
+        },
+      },
+    },
     include: { drama: true },
     orderBy: { updatedAt: "desc" },
     take: 120,

@@ -3,6 +3,7 @@ import { RefreshCcw } from "lucide-react";
 import { AdminSyncPanel } from "@/components/admin-sync-panel";
 import { Badge } from "@/components/ui/badge";
 import { getCurrentAdmin } from "@/lib/admin-auth";
+import { ACTIVE_PROVIDERS } from "@/lib/provider-adapter";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,11 @@ export default async function AdminSyncPage() {
         </p>
       </div>
 
-      <AdminSyncPanel adminName={admin.name} adminEmail={admin.email} />
+      <AdminSyncPanel
+        adminName={admin.name}
+        adminEmail={admin.email}
+        activeProviders={[...ACTIVE_PROVIDERS]}
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 
+import { ACTIVE_PROVIDERS } from "@/lib/provider-adapter";
 import { prisma } from "@/lib/prisma";
 import { getUserFromRequest } from "@/lib/user-auth";
 
@@ -14,7 +15,14 @@ export async function GET(request: NextRequest) {
   }
 
   const favorites = await prisma.favoriteDrama.findMany({
-    where: { userId: user.id },
+    where: {
+      userId: user.id,
+      drama: {
+        providerName: {
+          in: ACTIVE_PROVIDERS,
+        },
+      },
+    },
     include: { drama: true },
     orderBy: { createdAt: "desc" },
     take: 120,

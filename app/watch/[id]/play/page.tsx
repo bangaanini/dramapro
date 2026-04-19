@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { VideoPlayer } from "@/components/video-player";
 import { getAppSettings } from "@/lib/app-settings";
+import { ACTIVE_PROVIDERS } from "@/lib/provider-adapter";
 import { prisma } from "@/lib/prisma";
 import { toSeoDescription } from "@/lib/site";
 import { getCurrentUser, userHasAdminVideoBypass } from "@/lib/user-auth";
@@ -20,6 +21,9 @@ const getDramaById = cache(async (id: string) =>
     where: {
       id,
       isStreamPlayable: true,
+      providerName: {
+        in: ACTIVE_PROVIDERS,
+      },
     },
   }),
 );

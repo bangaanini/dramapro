@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { ACTIVE_PROVIDERS } from "@/lib/provider-adapter";
 import { getHomepageBroadcastDramaEntries } from "@/lib/catalog-data";
 import {
   buildDramaShareStartParam,
@@ -146,6 +147,9 @@ export async function searchDramasForChannelBroadcast(query: string) {
   return prisma.drama.findMany({
     where: {
       isStreamPlayable: true,
+      providerName: {
+        in: ACTIVE_PROVIDERS,
+      },
       thumbUrl: {
         not: "",
       },

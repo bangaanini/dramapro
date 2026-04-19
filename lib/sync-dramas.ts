@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import {
+  ACTIVE_PROVIDERS,
   getProviderPayloadError,
   normalizeStreamPayload,
-  PROVIDERS,
   ProviderType,
   ProviderDetailMetadata,
   SyncSource,
@@ -80,7 +80,7 @@ export type StoredDramaStreamAuditBatchResult = StoredDramaStreamAuditResult & {
   hasMore: boolean;
 };
 
-const STREAM_VALIDATION_PROVIDERS = new Set<ProviderType>(PROVIDERS);
+const STREAM_VALIDATION_PROVIDERS = new Set<ProviderType>(ACTIVE_PROVIDERS);
 const FAST_METADATA_SYNC_PROVIDERS = new Set<ProviderType>(["dramadash"]);
 
 type StreamValidationResult =
@@ -305,6 +305,9 @@ export async function runStoredDramaStreamAudit(
 ): Promise<StoredDramaStreamAuditResult> {
   const dramas = await prisma.drama.findMany({
     where: {
+      providerName: {
+        in: ACTIVE_PROVIDERS,
+      },
       feedEntries: {
         some: {
           source,
@@ -438,11 +441,21 @@ export async function runStoredDramaStreamAuditBatch({
     prisma.dramaFeed.count({
       where: {
         source,
+        drama: {
+          providerName: {
+            in: ACTIVE_PROVIDERS,
+          },
+        },
       },
     }),
     prisma.dramaFeed.findMany({
       where: {
         source,
+        drama: {
+          providerName: {
+            in: ACTIVE_PROVIDERS,
+          },
+        },
       },
       orderBy: {
         id: "asc",

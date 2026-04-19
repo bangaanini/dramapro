@@ -8,7 +8,7 @@ import {
   getProviderRuntimeControls,
   setProviderHomepageVisibility,
 } from "@/lib/provider-runtime-controls";
-import { isProviderType } from "@/lib/provider-adapter";
+import { isActiveProviderType } from "@/lib/provider-adapter";
 
 export const runtime = "nodejs";
 
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
   const controls =
     provider === "all"
       ? await checkAllProviderStreamHealth()
-      : isProviderType(provider)
+      : isActiveProviderType(provider)
         ? [await checkProviderStreamHealth(provider)]
         : null;
 
@@ -80,7 +80,7 @@ export async function PATCH(request: NextRequest) {
 
   const provider = payload?.provider?.trim() ?? "";
 
-  if (!isProviderType(provider) || typeof payload?.isHomepageVisible !== "boolean") {
+  if (!isActiveProviderType(provider) || typeof payload?.isHomepageVisible !== "boolean") {
     return NextResponse.json(
       { error: "Payload provider visibility tidak valid." },
       { status: 400 },

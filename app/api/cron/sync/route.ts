@@ -4,10 +4,10 @@ import { revalidateTag } from "next/cache";
 import { getAdminFromRequest } from "@/lib/admin-auth";
 import { hasValidInternalSecret } from "@/lib/internal-route-auth";
 import {
+  ACTIVE_PROVIDERS,
   normalizeSyncSource,
-  PROVIDERS,
   UpstreamHttpError,
-  isProviderType,
+  isActiveProviderType,
   SYNC_SOURCES,
 } from "@/lib/provider-adapter";
 import { runProviderSync } from "@/lib/sync-dramas";
@@ -30,11 +30,11 @@ export async function GET(request: NextRequest) {
     const sourceParam = normalizeSyncSource(rawSourceParam);
     const page = Number.parseInt(pageParam, 10);
 
-    if (!providerParam || !isProviderType(providerParam)) {
+    if (!providerParam || !isActiveProviderType(providerParam)) {
       return Response.json(
         {
           error: "Invalid provider.",
-          supportedProviders: PROVIDERS,
+          supportedProviders: ACTIVE_PROVIDERS,
         },
         { status: 400 },
       );
