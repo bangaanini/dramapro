@@ -86,9 +86,12 @@ export async function resolveDramaStreamSources({
     episodeIndex,
   });
 
-  const streamPayload = await fetchProviderJson("stream", provider, resolved.streamArgs, {
-    revalidate: 3600,
-  });
+  const streamPayload = await fetchProviderJson(
+    "stream",
+    provider,
+    resolved.streamArgs,
+    { cacheMode: "no-store" },
+  );
 
   const upstreamPayloadError = getProviderPayloadError(streamPayload);
 

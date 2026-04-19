@@ -140,6 +140,13 @@ function rewritePlaylistLine(line: string, baseUrl: URL) {
     return line;
   }
 
+  if (
+    trimmed.startsWith("#EXT-X-KEY:") &&
+    trimmed.includes('URI="local://offline-key')
+  ) {
+    return "";
+  }
+
   if (!trimmed.startsWith("#")) {
     return buildProxyLine(trimmed, baseUrl);
   }

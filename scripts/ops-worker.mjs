@@ -4,16 +4,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const DEFAULT_PROVIDERS = [
-  "melolo",
-  "meloshort",
   "goodshort",
-  "dramawave",
   "dramabox",
-  "dramadash",
-  "reelshort",
-  "freereels",
-  "flickreels",
-  "netshort",
 ];
 
 const DEFAULT_SOURCES = ["home", "new", "popular"];
@@ -78,6 +70,16 @@ function parseOptionalString(value) {
   return normalized ? normalized : null;
 }
 
+function intersectCsv(primary, fallback) {
+  if (!Array.isArray(primary) || primary.length === 0) {
+    return fallback;
+  }
+
+  const fallbackSet = new Set(fallback);
+  const filtered = primary.filter((item) => fallbackSet.has(item));
+  return filtered.length > 0 ? filtered : fallback;
+}
+
 function parsePositiveInt(value, fallback) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
@@ -121,11 +123,13 @@ function createConfig() {
   const configuredProviders =
     parseOptionalString(process.env.WORKER_PROVIDERS) ||
     parseOptionalString(process.env.ACTIVE_PROVIDERS);
+  const activeProviders = parseCsv(process.env.ACTIVE_PROVIDERS, DEFAULT_PROVIDERS);
+  const workerProviders = parseCsv(configuredProviders, DEFAULT_PROVIDERS);
 
   return {
     baseUrl: baseUrl.replace(/\/+$/u, ""),
     secret,
-    providers: parseCsv(configuredProviders, DEFAULT_PROVIDERS),
+    providers: intersectCsv(workerProviders, activeProviders),
     sources: parseCsv(process.env.WORKER_SOURCES, DEFAULT_SOURCES),
     pages: parsePositiveInt(process.env.WORKER_SYNC_PAGES, 2),
     auditBatchSize: parsePositiveInt(process.env.WORKER_AUDIT_BATCH_SIZE, 10),

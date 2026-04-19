@@ -13,6 +13,14 @@ import {
 import { runProviderSync } from "@/lib/sync-dramas";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const NO_STORE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+  Pragma: "no-cache",
+  Expires: "0",
+} as const;
 
 export async function GET(request: NextRequest) {
   const providerParam = request.nextUrl.searchParams.get("provider");
@@ -60,7 +68,7 @@ export async function GET(request: NextRequest) {
     const result = await runProviderSync(providerParam, page, sourceParam);
     revalidateTag("catalog-home", "max");
     revalidateTag("catalog-shortcuts", "max");
-    return Response.json(result);
+    return Response.json(result, { headers: NO_STORE_HEADERS });
   } catch (error) {
     if (error instanceof UpstreamHttpError) {
       return Response.json(
@@ -72,7 +80,7 @@ export async function GET(request: NextRequest) {
           status: error.status,
           detail: error.message,
         },
-        { status: 502 },
+        { status: 502, headers: NO_STORE_HEADERS },
       );
     }
 
@@ -84,7 +92,7 @@ export async function GET(request: NextRequest) {
         source: rawSourceParam,
         page: pageParam,
       },
-      { status: 502 },
+      { status: 502, headers: NO_STORE_HEADERS },
     );
   }
 }

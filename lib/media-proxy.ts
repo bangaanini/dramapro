@@ -7,12 +7,16 @@ export function buildMediaProxyUrl(url: string) {
 export function shouldProxyMediaUrl(url: string) {
   try {
     const parsedUrl = new URL(url);
+    const hostname = parsedUrl.hostname.toLowerCase();
+
     return (
-      parsedUrl.hostname.includes("mydramawave.com") ||
-      parsedUrl.hostname.includes("static-v1.mydramawave.com") ||
-      parsedUrl.hostname.includes("video-v5.mydramawave.com") ||
-      parsedUrl.hostname.includes("video-v6.mydramawave.com") ||
-      parsedUrl.hostname.includes("dramaboxdb.com")
+      hostname.includes("mydramawave.com") ||
+      hostname.includes("static-v1.mydramawave.com") ||
+      hostname.includes("video-v5.mydramawave.com") ||
+      hostname.includes("video-v6.mydramawave.com") ||
+      hostname.includes("dramaboxdb.com") ||
+      hostname.endsWith("goodreels.com") ||
+      hostname.endsWith("goodshort.com")
     );
   } catch {
     return false;

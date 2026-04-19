@@ -81,11 +81,24 @@ export type StoredDramaStreamAuditBatchResult = StoredDramaStreamAuditResult & {
 };
 
 const STREAM_VALIDATION_PROVIDERS = new Set<ProviderType>(ACTIVE_PROVIDERS);
-const FAST_METADATA_SYNC_PROVIDERS = new Set<ProviderType>(["dramadash"]);
+const FAST_METADATA_SYNC_PROVIDERS = new Set<ProviderType>();
 
 type StreamValidationResult =
   | { ok: true }
   | { ok: false; message: string };
+
+type ExistingDramaSnapshot = {
+  id: string;
+  title: string;
+  description: string;
+  thumbUrl: string;
+  episodeCount: number;
+  watchValue: string;
+  isNewBook: boolean;
+  tags: string[];
+  isStreamPlayable: boolean;
+  streamCheckMessage: string;
+};
 
 async function fetchCollectionPayloadWithRetry(
   provider: ProviderType,
@@ -208,16 +221,55 @@ function prepareFastSyncMetadata(
   },
   existing?: { episodeCount: number } | null,
 ) {
-  if (drama.providerName !== "dramadash") {
-    return drama;
-  }
-
   return {
     ...drama,
-    // DramaDash collection payload tidak membawa episode list. Detail dan stream
-    // dicek bertahap oleh audit worker supaya sync manual tidak timeout.
     episodeCount: Math.max(existing?.episodeCount ?? 0, drama.episodeCount, 1),
   };
+}
+
+function normalizeTagsForComparison(tags: string[]) {
+  return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))].sort();
+}
+
+function hasDramaMetadataChanged(
+  existing: ExistingDramaSnapshot | null,
+  drama: {
+    title: string;
+    description: string;
+    thumbUrl: string;
+    episodeCount: number;
+    isNewBook: boolean;
+    tags: string[];
+  },
+) {
+  if (!existing) {
+    return false;
+  }
+
+  const nextTags = normalizeTagsForComparison(drama.tags);
+  const prevTags = normalizeTagsForComparison(existing.tags);
+
+  return (
+    existing.title !== drama.title ||
+    existing.description !== drama.description ||
+    existing.thumbUrl !== drama.thumbUrl ||
+    existing.episodeCount !== drama.episodeCount ||
+    existing.isNewBook !== drama.isNewBook ||
+    nextTags.length !== prevTags.length ||
+    nextTags.some((tag, index) => tag !== prevTags[index])
+  );
+}
+
+function hasDramaStreamStateChanged(
+  existing: ExistingDramaSnapshot | null,
+  validation: StreamValidationResult,
+  useFastMetadataSync: boolean,
+) {
+  if (!existing || useFastMetadataSync) {
+    return false;
+  }
+
+  return existing.isStreamPlayable !== validation.ok;
 }
 
 async function validateDramaStreamAvailability(drama: {
@@ -240,7 +292,7 @@ async function validateDramaStreamAvailability(drama: {
       "stream",
       drama.providerName,
       resolved.streamArgs,
-      { timeoutMs: 12000 },
+      { timeoutMs: 12000, cacheMode: "no-store" },
     );
 
     const payloadError = getProviderPayloadError(payload);
@@ -607,7 +659,15 @@ export async function runProviderSync(
         },
         select: {
           id: true,
+          title: true,
+          description: true,
+          thumbUrl: true,
           episodeCount: true,
+          watchValue: true,
+          isNewBook: true,
+          tags: true,
+          isStreamPlayable: true,
+          streamCheckMessage: true,
         },
       });
       const useFastMetadataSync = shouldUseFastMetadataSync(drama.providerName);
@@ -692,9 +752,16 @@ export async function runProviderSync(
         },
       });
 
-      if (existing) {
+      const metadataChanged = hasDramaMetadataChanged(existing, enrichedDrama);
+      const streamStateChanged = hasDramaStreamStateChanged(
+        existing,
+        validation,
+        useFastMetadataSync,
+      );
+
+      if (existing && (metadataChanged || streamStateChanged)) {
         updated += 1;
-      } else {
+      } else if (!existing) {
         created += 1;
       }
 

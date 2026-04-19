@@ -3,16 +3,8 @@ import { twMerge } from "tailwind-merge";
 
 const UNOPTIMIZED_IMAGE_HOSTS = new Set(["awscover.netshort.com"]);
 const PROVIDER_LABELS: Record<string, string> = {
-  melolo: "Melolo",
-  meloshort: "MeloShort",
   goodshort: "GoodShort",
-  dramawave: "DramaWave",
   dramabox: "DramaBox",
-  dramadash: "DramaDash",
-  reelshort: "ReelShort",
-  freereels: "FreeReels",
-  flickreels: "FlickReels",
-  netshort: "NetShort",
 };
 
 export function cn(...inputs: ClassValue[]) {

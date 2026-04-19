@@ -516,11 +516,15 @@ export function AdminSyncPanel({
       }
 
       const nextResults: SyncResult[] = [];
+      const requestNonce = Date.now().toString();
 
       for (const currentProvider of providersToRun) {
         try {
           const response = await fetch(
-            `/api/cron/sync?provider=${encodeURIComponent(currentProvider)}&page=${pageNumber}&source=${encodeURIComponent(source)}`,
+            `/api/cron/sync?provider=${encodeURIComponent(currentProvider)}&page=${pageNumber}&source=${encodeURIComponent(source)}&_=${requestNonce}`,
+            {
+              cache: "no-store",
+            },
           );
 
           const payload = await readResponsePayload(response);

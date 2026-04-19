@@ -157,10 +157,10 @@ TELEGRAM_SUPPORT_URL=""
 TELEGRAM_MINI_APP_URL=""
 
 # Global provider toggle, opsional
-ACTIVE_PROVIDERS="melolo,meloshort,goodshort,dramawave,dramabox,dramadash,reelshort,freereels,flickreels,netshort"
+ACTIVE_PROVIDERS="goodshort,dramabox"
 
 # Netlify scheduled sync, opsional
-SYNC_PROVIDERS="melolo,meloshort,goodshort,dramawave,dramabox,reelshort,freereels,flickreels,netshort"
+SYNC_PROVIDERS="goodshort,dramabox"
 SYNC_SOURCES="new"
 SYNC_PAGES="1"
 ```
@@ -171,6 +171,7 @@ Catatan penting:
 - `PAYMENT_CREDENTIALS_KEY` wajib stabil. Jika diganti, credential terenkripsi lama di database tidak bisa dibaca.
 - Setelah admin mengisi setting dari dashboard, value database dipakai lebih dulu daripada env untuk Telegram, SEO, dan payment gateway.
 - `ACTIVE_PROVIDERS` adalah saklar global. Provider di luar daftar ini tidak ikut sync, search, sitemap, health check, homepage, atau halaman detail/player.
+- `GOODSHORT_API_BASE_URL` dan `DRAMABOX_API_BASE_URL` dipakai per provider. Kalau `DRAMABOX_EDGE_BASE_URL` diisi, route dramabox masih boleh fallback ke edge lama saat upstream utama error.
 
 ### 4. Jalankan migration
 

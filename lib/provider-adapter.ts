@@ -5,26 +5,16 @@ const API_BASE_URL =
   "https://api.sonzaix.indevs.in";
 const GOODSHORT_API_BASE_URL =
   process.env.GOODSHORT_API_BASE_URL?.trim() ||
-  "https://goodshort-api.rokeroke41.workers.dev";
-const DRAMABOX_EDGE_BASE_URL =
-  process.env.DRAMABOX_EDGE_BASE_URL?.trim() ||
-  "https://zlcibrpnwgazvwejzjdp.supabase.co/functions/v1/dramabox";
-const DRAMADASH_EDGE_BASE_URL =
-  process.env.DRAMADASH_EDGE_BASE_URL?.trim() ||
-  "https://wdofzqixcnvtfrfjzfzw.supabase.co/functions/v1/dramadash";
+  API_BASE_URL;
+const DRAMABOX_API_BASE_URL =
+  process.env.DRAMABOX_API_BASE_URL?.trim() ||
+  API_BASE_URL;
+const DRAMABOX_EDGE_BASE_URL = process.env.DRAMABOX_EDGE_BASE_URL?.trim() || "";
 export const DEFAULT_LANG = "id";
 
 export const PROVIDERS = [
-  "melolo",
-  "meloshort",
   "goodshort",
-  "dramawave",
   "dramabox",
-  "dramadash",
-  "reelshort",
-  "freereels",
-  "flickreels",
-  "netshort",
 ] as const;
 
 export type ProviderType = (typeof PROVIDERS)[number];
@@ -57,6 +47,7 @@ type JsonRecord = Record<string, unknown>;
 type FetchJsonOptions = {
   revalidate?: number;
   timeoutMs?: number;
+  cacheMode?: RequestCache;
 };
 
 const UPSTREAM_HEADERS = {
@@ -169,6 +160,71 @@ function resolveProviderLang(provider: ProviderType, lang = DEFAULT_LANG) {
   return lang;
 }
 
+function isDramaboxEdgeLikeBaseUrl(baseUrl: string) {
+  if (!baseUrl) {
+    return false;
+  }
+
+  return (
+    baseUrl === DRAMABOX_EDGE_BASE_URL ||
+    /\/functions\/v1\/dramabox\/?$/i.test(baseUrl)
+  );
+}
+
+function buildDramaboxApiCollectionUrl(
+  baseUrl: string,
+  source: SyncSource,
+  page: number,
+  lang = DEFAULT_LANG,
+) {
+  const resolvedLang = resolveProviderLang("dramabox", lang);
+  const sourceKey = source === "popular" ? "populer" : source;
+
+  if (isDramaboxEdgeLikeBaseUrl(baseUrl)) {
+    const params = new URLSearchParams({
+      page: String(page),
+      lang: resolvedLang,
+    });
+    params.set(sourceKey, "1");
+    return `${baseUrl}?${params.toString()}`;
+  }
+
+  return `${baseUrl}/dramabox/${sourceKey}?page=${page}&lang=${encodeURIComponent(resolvedLang)}`;
+}
+
+function buildDramaboxApiDetailUrl(baseUrl: string, id: string, lang = DEFAULT_LANG) {
+  const resolvedLang = resolveProviderLang("dramabox", lang);
+
+  if (isDramaboxEdgeLikeBaseUrl(baseUrl)) {
+    const params = new URLSearchParams({
+      bookId: id,
+      lang: resolvedLang,
+    });
+
+    return `${baseUrl}/detail?${params.toString()}`;
+  }
+
+  return `${baseUrl}/dramabox/detail/${encodeURIComponent(id)}?lang=${encodeURIComponent(resolvedLang)}`;
+}
+
+function buildDramaboxApiStreamUrl(baseUrl: string, args: StreamBuildArgs) {
+  const lang = resolveProviderLang("dramabox", args.lang ?? DEFAULT_LANG);
+  const id = requireStringArg(args.id, "id");
+  const episodeIndex = String(requireNumberArg(args.episodeIndex, "episodeIndex"));
+
+  if (isDramaboxEdgeLikeBaseUrl(baseUrl)) {
+    const params = new URLSearchParams({
+      bookId: id,
+      episodeIndex,
+      lang,
+    });
+
+    return `${baseUrl}/stream?${params.toString()}`;
+  }
+
+  return `${baseUrl}/dramabox/stream?dramaId=${encodeURIComponent(id)}&episodeIndex=${encodeURIComponent(episodeIndex)}&lang=${encodeURIComponent(lang)}`;
+}
+
 export function buildCollectionUrl(
   provider: ProviderType,
   source: SyncSource,
@@ -186,21 +242,16 @@ export function buildCollectionUrl(
       params.set(upstreamSource, "1");
       return `${GOODSHORT_API_BASE_URL}/goodshort?${params.toString()}`;
     }
-    case "dramadash":
-      if (source === "new") {
-        return `${DRAMADASH_EDGE_BASE_URL}/tabs/2`;
-      }
-
-      if (source === "popular") {
-        return `${DRAMADASH_EDGE_BASE_URL}/tabs/3`;
-      }
-
-      return `${DRAMADASH_EDGE_BASE_URL}/home`;
-    case "reelshort":
-      return `${API_BASE_URL}/reelshort/${upstreamSource}?lang=${encodeURIComponent(resolvedLang)}`;
-    default:
-      return `${API_BASE_URL}/${provider}/${upstreamSource}?page=${page}&lang=${encodeURIComponent(resolvedLang)}`;
+    case "dramabox":
+      return buildDramaboxApiCollectionUrl(
+        DRAMABOX_API_BASE_URL,
+        source,
+        page,
+        resolvedLang,
+      );
   }
+
+  throw new Error(`Unsupported provider: ${provider}`);
 }
 
 export function buildDetailUrl(
@@ -211,54 +262,29 @@ export function buildDetailUrl(
   const resolvedLang = resolveProviderLang(provider, lang);
 
   switch (provider) {
-    case "melolo":
-      return `${API_BASE_URL}/melolo/detail/${encodeURIComponent(id)}`;
-    case "meloshort":
-      return `${API_BASE_URL}/meloshort/detail?dramaId=${encodeURIComponent(id)}&lang=${encodeURIComponent(resolvedLang)}`;
     case "goodshort":
       return `${GOODSHORT_API_BASE_URL}/goodshort/detail?bookId=${encodeURIComponent(id)}`;
-    case "dramawave":
-      return `${API_BASE_URL}/dramawave/detail?id=${encodeURIComponent(id)}&lang=${encodeURIComponent(resolvedLang)}`;
     case "dramabox":
-      return `${API_BASE_URL}/dramabox/detail/${encodeURIComponent(id)}?lang=${encodeURIComponent(resolvedLang)}`;
-    case "dramadash":
-      return `${DRAMADASH_EDGE_BASE_URL}/drama/${encodeURIComponent(id)}`;
-    case "reelshort":
-      return `${API_BASE_URL}/reelshort/detail?bookId=${encodeURIComponent(id)}&lang=${encodeURIComponent(resolvedLang)}`;
-    case "freereels":
-      return `${API_BASE_URL}/freereels/detail?dramaId=${encodeURIComponent(id)}&lang=${encodeURIComponent(resolvedLang)}`;
-    case "flickreels":
-      return `${API_BASE_URL}/flickreels/detail?playlet_id=${encodeURIComponent(id)}&lang=${encodeURIComponent(resolvedLang)}`;
-    case "netshort":
-      return `${API_BASE_URL}/netshort/detail?dramaId=${encodeURIComponent(id)}&lang=${encodeURIComponent(resolvedLang)}`;
+      return buildDramaboxApiDetailUrl(DRAMABOX_API_BASE_URL, id, resolvedLang);
   }
+
+  throw new Error(`Unsupported provider: ${provider}`);
 }
 
 export function buildStreamUrl(provider: ProviderType, args: StreamBuildArgs) {
   const lang = resolveProviderLang(provider, args.lang ?? DEFAULT_LANG);
 
   switch (provider) {
-    case "melolo":
-      return `${API_BASE_URL}/melolo/stream/${encodeURIComponent(requireStringArg(args.videoId ?? args.id, "videoId"))}`;
-    case "meloshort":
-      return `${API_BASE_URL}/meloshort/stream?dramaId=${encodeURIComponent(requireStringArg(args.id, "id"))}&episodeId=${encodeURIComponent(requireStringArg(args.episodeId, "episodeId"))}&lang=${encodeURIComponent(lang)}`;
     case "goodshort":
       return `${GOODSHORT_API_BASE_URL}/goodshort/stream?bookId=${encodeURIComponent(requireStringArg(args.id, "id"))}`;
-    case "dramawave":
-      return `${API_BASE_URL}/dramawave/stream?dramaId=${encodeURIComponent(requireStringArg(args.id, "id"))}&episode=${encodeURIComponent(String(requireNumberArg(args.episodeIndex, "episodeIndex")))}&lang=${encodeURIComponent(lang)}`;
     case "dramabox":
-      return `${API_BASE_URL}/dramabox/stream?dramaId=${encodeURIComponent(requireStringArg(args.id, "id"))}&episodeIndex=${encodeURIComponent(String(requireNumberArg(args.episodeIndex, "episodeIndex")))}&lang=${encodeURIComponent(lang)}`;
-    case "dramadash":
-      return `${DRAMADASH_EDGE_BASE_URL}/episode/${encodeURIComponent(requireStringArg(args.id, "id"))}/${encodeURIComponent(String(requireNumberArg(args.episodeIndex, "episodeIndex")))}`;
-    case "reelshort":
-      return `${API_BASE_URL}/reelshort/stream?bookId=${encodeURIComponent(requireStringArg(args.id, "id"))}&chapterId=${encodeURIComponent(requireStringArg(args.chapterId, "chapterId"))}&lang=${encodeURIComponent(lang)}`;
-    case "freereels":
-      return `${API_BASE_URL}/freereels/stream?dramaId=${encodeURIComponent(requireStringArg(args.id, "id"))}&episode=${encodeURIComponent(String(requireNumberArg(args.episodeIndex, "episodeIndex")))}&lang=${encodeURIComponent(lang)}`;
-    case "flickreels":
-      return `${API_BASE_URL}/flickreels/stream?playlet_id=${encodeURIComponent(requireStringArg(args.id, "id"))}&lang=${encodeURIComponent(lang)}`;
-    case "netshort":
-      return `${API_BASE_URL}/netshort/stream?dramaId=${encodeURIComponent(requireStringArg(args.id, "id"))}&episode=${encodeURIComponent(String(requireNumberArg(args.episodeIndex, "episodeIndex")))}&lang=${encodeURIComponent(lang)}`;
+      return buildDramaboxApiStreamUrl(DRAMABOX_API_BASE_URL, {
+        ...args,
+        lang,
+      });
   }
+
+  throw new Error(`Unsupported provider: ${provider}`);
 }
 
 function buildDramaboxEdgeCollectionUrl(
@@ -266,37 +292,27 @@ function buildDramaboxEdgeCollectionUrl(
   page: number,
   lang = DEFAULT_LANG,
 ) {
-  const resolvedLang = resolveProviderLang("dramabox", lang);
-  const params = new URLSearchParams({
-    page: String(page),
-    lang: resolvedLang,
-  });
+  if (!DRAMABOX_EDGE_BASE_URL) {
+    return null;
+  }
 
-  const sourceKey = source === "popular" ? "populer" : source;
-  params.set(sourceKey, "1");
-
-  return `${DRAMABOX_EDGE_BASE_URL}?${params.toString()}`;
+  return buildDramaboxApiCollectionUrl(DRAMABOX_EDGE_BASE_URL, source, page, lang);
 }
 
 function buildDramaboxEdgeDetailUrl(id: string, lang = DEFAULT_LANG) {
-  const resolvedLang = resolveProviderLang("dramabox", lang);
-  const params = new URLSearchParams({
-    bookId: id,
-    lang: resolvedLang,
-  });
+  if (!DRAMABOX_EDGE_BASE_URL) {
+    return null;
+  }
 
-  return `${DRAMABOX_EDGE_BASE_URL}/detail?${params.toString()}`;
+  return buildDramaboxApiDetailUrl(DRAMABOX_EDGE_BASE_URL, id, lang);
 }
 
 function buildDramaboxEdgeStreamUrl(args: StreamBuildArgs) {
-  const lang = resolveProviderLang("dramabox", args.lang ?? DEFAULT_LANG);
-  const params = new URLSearchParams({
-    bookId: requireStringArg(args.id, "id"),
-    episodeIndex: String(requireNumberArg(args.episodeIndex, "episodeIndex")),
-    lang,
-  });
+  if (!DRAMABOX_EDGE_BASE_URL) {
+    return null;
+  }
 
-  return `${DRAMABOX_EDGE_BASE_URL}/stream?${params.toString()}`;
+  return buildDramaboxApiStreamUrl(DRAMABOX_EDGE_BASE_URL, args);
 }
 
 function buildProviderRequestUrls(
@@ -321,6 +337,10 @@ function buildProviderRequestUrls(
       : kind === "detail"
         ? buildDramaboxEdgeDetailUrl(requireStringArg(args.id, "id"), args.lang)
         : buildDramaboxEdgeStreamUrl(args);
+
+  if (!fallbackUrl || fallbackUrl === primaryUrl) {
+    return [primaryUrl];
+  }
 
   if (kind === "home" || kind === "new" || kind === "popular") {
     return Array.from(new Set([fallbackUrl, primaryUrl]));
@@ -375,6 +395,45 @@ export function normalizeDetailMetadata(
   payload: unknown,
 ): ProviderDetailMetadata {
   const data = getDataRecord(payload);
+  const goodshortBook = asRecord(data.book) ?? data;
+
+  if (provider === "goodshort") {
+    return {
+      providerDramaId:
+        readString(goodshortBook.bookId) ||
+        readString(goodshortBook.drama_id) ||
+        readString(goodshortBook.id),
+      providerName: provider,
+      title:
+        readString(goodshortBook.bookName) ||
+        readString(goodshortBook.drama_name),
+      description:
+        readString(goodshortBook.introduction) ||
+        readString(goodshortBook.description),
+      thumbUrl: normalizeDisplayImageUrl(
+        readString(goodshortBook.bookCover) ||
+          readString(goodshortBook.cover) ||
+          readString(goodshortBook.thumb_url),
+      ),
+      episodeCount:
+        readInt(goodshortBook.chapterCount) ||
+        readArray(data.list)?.length ||
+        readArray(data.downloadList)?.length ||
+        readInt(goodshortBook.episode_count),
+      watchValue:
+        readString(goodshortBook.viewCountDisplay) ||
+        readString(goodshortBook.viewCount) ||
+        readString(goodshortBook.watch_value),
+      isNewBook:
+        readBoolean(goodshortBook.is_new_book) ||
+        readBoolean(goodshortBook.isNewBook) ||
+        false,
+      tags: mergeStringArrays(
+        readLooseStringArray(goodshortBook.labels),
+        readLooseStringArray(goodshortBook.labelInfos),
+      ),
+    };
+  }
 
   if (provider === "dramabox") {
     return {
@@ -412,66 +471,18 @@ export function normalizeDetailMetadata(
     };
   }
 
-  if (provider === "dramadash") {
-    const root = asRecord(payload);
-    const episodes = readArray(root?.episodes) ?? [];
-    const playableEpisodeCount = episodes
-      .map((episode) => asRecord(episode))
-      .filter((episode) => episode && readString(episode.videoUrl)).length;
-
-    return {
-      providerDramaId: readString(data.id),
-      providerName: provider,
-      title: readString(data.name),
-      description: readString(data.description),
-      thumbUrl: normalizeDisplayImageUrl(readString(data.poster)),
-      episodeCount: playableEpisodeCount,
-      watchValue: readString(data.viewCount),
-      isNewBook: false,
-      tags: mergeStringArrays(
-        readLooseStringArray(data.tags),
-        readLooseStringArray(data.genres),
-      ),
-    };
-  }
-
-  if (provider === "flickreels") {
-    return {
-      providerDramaId: readString(data.playlet_id),
-      providerName: provider,
-      title: readString(data.title),
-      description: readString(data.introduce),
-      thumbUrl: normalizeDisplayImageUrl(readString(data.cover)),
-      episodeCount: readInt(data.upload_num),
-      watchValue: readString(data.likes),
-      isNewBook: false,
-      tags: readStringArray(data.tags),
-    };
-  }
-
-  return {
-    providerDramaId: readString(data.drama_id),
-    providerName: provider,
-    title: readString(data.drama_name),
-    description: readString(data.description),
-    thumbUrl: normalizeDisplayImageUrl(readString(data.thumb_url)),
-    episodeCount: readInt(data.episode_count),
-    watchValue:
-      readString(data.watch_value) ||
-      readString(data.hot_score) ||
-      readString(data.follow_count),
-    isNewBook:
-      readBoolean(data.is_new_book) || readBoolean(data.is_finished) || false,
-    tags: readStringArray(data.tags),
-  };
+  return {};
 }
 
 export function normalizeCollectionPayload(
   provider: ProviderType,
   payload: unknown,
 ): NormalizedDramaMetadata[] {
-  const root = asRecord(payload);
-  const data = Array.isArray(root?.data) ? root.data : [];
+  if (provider === "goodshort") {
+    return extractGoodshortCollectionEntries(payload)
+      .map((item) => normalizeDramaMetadata(provider, item))
+      .filter((item): item is NormalizedDramaMetadata => item !== null);
+  }
 
   if (provider === "dramabox") {
     return extractDramaboxCollectionEntries(payload)
@@ -479,24 +490,7 @@ export function normalizeCollectionPayload(
       .filter((item): item is NormalizedDramaMetadata => item !== null);
   }
 
-  if (provider === "dramadash") {
-    return extractDramadashCollectionEntries(payload)
-      .map((item) => normalizeDramaMetadata(provider, item))
-      .filter((item): item is NormalizedDramaMetadata => item !== null);
-  }
-
-  if (provider === "flickreels") {
-    return data
-      .flatMap((item) => readArray(asRecord(item)?.playlets) ?? [])
-      .map((item) => normalizeDramaMetadata(provider, asRecord(item)))
-      .filter((item): item is NormalizedDramaMetadata => item !== null);
-  }
-
-  const books = data.flatMap((block) => readArray(asRecord(block)?.books) ?? []);
-
-  return books
-    .map((item) => normalizeDramaMetadata(provider, asRecord(item)))
-    .filter((item): item is NormalizedDramaMetadata => item !== null);
+  return [];
 }
 
 export async function resolveStreamRequest({
@@ -513,57 +507,6 @@ export async function resolveStreamRequest({
           lang,
         },
       };
-    case "flickreels": {
-      await validateEpisodeFromDetail(provider, providerDramaId, episodeIndex, lang);
-
-      return {
-        streamArgs: {
-          id: providerDramaId,
-          lang,
-        },
-      };
-    }
-    case "melolo": {
-      const detailData = await fetchDetailData(provider, providerDramaId, lang);
-      const episode = findEpisodeEntry(detailData, episodeIndex);
-
-      if (!episode.videoId) {
-        throw new RangeError("Unable to resolve Melolo video id for episode.");
-      }
-
-      return {
-        streamArgs: {
-          id: providerDramaId,
-          videoId: episode.videoId,
-          lang,
-        },
-      };
-    }
-    case "meloshort": {
-      const detailData = await fetchDetailData(provider, providerDramaId, lang);
-      const episode = findEpisodeEntry(detailData, episodeIndex);
-
-      if (!episode.episodeId) {
-        throw new RangeError("Unable to resolve Meloshort episode id.");
-      }
-
-      return {
-        streamArgs: {
-          id: providerDramaId,
-          episodeId: episode.episodeId,
-          lang,
-        },
-      };
-    }
-    case "dramawave": {
-      return {
-        streamArgs: {
-          id: providerDramaId,
-          episodeIndex,
-          lang,
-        },
-      };
-    }
     case "dramabox": {
       await validateEpisodeFromDetail(provider, providerDramaId, episodeIndex, lang);
 
@@ -575,44 +518,9 @@ export async function resolveStreamRequest({
         },
       };
     }
-    case "dramadash": {
-      return {
-        streamArgs: {
-          id: providerDramaId,
-          episodeIndex,
-          lang,
-        },
-      };
-    }
-    case "reelshort": {
-      const detailData = await fetchDetailData(provider, providerDramaId, lang);
-      const episode = findEpisodeEntry(detailData, episodeIndex);
-
-      if (!episode.chapterId) {
-        throw new RangeError("Unable to resolve Reelshort chapter id.");
-      }
-
-      return {
-        streamArgs: {
-          id: providerDramaId,
-          chapterId: episode.chapterId,
-          lang,
-        },
-      };
-    }
-    case "freereels":
-    case "netshort": {
-      await validateEpisodeFromDetail(provider, providerDramaId, episodeIndex, lang);
-
-      return {
-        streamArgs: {
-          id: providerDramaId,
-          episodeIndex,
-          lang,
-        },
-      };
-    }
   }
+
+  throw new Error(`Unsupported provider: ${provider}`);
 }
 
 export function normalizeStreamPayload({
@@ -622,7 +530,7 @@ export function normalizeStreamPayload({
   payload,
 }: NormalizeStreamPayloadArgs): StreamResponse {
   const root = asRecord(payload);
-  const data = asRecord(root?.data);
+  const data = asRecord(root?.data) ?? root;
   const subtitles = normalizeProviderSubtitles(data);
   let qualities: StreamResponse["qualities"] = [];
 
@@ -630,12 +538,6 @@ export function normalizeStreamPayload({
     qualities = normalizeGoodshortStream(data, episodeIndex);
   } else if (provider === "dramabox") {
     qualities = normalizeDramaboxStream(data);
-  } else if (provider === "dramadash") {
-    qualities = normalizeDramadashStream(data);
-  } else if (provider === "flickreels") {
-    qualities = normalizeFlickreelsStream(data, episodeIndex);
-  } else {
-    qualities = normalizeGenericStream(data);
   }
 
   const deduped = dedupeQualities(qualities);
@@ -672,7 +574,7 @@ async function fetchDetailData(
     "detail",
     provider,
     { id: providerDramaId, lang },
-    { revalidate: 3600 },
+    { cacheMode: "no-store" },
   );
 
   return getDataRecord(payload);
@@ -689,10 +591,15 @@ async function validateEpisodeFromDetail(
 }
 
 async function fetchJson(url: string, options?: FetchJsonOptions) {
+  const shouldUseRevalidate =
+    typeof options?.revalidate === "number" &&
+    options.cacheMode !== "no-store";
+
   const response = await fetch(url, {
     headers: UPSTREAM_HEADERS,
     signal: AbortSignal.timeout(options?.timeoutMs ?? 25000),
-    ...(typeof options?.revalidate === "number"
+    ...(options?.cacheMode ? { cache: options.cacheMode } : {}),
+    ...(shouldUseRevalidate
       ? { next: { revalidate: options.revalidate } }
       : {}),
   });
@@ -722,11 +629,15 @@ function getDataRecord(payload: unknown) {
   const root = asRecord(payload);
   const data = asRecord(root?.data);
 
-  if (!data) {
-    throw new Error("Provider payload did not contain a `data` object.");
+  if (data) {
+    return data;
   }
 
-  return data;
+  if (root) {
+    return root;
+  }
+
+  throw new Error("Provider payload did not contain a usable object payload.");
 }
 
 function extractDramaboxCollectionEntries(payload: unknown) {
@@ -805,25 +716,37 @@ function extractDramaboxCollectionEntries(payload: unknown) {
   return dedupeDramaEntries(items);
 }
 
-function extractDramadashCollectionEntries(payload: unknown) {
+function extractGoodshortCollectionEntries(payload: unknown) {
   const root = asRecord(payload);
   const dataRecord = asRecord(root?.data);
   const items: JsonRecord[] = [];
 
   const collectionSources = [
+    readArray(dataRecord?.recommentList),
+    readArray(dataRecord?.recommendBookList),
+    readArray(dataRecord?.bookList),
+    readArray(dataRecord?.list),
     readArray(root?.list),
-    readArray(dataRecord?.drama),
-    readArray(dataRecord?.trending),
-    readArray(dataRecord?.banner),
-    readArray(root?.trendingSearches),
   ];
 
   for (const entries of collectionSources) {
-    items.push(
-      ...(entries ?? [])
-        .map((entry) => asRecord(entry))
-        .filter((entry): entry is JsonRecord => entry !== null),
-    );
+    for (const entry of entries ?? []) {
+      const record = asRecord(entry);
+
+      if (!record) {
+        continue;
+      }
+
+      const bookRecord = asRecord(record.book);
+
+      if (bookRecord) {
+        items.push(bookRecord);
+      }
+
+      if (looksLikeGoodshortItem(record)) {
+        items.push(record);
+      }
+    }
   }
 
   return dedupeDramaEntries(items);
@@ -862,12 +785,61 @@ function looksLikeDramaboxItem(item: JsonRecord | null) {
   );
 }
 
+function looksLikeGoodshortItem(item: JsonRecord | null) {
+  if (!item) {
+    return false;
+  }
+
+  return Boolean(
+    readString(item.bookId) ||
+      readString(item.bookName) ||
+      readString(item.cover) ||
+      readString(item.bookCover) ||
+      readString(item.introduction),
+  );
+}
+
 function normalizeDramaMetadata(
   provider: ProviderType,
   item: JsonRecord | null,
 ): NormalizedDramaMetadata | null {
   if (!item) {
     return null;
+  }
+
+  if (provider === "goodshort") {
+    const normalized = {
+      providerDramaId:
+        readString(item.bookId) ||
+        readString(item.drama_id) ||
+        readString(item.id),
+      providerName: provider,
+      title: readString(item.bookName) || readString(item.drama_name),
+      description:
+        readString(item.introduction) || readString(item.description),
+      thumbUrl: normalizeDisplayImageUrl(
+        readString(item.bookCover) ||
+          readString(item.cover) ||
+          readString(item.thumb_url),
+      ),
+      episodeCount:
+        readInt(item.chapterCount) || readInt(item.episode_count),
+      watchValue:
+        readString(item.viewCountDisplay) ||
+        readString(item.viewCount) ||
+        readString(item.watch_value),
+      isNewBook:
+        readBoolean(item.is_new_book) ||
+        readBoolean(item.isNewBook) ||
+        false,
+      tags: mergeStringArrays(
+        readLooseStringArray(item.labels),
+        readLooseStringArray(item.labelInfos),
+        readLooseStringArray(item.tags),
+      ),
+    };
+
+    return normalized.providerDramaId && normalized.title ? normalized : null;
   }
 
   if (provider === "dramabox") {
@@ -907,59 +879,7 @@ function normalizeDramaMetadata(
     return normalized.providerDramaId && normalized.title ? normalized : null;
   }
 
-  if (provider === "dramadash") {
-    const normalized = {
-      providerDramaId: readString(item.id),
-      providerName: provider,
-      title: readString(item.name),
-      description: readString(item.description),
-      thumbUrl: normalizeDisplayImageUrl(readString(item.poster)),
-      episodeCount: readInt(item.episodeCount) || readInt(item.total_episodes),
-      watchValue: readString(item.viewCount),
-      isNewBook: readLooseStringArray(item.tags).some((tag) =>
-        tag.toLowerCase().includes("baru"),
-      ),
-      tags: mergeStringArrays(
-        readLooseStringArray(item.tags),
-        readLooseStringArray(item.genres),
-      ),
-    };
-
-    return normalized.providerDramaId && normalized.title ? normalized : null;
-  }
-
-  if (provider === "flickreels") {
-    const normalized = {
-      providerDramaId: readString(item.id),
-      providerName: provider,
-      title: readString(item.title),
-      description: readString(item.introduce),
-      thumbUrl: normalizeDisplayImageUrl(
-        readString(item.cover) || readString(item.cover_thumb),
-      ),
-      episodeCount: readInt(item.total_episodes) || readInt(item.upload_num),
-      watchValue: readString(item.likes) || readString(item.rank),
-      isNewBook: false,
-      tags: readStringArray(item.tags),
-    };
-
-    return normalized.providerDramaId && normalized.title ? normalized : null;
-  }
-
-  const normalized = {
-    providerDramaId: readString(item.drama_id),
-    providerName: provider,
-    title: readString(item.drama_name),
-    description: readString(item.description),
-    thumbUrl: normalizeDisplayImageUrl(readString(item.thumb_url)),
-    episodeCount: readInt(item.episode_count),
-    watchValue: readString(item.watch_value),
-    isNewBook:
-      readBoolean(item.is_new_book) || readBoolean(item.is_finished) || false,
-    tags: readStringArray(item.tags),
-  };
-
-  return normalized.providerDramaId && normalized.title ? normalized : null;
+  return null;
 }
 
 function findEpisodeEntry(detailData: JsonRecord, episodeIndex: number) {
@@ -1023,55 +943,81 @@ function normalizeGoodshortStream(data: JsonRecord | null, episodeIndex: number)
       }
 
       const index = readInt(item.index);
-      return index === episodeIndex - 1 || readInt(item.episode) === episodeIndex;
+      return (
+        index === episodeIndex - 1 ||
+        readInt(item.episode) === episodeIndex ||
+        readInt(item.chapterName) === episodeIndex
+      );
     });
 
   const multiVideos = readArray(selected?.multiVideos) ?? [];
+  const qualities: StreamResponse["qualities"] = [];
 
-  return multiVideos
-    .map((entry) => asRecord(entry))
-    .filter((entry): entry is JsonRecord => entry !== null)
-    .map((entry) => ({
-      label: readString(entry.type) || "Auto",
-      url: readString(entry.filePath),
-      mimeType: "application/x-mpegURL" as const,
-    }))
-    .filter(isCompleteQuality);
-}
+  for (const entry of multiVideos) {
+    const record = asRecord(entry);
 
-function normalizeFlickreelsStream(data: JsonRecord | null, episodeIndex: number) {
-  const list = readArray(data?.list) ?? [];
-  const selected = list
-    .map((item) => asRecord(item))
-    .find((item) => item && readInt(item.chapter_num) === episodeIndex);
+    if (!record) {
+      continue;
+    }
 
-  if (!selected) {
-    return [];
+    const label = readString(record.type) || "Auto";
+    const primaryUrl = readString(record.filePath);
+
+    if (primaryUrl) {
+      qualities.push({
+        label,
+        url: primaryUrl,
+        mimeType: inferMimeType(primaryUrl),
+      });
+    }
+
+    for (const cdnEntry of readArray(record.cdnList) ?? []) {
+      const cdnRecord = asRecord(cdnEntry);
+      const cdnUrl = readString(cdnRecord?.videoPath);
+
+      if (!cdnUrl) {
+        continue;
+      }
+
+      qualities.push({
+        label,
+        url: cdnUrl,
+        mimeType: inferMimeType(cdnUrl),
+      });
+    }
   }
 
-  const url = readString(selected.play_url);
+  const fallbackUrl = readString(selected?.cdn);
 
-  if (!url) {
-    return [];
-  }
-
-  return [
-    {
+  if (fallbackUrl) {
+    qualities.push({
       label: "Auto",
-      url,
-      mimeType: inferMimeType(url),
-    },
-  ];
+      url: fallbackUrl,
+      mimeType: inferMimeType(fallbackUrl),
+    });
+  }
+
+  return qualities.filter(isCompleteQuality);
 }
 
 function normalizeDramaboxStream(data: JsonRecord | null) {
   const qualities: StreamResponse["qualities"] = [];
-  const chapterList = readArray(data?.chapterList) ?? [];
+  const chapterList =
+    readArray(data?.chapterList) ??
+    readArray(data?.chapter_list) ??
+    [];
   const candidates = [
     data,
     ...chapterList.map((entry) => asRecord(entry)),
     ...chapterList.map((entry) => asRecord(asRecord(entry)?.videoInfo)),
     ...chapterList.map((entry) => asRecord(asRecord(entry)?.chapterVideoInfo)),
+    ...chapterList.map((entry) => asRecord(asRecord(entry)?.playInfo)),
+    ...flattenRecordArrays(chapterList, "videoPathList"),
+    ...flattenRecordArrays(chapterList, "playInfoList"),
+    ...flattenRecordArrays(chapterList, "playList"),
+    ...flattenNestedRecordArrays(chapterList, "cdnList", "videoPathList"),
+    ...flattenNestedRecordArrays(chapterList, "cdnList", "playInfoList"),
+    ...flattenNestedRecordArrays(chapterList, "cdnList", "playList"),
   ].filter((entry): entry is JsonRecord => entry !== null);
 
   for (const chapter of chapterList) {
@@ -1079,6 +1025,16 @@ function normalizeDramaboxStream(data: JsonRecord | null) {
 
     if (!chapterRecord) {
       continue;
+    }
+
+    qualities.push(...normalizeGenericStream(chapterRecord));
+
+    for (const pathRecord of [
+      ...collectRecordArray(chapterRecord.videoPathList),
+      ...collectRecordArray(chapterRecord.playInfoList),
+      ...collectRecordArray(chapterRecord.playList),
+    ]) {
+      qualities.push(createQualityFromRecord(pathRecord));
     }
 
     const cdnList = readArray(chapterRecord.cdnList) ?? [];
@@ -1090,40 +1046,17 @@ function normalizeDramaboxStream(data: JsonRecord | null) {
         continue;
       }
 
-      const pathList = readArray(cdnRecord.videoPathList) ?? [];
+      qualities.push(...normalizeGenericStream(cdnRecord));
+      qualities.push(createQualityFromRecord(cdnRecord));
+
+      const pathList = [
+        ...collectRecordArray(cdnRecord.videoPathList),
+        ...collectRecordArray(cdnRecord.playInfoList),
+        ...collectRecordArray(cdnRecord.playList),
+      ];
 
       for (const pathItem of pathList) {
-        const pathRecord = asRecord(pathItem);
-
-        if (!pathRecord) {
-          continue;
-        }
-
-        const qualityValue = readInt(pathRecord.quality);
-        const encode =
-          readString(pathRecord.format) ||
-          readString(pathRecord.codec) ||
-          readString(pathRecord.profile);
-        const fallbackLabel =
-          qualityValue > 0 && encode
-            ? `${qualityValue}p ${encode}`
-            : qualityValue > 0
-              ? `${qualityValue}p`
-              : "MP4";
-        const url =
-          readString(pathRecord.videoPath) ||
-          readString(pathRecord.playUrl) ||
-          readString(pathRecord.url);
-
-        if (!url) {
-          continue;
-        }
-
-        qualities.push({
-          label: fallbackLabel,
-          url,
-          mimeType: inferMimeType(url),
-        });
+        qualities.push(createQualityFromRecord(pathItem));
       }
     }
   }
@@ -1135,27 +1068,14 @@ function normalizeDramaboxStream(data: JsonRecord | null) {
   return qualities.filter(isCompleteQuality);
 }
 
-function normalizeDramadashStream(data: JsonRecord | null) {
-  const url = readString(data?.videoUrl);
-
-  if (!url) {
-    return [];
-  }
-
-  return [
-    {
-      label: "HLS",
-      url,
-      mimeType: inferMimeType(url),
-    },
-  ].filter(isCompleteQuality);
-}
-
 function normalizeGenericStream(data: JsonRecord | null) {
   const qualities: StreamResponse["qualities"] = [];
   const streamQualities = readArray(data?.qualities) ?? [];
   const videos = readArray(data?.videos) ?? [];
   const videoList = readArray(data?.videoList) ?? [];
+  const playInfoList = readArray(data?.playInfoList) ?? [];
+  const playList = readArray(data?.playList) ?? [];
+  const videoPathList = readArray(data?.videoPathList) ?? [];
 
   for (const quality of streamQualities) {
     const entry = asRecord(quality);
@@ -1233,14 +1153,28 @@ function normalizeGenericStream(data: JsonRecord | null) {
     });
   }
 
+  for (const entry of [
+    ...playInfoList.map((item) => asRecord(item)),
+    ...playList.map((item) => asRecord(item)),
+    ...videoPathList.map((item) => asRecord(item)),
+  ].filter((item): item is JsonRecord => item !== null)) {
+    qualities.push(createQualityFromRecord(entry));
+  }
+
   const directSources: Array<[string, unknown]> = [
     ["HLS (External H.265)", data?.external_audio_h265_m3u8],
     ["HLS (External H.264)", data?.external_audio_h264_m3u8],
     ["HLS (H.265)", data?.h265_m3u8],
     ["HLS (H.264)", data?.h264_m3u8],
+    ["HLS", data?.m3u8],
     ["HLS", data?.m3u8_url],
+    ["HLS", data?.hls],
+    ["HLS", data?.hls_url],
     ["MP4", data?.video_url],
     ["MP4", data?.videoUrl],
+    ["MP4", data?.filePath],
+    ["MP4", data?.videoPath],
+    ["Auto", data?.playUrl],
     ["Auto", data?.play_url],
     ["Auto", data?.url],
   ];
@@ -1260,6 +1194,75 @@ function normalizeGenericStream(data: JsonRecord | null) {
   }
 
   return qualities.filter(isCompleteQuality);
+}
+
+function flattenRecordArrays(items: unknown[], key: string) {
+  return items.flatMap((item) => {
+    const record = asRecord(item);
+    return collectRecordArray(record?.[key]);
+  });
+}
+
+function flattenNestedRecordArrays(items: unknown[], outerKey: string, innerKey: string) {
+  return items.flatMap((item) => {
+    const record = asRecord(item);
+    const nested = readArray(record?.[outerKey]) ?? [];
+
+    return nested.flatMap((entry) => {
+      const nestedRecord = asRecord(entry);
+
+      return [
+        ...(nestedRecord ? [nestedRecord] : []),
+        ...collectRecordArray(nestedRecord?.[innerKey]),
+      ];
+    });
+  });
+}
+
+function collectRecordArray(value: unknown) {
+  return (readArray(value) ?? [])
+    .map((item) => asRecord(item))
+    .filter((item): item is JsonRecord => item !== null);
+}
+
+function createQualityFromRecord(
+  entry: JsonRecord,
+): StreamResponse["qualities"][number] {
+  const qualityValue =
+    readInt(entry.quality) ||
+    readInt(entry.dpi) ||
+    readInt(entry.height) ||
+    readInt(entry.resolution);
+  const encode =
+    readString(entry.format) ||
+    readString(entry.codec) ||
+    readString(entry.profile) ||
+    readString(entry.encode) ||
+    readString(entry.type);
+  const fallbackLabel =
+    qualityValue > 0 && encode
+      ? `${qualityValue}p ${encode}`
+      : qualityValue > 0
+        ? `${qualityValue}p`
+        : encode || "Auto";
+  const url =
+    readString(entry.videoPath) ||
+    readString(entry.playUrl) ||
+    readString(entry.play_url) ||
+    readString(entry.url) ||
+    readString(entry.filePath) ||
+    readString(entry.videoUrl) ||
+    readString(entry.video_url) ||
+    readString(entry.m3u8) ||
+    readString(entry.m3u8_url) ||
+    readString(entry.hls) ||
+    readString(entry.hls_url);
+
+  return {
+    label: fallbackLabel,
+    url,
+    mimeType: inferMimeType(url),
+  };
 }
 
 function normalizeSubtitles(input: unknown) {
@@ -1477,16 +1480,6 @@ function readBoolean(value: unknown) {
   }
 
   return false;
-}
-
-function readStringArray(value: unknown) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value
-    .map((entry) => readString(entry))
-    .filter((entry) => Boolean(entry));
 }
 
 function readLooseStringArray(value: unknown) {
