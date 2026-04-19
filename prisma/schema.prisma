@@ -308,6 +308,8 @@ model TelegramPartnerBot {
   webhookSecretCiphertext String?
   defaultChannelUsername  String   @default("")
   boxOfficeBotUrl         String   @default("")
+  welcomeMessage          String   @default("")
+  inlineButtons           Json?    @db.JsonB
   ownerUserId             String   @db.Uuid
   owner                   User     @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
   referredUsers           User[]   @relation("PartnerBotReferrals")

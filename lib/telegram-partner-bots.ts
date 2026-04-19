@@ -1,6 +1,10 @@
 import { cache } from "react";
 
-import { absoluteUrlFromSiteUrl, getAppSettings } from "@/lib/app-settings";
+import {
+  absoluteUrlFromSiteUrl,
+  getAppSettings,
+  normalizeTelegramInlineButtons,
+} from "@/lib/app-settings";
 import { decryptPaymentSecret } from "@/lib/payment-crypto";
 import { prisma } from "@/lib/prisma";
 
@@ -31,6 +35,7 @@ export const getEnabledTelegramPartnerBot = cache(
             name: true,
             email: true,
             authProvider: true,
+            telegramId: true,
             telegramUsername: true,
             affiliateCode: true,
           },
@@ -51,9 +56,20 @@ export const getEnabledTelegramPartnerBot = cache(
       return null;
     }
 
+    const settings = await getAppSettings();
+
+    const hasCustomInlineButtons = Array.isArray(row.inlineButtons);
+
     return {
       ...row,
       botToken,
+      hasCustomInlineButtons,
+      inlineButtons: normalizeTelegramInlineButtons(
+        row.inlineButtons,
+        settings.telegram.inlineButtons,
+      ),
+      welcomeMessage:
+        row.welcomeMessage.trim() || settings.telegram.menu.welcomeMessage,
       webhookSecret: webhookSecret || null,
     };
   },
@@ -138,6 +154,14 @@ export async function buildPartnerWebhookUrl(botUsername: string) {
   return buildPartnerWebhookUrlFromSiteUrl(settings.site.url, botUsername);
 }
 
+export async function buildPartnerBotSettingsUrl(botUsername: string) {
+  const settings = await getAppSettings();
+  return buildPartnerBotSettingsUrlFromSiteUrl(
+    settings.telegram.miniAppUrl || settings.site.url,
+    botUsername,
+  );
+}
+
 function buildPartnerMiniAppUrlFromSiteUrl(
   siteUrl: string,
   botUsername: string,
@@ -157,5 +181,15 @@ function buildPartnerWebhookUrlFromSiteUrl(siteUrl: string, botUsername: string)
   return absoluteUrlFromSiteUrl(
     siteUrl,
     `/api/telegram/webhook/partner/${normalizeTelegramBotUsername(botUsername)}`,
+  );
+}
+
+function buildPartnerBotSettingsUrlFromSiteUrl(siteUrl: string, botUsername: string) {
+  const normalizedBotUsername = normalizeTelegramBotUsername(botUsername);
+  return absoluteUrlFromSiteUrl(
+    siteUrl,
+    `/affiliate/partner-bot/${normalizedBotUsername}?tg_bot=${encodeURIComponent(
+      normalizedBotUsername,
+    )}`,
   );
 }

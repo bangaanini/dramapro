@@ -104,7 +104,7 @@ export function buildLegacyTelegramInlineButtons(
   });
 }
 
-function normalizeTelegramInlineButtons(
+export function normalizeTelegramInlineButtons(
   value: unknown,
   fallbackButtons: TelegramInlineButtonConfig[],
 ) {

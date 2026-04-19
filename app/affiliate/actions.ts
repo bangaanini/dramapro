@@ -3,12 +3,88 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { Prisma } from "@/app/generated/prisma/client";
+import { type TelegramInlineButtonConfig } from "@/lib/app-settings";
 import {
   calculateAffiliateAvailableBalance,
   getAffiliateSettings,
 } from "@/lib/affiliate";
 import { prisma } from "@/lib/prisma";
+import { normalizeTelegramBotUsername } from "@/lib/telegram-partner-bots";
 import { getCurrentUser, resolveSafeRedirectPath } from "@/lib/user-auth";
+
+function parseOptionalText(value: FormDataEntryValue | null) {
+  return String(value ?? "").trim();
+}
+
+function parseOptionalUrl(value: FormDataEntryValue | null, fieldLabel: string) {
+  const rawValue = parseOptionalText(value);
+
+  if (!rawValue) {
+    return "";
+  }
+
+  const normalized = rawValue.startsWith("http://") || rawValue.startsWith("https://")
+    ? rawValue
+    : `https://${rawValue}`;
+
+  try {
+    return new URL(normalized).toString();
+  } catch {
+    throw new Error(`${fieldLabel} tidak valid.`);
+  }
+}
+
+function parseLimitedText(value: FormDataEntryValue | null, maxLength: number) {
+  return parseOptionalText(value).slice(0, maxLength);
+}
+
+function parseOptionalButtonUrl(
+  value: FormDataEntryValue | null,
+  fieldLabel: string,
+) {
+  const rawValue = parseOptionalText(value);
+
+  if (!rawValue) {
+    return "";
+  }
+
+  return parseOptionalUrl(rawValue, fieldLabel);
+}
+
+function readTelegramInlineButtons(formData: FormData) {
+  const buttons: TelegramInlineButtonConfig[] = [];
+
+  for (let index = 0; index < 10; index += 1) {
+    const buttonNumber = index + 1;
+    const enabled =
+      String(formData.get(`buttonEnabled_${buttonNumber}`) ?? "") === "on";
+    const label = parseLimitedText(formData.get(`buttonLabel_${buttonNumber}`), 40);
+    const rawUrl = parseOptionalText(formData.get(`buttonUrl_${buttonNumber}`));
+
+    if (enabled && !label) {
+      throw new Error(`Label tombol ${buttonNumber} wajib diisi jika tombol diaktifkan.`);
+    }
+
+    if (enabled && !rawUrl) {
+      throw new Error(`URL tombol ${buttonNumber} wajib diisi jika tombol diaktifkan.`);
+    }
+
+    buttons.push({
+      enabled,
+      id: `button${buttonNumber}`,
+      label,
+      url: rawUrl
+        ? parseOptionalButtonUrl(
+            rawUrl,
+            `URL tombol ${buttonNumber}`,
+          )
+        : "",
+    });
+  }
+
+  return buttons;
+}
 
 export async function saveAffiliatePayoutProfileAction(formData: FormData) {
   const user = await getCurrentUser();
@@ -186,4 +262,79 @@ export async function requestAffiliateWithdrawalAction() {
   revalidatePath("/affiliate");
   revalidatePath("/admin/affiliate-settings");
   redirect("/affiliate?tab=history&success=1");
+}
+
+export async function updatePartnerBotPresentationSettingsAction(
+  botUsername: string,
+  formData: FormData,
+) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect(
+      `/sign-in?next=${encodeURIComponent(
+        `/affiliate/partner-bot/${normalizeTelegramBotUsername(botUsername)}`,
+      )}`,
+    );
+  }
+
+  const normalizedBotUsername = normalizeTelegramBotUsername(botUsername);
+
+  if (!normalizedBotUsername) {
+    redirect("/affiliate?error=Bot%20partner%20tidak%20valid");
+  }
+
+  const partnerBot = await prisma.telegramPartnerBot.findUnique({
+    where: {
+      botUsername: normalizedBotUsername,
+    },
+    select: {
+      id: true,
+      ownerUserId: true,
+    },
+  });
+
+  if (!partnerBot || partnerBot.ownerUserId !== user.id) {
+    redirect("/affiliate?error=Bot%20partner%20tidak%20ditemukan");
+  }
+
+  try {
+    const welcomeMessage = parseLimitedText(formData.get("welcomeMessage"), 3000);
+
+    if (welcomeMessage.length < 20) {
+      throw new Error("Pesan sambutan minimal 20 karakter.");
+    }
+
+    const inlineButtons = readTelegramInlineButtons(formData);
+
+    if (!inlineButtons.some((button) => button.enabled && button.label && button.url)) {
+      throw new Error("Minimal aktifkan satu tombol inline.");
+    }
+
+    await prisma.telegramPartnerBot.update({
+      where: {
+        id: partnerBot.id,
+      },
+      data: {
+        welcomeMessage,
+        inlineButtons: inlineButtons as unknown as Prisma.InputJsonValue,
+      },
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Pengaturan partner bot gagal disimpan.";
+    redirect(
+      `/affiliate/partner-bot/${normalizedBotUsername}?error=${encodeURIComponent(message)}`,
+    );
+  }
+
+  revalidatePath("/affiliate");
+  revalidatePath(`/affiliate/partner-bot/${normalizedBotUsername}`);
+  redirect(
+    `/affiliate/partner-bot/${normalizedBotUsername}?saved=${encodeURIComponent(
+      "Pengaturan bot partner berhasil disimpan.",
+    )}`,
+  );
 }

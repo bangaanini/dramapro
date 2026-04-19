@@ -57,6 +57,8 @@ type TelegramWebhookMessage = {
 
 type TelegramMiniAppTarget = "home" | "search" | "vip" | "profile" | "affiliate";
 
+const PARTNER_BOX_OFFICE_INLINE_BUTTON_INDEX = 4;
+
 function sanitizeInlineButtonUrl(value: string) {
   const trimmed = value.trim();
 
@@ -194,6 +196,7 @@ export async function buildTelegramStartMessage(
   options?: {
     botName?: string | null;
     botUsername?: string | null;
+    welcomeMessage?: string | null;
   },
 ) {
   const safeName = firstName?.trim() || "Sobat Drama";
@@ -204,32 +207,49 @@ export async function buildTelegramStartMessage(
     settings.telegram.botUsername?.trim().replace(/^@/, "") ||
     settings.site.name;
 
-  return formatTelegramTemplate(settings.telegram.menu.welcomeMessage, {
-    botName: resolvedBotName,
-    name: safeName,
-    siteName: settings.site.name,
-  });
+  return formatTelegramTemplate(
+    options?.welcomeMessage?.trim() || settings.telegram.menu.welcomeMessage,
+    {
+      botName: resolvedBotName,
+      name: safeName,
+      siteName: settings.site.name,
+    },
+  );
 }
 
 export async function buildTelegramStartKeyboard(
   referralCode?: string | null,
   options?: {
     botUsername?: string | null;
+    inlineButtons?: TelegramInlineButtonConfig[] | null;
+    partnerBoxOfficeBotUrl?: string | null;
   },
 ) {
   const settings = await getTelegramSettings();
+  const inlineButtons = options?.inlineButtons ?? settings.inlineButtons;
+  const partnerBoxOfficeBotUrl = sanitizeInlineButtonUrl(
+    options?.partnerBoxOfficeBotUrl ?? "",
+  );
   const miniAppOptions = {
     referralCode,
     botUsername: options?.botUsername,
   };
   const rows: TelegramInlineKeyboardButton[][] = [];
 
-  for (let index = 0; index < settings.inlineButtons.length; index += 2) {
-    const row = settings.inlineButtons
+  for (let index = 0; index < inlineButtons.length; index += 2) {
+    const row = inlineButtons
       .slice(index, index + 2)
       .filter((button) => button.enabled && button.label.trim() && button.url.trim())
-      .map((button) =>
-        buildTelegramInlineButton(button, settings.miniAppUrl, miniAppOptions),
+      .map((button, offset) =>
+        buildTelegramInlineButton(
+          resolveTelegramStartInlineButton(
+            button,
+            index + offset,
+            partnerBoxOfficeBotUrl,
+          ),
+          settings.miniAppUrl,
+          miniAppOptions,
+        ),
       )
       .filter((button): button is TelegramInlineKeyboardButton => button !== null);
 
@@ -245,6 +265,7 @@ export async function buildTelegramStartKeyboard(
   }
 
   const menu = settings.menu;
+  const movieChannelUrl = partnerBoxOfficeBotUrl || menu.movieChannelUrl;
 
   return {
     inline_keyboard: [
@@ -274,7 +295,7 @@ export async function buildTelegramStartKeyboard(
       ],
       [
         { text: menu.dramaChannelButtonText, url: menu.dramaChannelUrl },
-        { text: menu.movieChannelButtonText, url: menu.movieChannelUrl },
+        { text: menu.movieChannelButtonText, url: movieChannelUrl },
       ],
       [
         { text: menu.supportButtonText, url: menu.supportButtonUrl },
@@ -286,6 +307,21 @@ export async function buildTelegramStartKeyboard(
         ),
       ],
     ],
+  };
+}
+
+function resolveTelegramStartInlineButton(
+  button: TelegramInlineButtonConfig,
+  index: number,
+  partnerBoxOfficeBotUrl: string | null,
+) {
+  if (!partnerBoxOfficeBotUrl || index !== PARTNER_BOX_OFFICE_INLINE_BUTTON_INDEX) {
+    return button;
+  }
+
+  return {
+    ...button,
+    url: partnerBoxOfficeBotUrl,
   };
 }
 

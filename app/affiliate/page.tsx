@@ -51,7 +51,7 @@ export default async function AffiliatePage(props: PageProps<"/affiliate">) {
       ? searchParams.payoutSuccess
       : null;
 
-  const [appSettings, settings, telegramSettings, affiliateCode, payoutProfile, totalReferrals, activeReferrals, commissionTotals, withdrawalTotals, recentWithdrawals, recentCommissions] =
+  const [appSettings, settings, telegramSettings, affiliateCode, payoutProfile, totalReferrals, activeReferrals, commissionTotals, withdrawalTotals, recentWithdrawals, recentCommissions, ownedPartnerBots] =
     await Promise.all([
       getAppSettings(),
       getAffiliateSettings(),
@@ -122,6 +122,18 @@ export default async function AffiliatePage(props: PageProps<"/affiliate">) {
           createdAt: "desc",
         },
         take: 6,
+      }),
+      prisma.telegramPartnerBot.findMany({
+        where: {
+          ownerUserId: user.id,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        select: {
+          botUsername: true,
+          isEnabled: true,
+        },
       }),
     ]);
 
@@ -253,6 +265,52 @@ export default async function AffiliatePage(props: PageProps<"/affiliate">) {
             </div>
           </div>
         </div>
+
+        {ownedPartnerBots.length > 0 ? (
+          <Card className="soft-panel rounded-[1.8rem] border-white/10">
+            <CardContent className="space-y-4 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <Badge className="border-accent/30 bg-accent-soft text-accent">
+                    <Sparkles className="mr-2 size-3.5" />
+                    Partner bot
+                  </Badge>
+                  <h2 className="mt-3 text-lg font-semibold text-white">
+                    Atur sambutan bot milikmu
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                    Edit pesan sambutan dan tombol keyboard untuk tiap partner bot
+                    yang kamu miliki.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-3">
+                {ownedPartnerBots.map((bot) => (
+                  <div
+                    key={bot.botUsername}
+                    className="flex flex-col gap-3 rounded-[1.4rem] border border-white/10 bg-black/20 p-4 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-white">
+                        @{bot.botUsername}
+                      </p>
+                      <p className="mt-1 text-xs text-[var(--muted)]">
+                        Status: {bot.isEnabled ? "Aktif" : "Nonaktif"}
+                      </p>
+                    </div>
+                    <Link
+                      href={`/affiliate/partner-bot/${bot.botUsername}`}
+                      className={cn(buttonVariants({ variant: "secondary" }), "w-full sm:w-auto")}
+                    >
+                      Buka pengaturan
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
 
         <Card className="soft-panel rounded-[1.8rem] border-white/10">
           <CardContent className="space-y-4 p-4">

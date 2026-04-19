@@ -7,6 +7,7 @@ import {
   sendTelegramMessageWithToken,
 } from "@/lib/telegram-bot";
 import {
+  buildPartnerBotSettingsUrl,
   getEnabledTelegramPartnerBot,
   normalizeTelegramBotUsername,
 } from "@/lib/telegram-partner-bots";
@@ -48,15 +49,49 @@ export async function POST(
     return NextResponse.json({ ok: true, ignored: true });
   }
 
+  const telegramUpdate = update as {
+    message?: {
+      from?: {
+        id?: number;
+      };
+    };
+  };
+  const senderTelegramId =
+    typeof telegramUpdate.message?.from?.id === "number"
+      ? String(telegramUpdate.message.from.id)
+      : null;
+  const isOwnerRunningBot = Boolean(
+    senderTelegramId &&
+      partnerBot.owner.telegramId &&
+      senderTelegramId === partnerBot.owner.telegramId,
+  );
+  const replyMarkup = await buildTelegramStartKeyboard(null, {
+    botUsername: normalizedBotUsername,
+    inlineButtons: partnerBot.inlineButtons,
+    partnerBoxOfficeBotUrl: partnerBot.hasCustomInlineButtons
+      ? null
+      : partnerBot.boxOfficeBotUrl,
+  });
+
+  if (isOwnerRunningBot) {
+    replyMarkup.inline_keyboard.push([
+      {
+        text: "⚙️ Setting",
+        web_app: {
+          url: await buildPartnerBotSettingsUrl(normalizedBotUsername),
+        },
+      },
+    ]);
+  }
+
   await sendTelegramMessageWithToken(partnerBot.botToken, {
     chat_id: startPayload.chatId,
     text: await buildTelegramStartMessage(startPayload.firstName, {
       botName: partnerBot.botUsername,
       botUsername: normalizedBotUsername,
+      welcomeMessage: partnerBot.welcomeMessage,
     }),
-    reply_markup: await buildTelegramStartKeyboard(null, {
-      botUsername: normalizedBotUsername,
-    }),
+    reply_markup: replyMarkup,
   });
 
   return NextResponse.json({ ok: true, partnerBot: normalizedBotUsername });
