@@ -5,6 +5,7 @@ Worker ini dipakai untuk menjalankan sync metadata, audit stream, dan refresh ca
 ## Command
 
 ```bash
+npm run worker:catalog-sync
 npm run worker:sync
 npm run worker:audit
 npm run worker:refresh
@@ -21,6 +22,7 @@ WORKER_BASE_URL=https://layardrama.id
 ACTIVE_PROVIDERS=goodshort,dramabox
 WORKER_PROVIDERS=goodshort,dramabox
 WORKER_SOURCES=home,new,popular
+WORKER_CATALOG_SYNC_INTERVAL_MS=3000
 WORKER_SYNC_PAGES=2
 WORKER_AUDIT_BATCH_SIZE=10
 WORKER_SYNC_INTERVAL_MINUTES=30
@@ -90,6 +92,11 @@ pm2 save
   - provider mengikuti `WORKER_PROVIDERS`, atau fallback ke `ACTIVE_PROVIDERS`
   - otomatis refresh cache katalog setelah selesai
 
+- `worker:catalog-sync`
+  - memproses `CatalogSyncJob` background dari panel admin
+  - mengambil step sync all satu per satu memakai lease DB agar tidak double-run
+  - panel admin cukup enqueue job lalu monitor progres/log
+
 - `worker:audit`
   - audit drama tersimpan per source secara batch
   - menghormati logic hide/unhide stream error yang sudah ada
@@ -99,7 +106,7 @@ pm2 save
   - hanya paksa refresh cache homepage/search
 
 - `worker:scheduler`
-  - menjalankan `sync` dan `audit` berdasarkan interval worker
+  - menjalankan `sync`, `catalog-sync`, dan `audit` berdasarkan interval worker
   - audit dimulai dengan delay awal agar tidak tabrakan dengan sync
   - kalau ada job lain yang masih berjalan, worker akan skip putaran itu agar tidak overlap
   - bisa kirim laporan selesai proses ke Telegram jika env notifikasi diisi

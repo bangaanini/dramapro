@@ -7,23 +7,15 @@ datasource db {
   provider = "postgresql"
 }
 
-enum ProviderName {
-  melolo
-  meloshort
-  goodshort
-  dramawave
-  dramabox
-  dramadash
-  reelshort
-  freereels
-  flickreels
-  netshort
+enum CatalogSyncScope {
+  tab
+  series
 }
 
-enum FeedSource {
-  home
-  new
-  popular
+enum CatalogSyncStatus {
+  pending
+  synced
+  failed
 }
 
 enum VipPaymentStatus {
@@ -60,50 +52,171 @@ enum AffiliateWithdrawalStatus {
   paid
 }
 
-enum ProviderHealthStatus {
-  unknown
-  healthy
-  no_data
-  stream_error
+model CatalogPlatform {
+  id          String            @id
+  name        String
+  isActive    Boolean           @default(true)
+  languages   CatalogLanguage[]
+  tabs        CatalogTab[]
+  series      CatalogSeries[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 }
 
-model Drama {
-  id              String       @id @default(uuid()) @db.Uuid
-  providerDramaId String
-  providerName    ProviderName
-  title           String
-  description     String       @default("")
-  thumbUrl        String       @default("")
-  episodeCount    Int          @default(0)
-  watchValue      String       @default("")
-  isNewBook       Boolean      @default(false)
-  tags            String[]     @default([])
-  isStreamPlayable Boolean     @default(true)
-  streamCheckMessage String    @default("")
-  streamCheckedAt  DateTime?
-  feedEntries     DramaFeed[]
-  channelBroadcasts DramaChannelBroadcast[]
-  favorites       FavoriteDrama[]
-  savedEpisodes   SavedEpisode[]
-  watchHistory    WatchHistory[]
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+model CatalogLanguage {
+  id           String            @id @default(uuid()) @db.Uuid
+  platformId   String
+  code         String
+  upstreamCode String?
+  isDefault    Boolean           @default(false)
+  isActive     Boolean           @default(true)
+  platform     CatalogPlatform   @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  tabs         CatalogTab[]
+  series       CatalogSeries[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
 
-  @@unique([providerName, providerDramaId])
-  @@index([providerName, updatedAt])
-  @@index([isStreamPlayable, updatedAt])
+  @@unique([platformId, code])
+  @@index([platformId, isActive])
 }
 
-model DramaFeed {
-  id        String     @id @default(uuid()) @db.Uuid
-  dramaId   String     @db.Uuid
-  source    FeedSource
-  drama     Drama      @relation(fields: [dramaId], references: [id], onDelete: Cascade)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+model CatalogTab {
+  id            String            @id @default(uuid()) @db.Uuid
+  platformId    String
+  languageId    String            @db.Uuid
+  type          String
+  name          String
+  tabKey        String
+  positionIndex Int
+  sortOrder     Int
+  isActive      Boolean           @default(true)
+  platform      CatalogPlatform   @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  language      CatalogLanguage   @relation(fields: [languageId], references: [id], onDelete: Cascade)
+  memberships   CatalogTabSeries[]
+  syncState     CatalogSyncState?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
 
-  @@unique([dramaId, source])
-  @@index([source, updatedAt])
+  @@unique([languageId, type, positionIndex, sortOrder])
+  @@index([platformId, languageId, isActive])
+  @@index([type, sortOrder])
+}
+
+model CatalogSeries {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  platformId         String
+  languageId         String                 @db.Uuid
+  upstreamSeriesId   String
+  title              String
+  description        String                 @default("")
+  coverUrl           String                 @default("")
+  chapterCount       Int                    @default(0)
+  playCount          String                 @default("")
+  tags               String[]               @default([])
+  lastDetailSyncedAt DateTime?
+  isHomepageVisible  Boolean                @default(true)
+  homepageHiddenReason String?
+  platform           CatalogPlatform        @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  language           CatalogLanguage        @relation(fields: [languageId], references: [id], onDelete: Cascade)
+  tabMemberships     CatalogTabSeries[]
+  episodes           CatalogEpisode[]
+  syncState          CatalogSyncState?
+  favorites          FavoriteDrama[]
+  savedEpisodes      SavedEpisode[]
+  watchHistory       WatchHistory[]
+  channelBroadcasts  DramaChannelBroadcast[]
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  @@unique([platformId, languageId, upstreamSeriesId])
+  @@index([platformId, languageId, updatedAt])
+  @@index([isHomepageVisible, updatedAt])
+  @@index([title, updatedAt])
+}
+
+model CatalogTabSeries {
+  id           String        @id @default(uuid()) @db.Uuid
+  tabId        String        @db.Uuid
+  seriesId     String        @db.Uuid
+  rank         Int
+  sourcePageNo Int           @default(1)
+  tab          CatalogTab    @relation(fields: [tabId], references: [id], onDelete: Cascade)
+  series       CatalogSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([tabId, seriesId])
+  @@index([tabId, rank])
+  @@index([seriesId, updatedAt])
+}
+
+model CatalogEpisode {
+  id           String        @id @default(uuid()) @db.Uuid
+  seriesId     String        @db.Uuid
+  episodeIndex Int
+  episodeLabel String        @default("")
+  videoUrl     String
+  quality      Int?
+  subtitles    Json?         @db.JsonB
+  checksum     String        @default("")
+  series       CatalogSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([seriesId, episodeIndex])
+  @@index([seriesId, updatedAt])
+}
+
+model CatalogSyncState {
+  id             String            @id @default(uuid()) @db.Uuid
+  scope          CatalogSyncScope
+  status         CatalogSyncStatus @default(pending)
+  tabId          String?           @unique @db.Uuid
+  seriesId       String?           @unique @db.Uuid
+  lastPageInfo   Json?             @db.JsonB
+  hasMore        Boolean           @default(false)
+  lastSyncedAt   DateTime?
+  lastError      String            @default("")
+  tab            CatalogTab?       @relation(fields: [tabId], references: [id], onDelete: Cascade)
+  series         CatalogSeries?    @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([scope, status, updatedAt])
+}
+
+model CatalogSyncJob {
+  id                 String   @id @default(uuid()) @db.Uuid
+  status             String   @default("queued")
+  languageCode       String   @default("id")
+  phase              String   @default("init-platform")
+  platformIndex      Int      @default(0)
+  currentPlatformId  String   @default("")
+  currentTabId       String?  @db.Uuid
+  currentTabName     String   @default("")
+  totalPlatforms     Int      @default(0)
+  completedPlatforms Int      @default(0)
+  totalTabs          Int      @default(0)
+  completedTabs      Int      @default(0)
+  totalTitles        Int      @default(0)
+  totalEpisodes      Int      @default(0)
+  pendingDetails     Int      @default(0)
+  processedDetails   Int      @default(0)
+  errorCount         Int      @default(0)
+  recentErrors       Json?    @db.JsonB
+  recentLogs         Json?    @db.JsonB
+  lastMessage        String   @default("")
+  runnerId           String?
+  leaseExpiresAt     DateTime?
+  lastHeartbeatAt    DateTime?
+  startedAt          DateTime?
+  finishedAt         DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([status, updatedAt])
+  @@index([status, leaseExpiresAt])
+  @@index([languageCode, createdAt])
 }
 
 model AdminUser {
@@ -128,39 +241,39 @@ model AdminSession {
 }
 
 model User {
-  id                         String                @id @default(uuid()) @db.Uuid
-  email                      String?               @unique
-  name                       String
-  authProvider               UserAuthProvider      @default(local)
-  passwordHash               String?
-  telegramId                 String?               @unique
-  telegramUsername           String?
-  telegramPhotoUrl           String?
-  telegramFirstName          String?
-  telegramLastName           String?
-  telegramLanguageCode       String?
-  vipStartedAt               DateTime?
-  vipExpiresAt               DateTime?
-  affiliateCode              String?               @unique
+  id                            String                @id @default(uuid()) @db.Uuid
+  email                         String?               @unique
+  name                          String
+  authProvider                  UserAuthProvider      @default(local)
+  passwordHash                  String?
+  telegramId                    String?               @unique
+  telegramUsername              String?
+  telegramPhotoUrl              String?
+  telegramFirstName             String?
+  telegramLastName              String?
+  telegramLanguageCode          String?
+  vipStartedAt                  DateTime?
+  vipExpiresAt                  DateTime?
+  affiliateCode                 String?               @unique
   affiliateCommissionOverrideRate Int?
-  referredById               String?               @db.Uuid
-  referredByPartnerBotId     String?               @db.Uuid
-  referredBy                 User?                 @relation("AffiliateReferrals", fields: [referredById], references: [id], onDelete: SetNull)
-  referredByPartnerBot       TelegramPartnerBot?   @relation("PartnerBotReferrals", fields: [referredByPartnerBotId], references: [id], onDelete: SetNull)
-  referrals                  User[]                @relation("AffiliateReferrals")
-  sessions                   UserSession[]
-  favorites                  FavoriteDrama[]
-  savedEpisodes              SavedEpisode[]
-  watchHistory               WatchHistory[]
-  vipPayments                VipPayment[]
-  affiliateCommissions       AffiliateCommission[] @relation("AffiliateOwner")
-  referredAffiliateSales     AffiliateCommission[] @relation("AffiliateReferred")
-  affiliateWithdrawals       AffiliateWithdrawal[]
-  affiliatePayoutProfile     AffiliatePayoutProfile?
-  ownedTelegramPartnerBots   TelegramPartnerBot[]
-  channelBroadcasts          DramaChannelBroadcast[]
-  createdAt                  DateTime              @default(now())
-  updatedAt                  DateTime              @updatedAt
+  referredById                  String?               @db.Uuid
+  referredByPartnerBotId        String?               @db.Uuid
+  referredBy                    User?                 @relation("AffiliateReferrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referredByPartnerBot          TelegramPartnerBot?   @relation("PartnerBotReferrals", fields: [referredByPartnerBotId], references: [id], onDelete: SetNull)
+  referrals                     User[]                @relation("AffiliateReferrals")
+  sessions                      UserSession[]
+  favorites                     FavoriteDrama[]
+  savedEpisodes                 SavedEpisode[]
+  watchHistory                  WatchHistory[]
+  vipPayments                   VipPayment[]
+  affiliateCommissions          AffiliateCommission[] @relation("AffiliateOwner")
+  referredAffiliateSales        AffiliateCommission[] @relation("AffiliateReferred")
+  affiliateWithdrawals          AffiliateWithdrawal[]
+  affiliatePayoutProfile        AffiliatePayoutProfile?
+  ownedTelegramPartnerBots      TelegramPartnerBot[]
+  channelBroadcasts             DramaChannelBroadcast[]
+  createdAt                     DateTime              @default(now())
+  updatedAt                     DateTime              @updatedAt
 
   @@index([referredById, createdAt])
   @@index([referredByPartnerBotId, createdAt])
@@ -178,46 +291,46 @@ model UserSession {
 }
 
 model FavoriteDrama {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  dramaId   String   @db.Uuid
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  drama     Drama    @relation(fields: [dramaId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+  id        String        @id @default(uuid()) @db.Uuid
+  userId    String        @db.Uuid
+  seriesId  String        @db.Uuid
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  series    CatalogSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  createdAt DateTime      @default(now())
 
-  @@unique([userId, dramaId])
+  @@unique([userId, seriesId])
   @@index([userId, createdAt])
 }
 
 model SavedEpisode {
-  id           String   @id @default(uuid()) @db.Uuid
-  userId       String   @db.Uuid
-  dramaId      String   @db.Uuid
+  id           String        @id @default(uuid()) @db.Uuid
+  userId       String        @db.Uuid
+  seriesId     String        @db.Uuid
   episodeIndex Int
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  drama        Drama    @relation(fields: [dramaId], references: [id], onDelete: Cascade)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  series       CatalogSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
-  @@unique([userId, dramaId, episodeIndex])
+  @@unique([userId, seriesId, episodeIndex])
   @@index([userId, updatedAt])
-  @@index([dramaId, updatedAt])
+  @@index([seriesId, updatedAt])
 }
 
 model WatchHistory {
-  id                  String   @id @default(uuid()) @db.Uuid
-  userId              String   @db.Uuid
-  dramaId             String   @db.Uuid
-  episodeIndex        Int      @default(1)
-  lastPositionSeconds Int      @default(0)
-  watchedAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  drama               Drama    @relation(fields: [dramaId], references: [id], onDelete: Cascade)
+  id                  String        @id @default(uuid()) @db.Uuid
+  userId              String        @db.Uuid
+  seriesId            String        @db.Uuid
+  episodeIndex        Int           @default(1)
+  lastPositionSeconds Int           @default(0)
+  watchedAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  series              CatalogSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, dramaId])
+  @@unique([userId, seriesId])
   @@index([userId, updatedAt])
-  @@index([dramaId, updatedAt])
+  @@index([seriesId, updatedAt])
 }
 
 model VipSettings {
@@ -255,50 +368,36 @@ model PaymentGatewaySettings {
 }
 
 model AppSettings {
-  id                           String   @id @default("global")
-  telegramBotUsername          String   @default("")
-  telegramBotTokenCiphertext   String?
+  id                             String   @id @default("global")
+  telegramBotUsername            String   @default("")
+  telegramBotTokenCiphertext     String?
   telegramWebhookSecretCiphertext String?
-  telegramSupportUrl           String   @default("")
-  telegramMiniAppUrl           String   @default("")
-  telegramDefaultBroadcastChannel String @default("")
-  telegramBoxOfficeBotUrl      String   @default("")
-  telegramInlineButtons        Json?    @db.JsonB
-  telegramWelcomeMessage        String   @default("")
-  telegramOpenButtonText        String   @default("")
-  telegramOpenButtonUrl         String   @default("")
-  telegramSearchButtonText      String   @default("")
-  telegramSearchButtonUrl       String   @default("")
-  telegramAffiliateButtonText   String   @default("")
-  telegramAffiliateButtonUrl    String   @default("")
-  telegramDramaChannelButtonText String  @default("")
-  telegramDramaChannelUrl       String   @default("")
-  telegramMovieChannelButtonText String  @default("")
-  telegramMovieChannelUrl       String   @default("")
-  telegramSupportButtonText     String   @default("")
-  telegramSupportButtonUrl      String   @default("")
-  telegramVipButtonText         String   @default("")
-  telegramVipButtonUrl          String   @default("")
-  siteUrl                      String   @default("")
-  siteName                     String   @default("")
-  siteDescription              String   @default("")
-  siteLogoUrl                  String   @default("")
-  createdAt                    DateTime @default(now())
-  updatedAt                    DateTime @updatedAt
-}
-
-model ProviderRuntimeControl {
-  providerName      ProviderName       @id
-  isHomepageVisible Boolean            @default(true)
-  healthStatus      ProviderHealthStatus @default(unknown)
-  healthMessage     String             @default("")
-  checkedDramaId    String             @default("")
-  checkedDramaTitle String             @default("")
-  lastCheckedAt     DateTime?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-
-  @@index([isHomepageVisible, providerName])
+  telegramSupportUrl             String   @default("")
+  telegramMiniAppUrl             String   @default("")
+  telegramDefaultBroadcastChannel String  @default("")
+  telegramBoxOfficeBotUrl        String   @default("")
+  telegramInlineButtons          Json?    @db.JsonB
+  telegramWelcomeMessage         String   @default("")
+  telegramOpenButtonText         String   @default("")
+  telegramOpenButtonUrl          String   @default("")
+  telegramSearchButtonText       String   @default("")
+  telegramSearchButtonUrl        String   @default("")
+  telegramAffiliateButtonText    String   @default("")
+  telegramAffiliateButtonUrl     String   @default("")
+  telegramDramaChannelButtonText String   @default("")
+  telegramDramaChannelUrl        String   @default("")
+  telegramMovieChannelButtonText String   @default("")
+  telegramMovieChannelUrl        String   @default("")
+  telegramSupportButtonText      String   @default("")
+  telegramSupportButtonUrl       String   @default("")
+  telegramVipButtonText          String   @default("")
+  telegramVipButtonUrl           String   @default("")
+  siteUrl                        String   @default("")
+  siteName                       String   @default("")
+  siteDescription                String   @default("")
+  siteLogoUrl                    String   @default("")
+  createdAt                      DateTime @default(now())
+  updatedAt                      DateTime @updatedAt
 }
 
 model TelegramPartnerBot {
@@ -324,25 +423,25 @@ model TelegramPartnerBot {
 }
 
 model DramaChannelBroadcast {
-  id               String              @id @default(uuid()) @db.Uuid
-  dramaId          String              @db.Uuid
-  ownerUserId      String?             @db.Uuid
-  partnerBotId     String?             @db.Uuid
-  botKind          String              @default("default")
-  botUsername      String
-  channelUsername  String
-  buttonLabel      String
-  caption          String
+  id                String              @id @default(uuid()) @db.Uuid
+  seriesId          String              @db.Uuid
+  ownerUserId       String?             @db.Uuid
+  partnerBotId      String?             @db.Uuid
+  botKind           String              @default("default")
+  botUsername       String
+  channelUsername   String
+  buttonLabel       String
+  caption           String
   telegramMessageId Int?
-  pinned           Boolean             @default(false)
-  postedAt         DateTime?
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
-  drama            Drama               @relation(fields: [dramaId], references: [id], onDelete: Cascade)
-  owner            User?               @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
-  partnerBot       TelegramPartnerBot? @relation(fields: [partnerBotId], references: [id], onDelete: SetNull)
+  pinned            Boolean             @default(false)
+  postedAt          DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  series            CatalogSeries       @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  owner             User?               @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
+  partnerBot        TelegramPartnerBot? @relation(fields: [partnerBotId], references: [id], onDelete: SetNull)
 
-  @@index([dramaId, createdAt])
+  @@index([seriesId, createdAt])
   @@index([ownerUserId, createdAt])
   @@index([partnerBotId, createdAt])
   @@index([botKind, createdAt])
@@ -365,18 +464,18 @@ model PaymentGatewayConfig {
 }
 
 model VipPayment {
-  id                    String           @id @default(uuid()) @db.Uuid
-  userId                String           @db.Uuid
-  vipPricePlanId        String           @db.Uuid
-  referenceId           String           @unique
+  id                    String                 @id @default(uuid()) @db.Uuid
+  userId                String                 @db.Uuid
+  vipPricePlanId        String                 @db.Uuid
+  referenceId           String                 @unique
   gatewayProvider       PaymentGatewayProvider @default(paymenku)
-  providerTransactionId String?          @unique
+  providerTransactionId String?                @unique
   channelCode           String
-  channelName           String           @default("")
+  channelName           String                 @default("")
   amount                Int
   paidAmount            Int?
-  currency              String           @default("IDR")
-  status                VipPaymentStatus @default(pending)
+  currency              String                 @default("IDR")
+  status                VipPaymentStatus       @default(pending)
   payUrl                String
   qrUrl                 String?
   qrString              String?
@@ -386,11 +485,11 @@ model VipPayment {
   activatedAt           DateTime?
   providerPayload       Json?
   statusPayload         Json?
-  user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  plan                  VipPricePlan     @relation(fields: [vipPricePlanId], references: [id], onDelete: Restrict)
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan                  VipPricePlan           @relation(fields: [vipPricePlanId], references: [id], onDelete: Restrict)
   affiliateCommission   AffiliateCommission?
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
 
   @@index([userId, status, createdAt])
   @@index([vipPricePlanId, createdAt])
@@ -417,24 +516,24 @@ model AffiliateSettings {
 }
 
 model AffiliateCommission {
-  id             String                    @id @default(uuid()) @db.Uuid
-  affiliateUserId String                   @db.Uuid
-  referredUserId  String                   @db.Uuid
-  vipPaymentId    String                   @unique @db.Uuid
-  partnerBotId    String?                  @db.Uuid
-  baseAmount      Int
-  commissionRate  Int
-  amount          Int
-  status          AffiliateCommissionStatus @default(approved)
-  description     String                   @default("")
+  id                 String                    @id @default(uuid()) @db.Uuid
+  affiliateUserId    String                    @db.Uuid
+  referredUserId     String                    @db.Uuid
+  vipPaymentId       String                    @unique @db.Uuid
+  partnerBotId       String?                   @db.Uuid
+  baseAmount         Int
+  commissionRate     Int
+  amount             Int
+  status             AffiliateCommissionStatus @default(approved)
+  description        String                    @default("")
   notificationSentAt DateTime?
-  notificationError  String                 @default("")
-  affiliateUser   User                     @relation("AffiliateOwner", fields: [affiliateUserId], references: [id], onDelete: Cascade)
-  referredUser    User                     @relation("AffiliateReferred", fields: [referredUserId], references: [id], onDelete: Cascade)
-  vipPayment      VipPayment               @relation(fields: [vipPaymentId], references: [id], onDelete: Cascade)
-  partnerBot      TelegramPartnerBot?      @relation(fields: [partnerBotId], references: [id], onDelete: SetNull)
-  createdAt       DateTime                 @default(now())
-  updatedAt       DateTime                 @updatedAt
+  notificationError  String                    @default("")
+  affiliateUser      User                      @relation("AffiliateOwner", fields: [affiliateUserId], references: [id], onDelete: Cascade)
+  referredUser       User                      @relation("AffiliateReferred", fields: [referredUserId], references: [id], onDelete: Cascade)
+  vipPayment         VipPayment                @relation(fields: [vipPaymentId], references: [id], onDelete: Cascade)
+  partnerBot         TelegramPartnerBot?       @relation(fields: [partnerBotId], references: [id], onDelete: SetNull)
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
 
   @@index([affiliateUserId, status, createdAt])
   @@index([referredUserId, createdAt])
@@ -442,21 +541,21 @@ model AffiliateCommission {
 }
 
 model AffiliateWithdrawal {
-  id              String                    @id @default(uuid()) @db.Uuid
-  affiliateUserId String                    @db.Uuid
-  amount          Int
-  status          AffiliateWithdrawalStatus @default(pending)
-  notes           String                    @default("")
-  payoutAccountHolderName String            @default("")
-  payoutBankName          String            @default("")
-  payoutAccountNumber     String            @default("")
-  payoutWhatsappNumber    String            @default("")
-  payoutEmail             String            @default("")
-  requestedAt     DateTime                  @default(now())
-  reviewedAt      DateTime?
-  affiliateUser   User                      @relation(fields: [affiliateUserId], references: [id], onDelete: Cascade)
-  createdAt       DateTime                  @default(now())
-  updatedAt       DateTime                  @updatedAt
+  id                      String                    @id @default(uuid()) @db.Uuid
+  affiliateUserId         String                    @db.Uuid
+  amount                  Int
+  status                  AffiliateWithdrawalStatus @default(pending)
+  notes                   String                    @default("")
+  payoutAccountHolderName String                    @default("")
+  payoutBankName          String                    @default("")
+  payoutAccountNumber     String                    @default("")
+  payoutWhatsappNumber    String                    @default("")
+  payoutEmail             String                    @default("")
+  requestedAt             DateTime                  @default(now())
+  reviewedAt              DateTime?
+  affiliateUser           User                      @relation(fields: [affiliateUserId], references: [id], onDelete: Cascade)
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
 
   @@index([affiliateUserId, status, createdAt])
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { BookOpen, Home, Megaphone, Search, UserRound } from "lucide-react";
@@ -50,6 +50,7 @@ export function SiteFooter() {
   const router = useRouter();
   const currentKey = resolveCurrentKey(pathname);
   const touchHapticLockRef = useRef(false);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
     for (const item of NAV_ITEMS) {
@@ -58,6 +59,10 @@ export function SiteFooter() {
       }
     }
   }, [pathname, router]);
+
+  useEffect(() => {
+    setPortalTarget(document.body);
+  }, []);
 
   function prefetchRoute(href: string) {
     router.prefetch(href);
@@ -140,9 +145,7 @@ export function SiteFooter() {
   return (
     <>
       <div className="h-24 sm:h-26" />
-      {typeof document !== "undefined" && document.body
-        ? createPortal(navMarkup, document.body)
-        : null}
+      {portalTarget ? createPortal(navMarkup, portalTarget) : null}
     </>
   );
 }

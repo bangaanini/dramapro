@@ -8,6 +8,8 @@ import { getAppSettings } from "@/lib/app-settings";
 import { getHomepageCatalogData } from "@/lib/catalog-data";
 import { SITE_DESCRIPTION, absoluteResolvedUrl, toSeoDescription } from "@/lib/site";
 
+export const dynamic = "force-dynamic";
+
 function getHomeDescription(siteName: string) {
   return toSeoDescription(
     `Jelajahi ribuan short drama sub Indo dari banyak provider dalam satu platform cepat. ${siteName} menyediakan ribuan short drama terbaru dari berbagai sumber update setiap hari.`,
@@ -89,10 +91,19 @@ export default async function HomePage(props: PageProps<"/">) {
     );
   }
 
-  const [catalogData, settings] = await Promise.all([
-    getHomepageCatalogData(),
-    getAppSettings(),
-  ]);
+  const settings = await getAppSettings();
+  const catalogData = await getHomepageCatalogData().catch(() => ({
+    initialFeed: {
+      entries: [],
+      total: 0,
+      nextOffset: 0,
+      hasMore: false,
+    },
+    stats: {
+      totalSeries: 0,
+      totalEpisodes: 0,
+    },
+  }));
   const homeDescription = getHomeDescription(settings.site.name);
   const structuredData = {
     "@context": "https://schema.org",

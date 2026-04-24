@@ -199,10 +199,43 @@ npx prisma generate
 npm run dev
 ```
 
+Kalau mau app + worker katalog hidup bareng dalam satu terminal:
+
+```bash
+npm run dev:all
+```
+
 Buka:
 
 ```text
 http://localhost:3000
+```
+
+## Menjalankan app + worker bersamaan
+
+### Development
+
+Satu perintah untuk Next dev server + background worker katalog:
+
+```bash
+npm run dev:all
+```
+
+### Production tanpa PM2
+
+Kalau build sudah ada dan ingin menjalankan web + worker bersama:
+
+```bash
+npm run start:all
+```
+
+### Production dengan PM2
+
+Repo ini juga punya `ecosystem.config.cjs` untuk menjalankan web app dan worker scheduler sekaligus:
+
+```bash
+pm2 start ecosystem.config.cjs
+pm2 save
 ```
 
 ## Login Admin Pertama

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { ACTIVE_PROVIDERS } from "@/lib/provider-adapter";
 import { prisma } from "@/lib/prisma";
 import { getUserFromRequest } from "@/lib/user-auth";
 
@@ -16,13 +15,14 @@ export async function GET(request: NextRequest) {
   const historyEntries = await prisma.watchHistory.findMany({
     where: {
       userId: user.id,
-      drama: {
-        providerName: {
-          in: ACTIVE_PROVIDERS,
+    },
+    include: {
+      series: {
+        include: {
+          platform: true,
         },
       },
     },
-    include: { drama: true },
     orderBy: { updatedAt: "desc" },
     take: 120,
   });
@@ -34,12 +34,12 @@ export async function GET(request: NextRequest) {
       lastPositionSeconds: entry.lastPositionSeconds,
       updatedAt: entry.updatedAt.toISOString(),
       drama: {
-        id: entry.drama.id,
-        title: entry.drama.title,
-        thumbUrl: entry.drama.thumbUrl,
-        providerName: entry.drama.providerName,
-        episodeCount: entry.drama.episodeCount,
-        tags: entry.drama.tags,
+        id: entry.series.id,
+        title: entry.series.title,
+        thumbUrl: entry.series.coverUrl,
+        providerName: entry.series.platform.name,
+        episodeCount: entry.series.chapterCount,
+        tags: entry.series.tags,
       },
     })),
   });

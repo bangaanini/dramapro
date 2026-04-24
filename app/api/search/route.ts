@@ -1,61 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-
 import { Prisma } from "@/app/generated/prisma/client";
+
 import { prisma } from "@/lib/prisma";
-import { ACTIVE_PROVIDERS, isActiveProviderType } from "@/lib/provider-adapter";
 
 export const runtime = "nodejs";
 
 const MAX_RESULTS = 24;
-const MIN_QUERY_LENGTH = 3;
 
 function normalizeQuery(value: string | null) {
   return value?.trim() ?? "";
 }
 
-function buildQueryFilter(query: string): Prisma.DramaWhereInput | null {
-  const normalized = query.trim();
-
-  if (normalized.length < MIN_QUERY_LENGTH) {
-    return null;
-  }
-
-  const terms = normalized
-    .split(/\s+/)
-    .map((term) => term.trim())
-    .filter((term) => term.length >= MIN_QUERY_LENGTH);
-
-  if (terms.length === 0) {
-    return null;
-  }
-
-  return {
-    AND: terms.map((term) => ({
-      OR: [
-        {
-          title: {
-            contains: term,
-            mode: "insensitive",
-          },
-        },
-        {
-          description: {
-            contains: term,
-            mode: "insensitive",
-          },
-        },
-      ],
-    })),
-  };
-}
-
 export async function GET(request: NextRequest) {
   const query = normalizeQuery(request.nextUrl.searchParams.get("q"));
-  const providerParam = normalizeQuery(
-    request.nextUrl.searchParams.get("provider"),
-  );
+  const tabId = normalizeQuery(request.nextUrl.searchParams.get("tabId"));
   const tag = normalizeQuery(request.nextUrl.searchParams.get("tag"));
-  const provider = isActiveProviderType(providerParam) ? providerParam : "";
   const limitParam = Number.parseInt(
     request.nextUrl.searchParams.get("limit") ?? "",
     10,
@@ -63,68 +22,88 @@ export async function GET(request: NextRequest) {
   const take =
     Number.isInteger(limitParam) && limitParam > 0
       ? Math.min(limitParam, MAX_RESULTS)
-      : 12;
+      : 18;
 
-  const textFilter = buildQueryFilter(query);
+  const terms = query
+    .split(/\s+/)
+    .map((term) => term.trim())
+    .filter((term) => term.length >= 2);
 
-  if (!textFilter && !provider && !tag) {
+  if (!tabId && !tag && terms.length === 0) {
     return NextResponse.json({
       query,
-      results: [],
+      tabId,
+      tag,
       total: 0,
-      minimumQueryLength: MIN_QUERY_LENGTH,
+      minimumQueryLength: 2,
+      results: [],
     });
   }
 
-  const where: Prisma.DramaWhereInput = {
-    AND: [
-      {
-        isStreamPlayable: true,
-      },
-      {
-        providerName: {
-          in: ACTIVE_PROVIDERS,
-        },
-      },
-      provider
-        ? {
-            providerName: provider,
-          }
-        : {},
-      tag
-        ? {
-            tags: {
-              has: tag,
+  const finalResults = await prisma.catalogSeries.findMany({
+    where: {
+      AND: [
+        tabId
+          ? {
+              tabMemberships: {
+                some: {
+                  tabId,
+                },
+              },
+            }
+          : {},
+        tag
+          ? {
+              tags: {
+                has: tag,
+              },
+            }
+          : {},
+        ...terms.map((term) => ({
+          OR: [
+            {
+              title: {
+                contains: term,
+                mode: Prisma.QueryMode.insensitive,
+              },
             },
-          }
-        : {},
-      textFilter ?? {},
-    ],
-  };
-
-  const [results, total] = await Promise.all([
-    prisma.drama.findMany({
-      where,
-      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-      take,
-      select: {
-        id: true,
-        title: true,
-        thumbUrl: true,
-        providerName: true,
-        episodeCount: true,
-        tags: true,
-      },
-    }),
-    prisma.drama.count({ where }),
-  ]);
+            {
+              description: {
+                contains: term,
+                mode: Prisma.QueryMode.insensitive,
+              },
+            },
+            {
+              tags: {
+                has: term,
+              },
+            },
+          ],
+        })),
+      ],
+    },
+    include: {
+      platform: true,
+    },
+    orderBy: [{ updatedAt: "desc" }],
+    take,
+  });
 
   return NextResponse.json({
     query,
-    provider,
+    tabId,
     tag,
-    total,
-    minimumQueryLength: MIN_QUERY_LENGTH,
-    results,
+    total: finalResults.length,
+    minimumQueryLength: 2,
+    results: finalResults.map((series) => ({
+      id: series.id,
+      title: series.title,
+      thumbUrl: series.coverUrl,
+      providerName: series.platform.name,
+      episodeCount: series.chapterCount,
+      tags: series.tags,
+      description: series.description,
+      playCount: series.playCount,
+    })),
   });
 }

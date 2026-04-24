@@ -51,21 +51,24 @@ export async function GET(request: NextRequest) {
   }
 
   const contentType = upstreamResponse.headers.get("content-type") ?? "";
+  const responseUrl = upstreamResponse.url ? new URL(upstreamResponse.url) : upstreamUrl;
+  const normalizedPathname = responseUrl.pathname.toLowerCase();
   const isPlaylist =
-    upstreamUrl.pathname.endsWith(".m3u8") ||
+    normalizedPathname.endsWith(".m3u8") ||
+    normalizedPathname.includes("m3u8") ||
     contentType.includes("mpegurl") ||
     contentType.includes("application/vnd.apple.mpegurl") ||
     contentType.includes("audio/x-mpegurl");
   const isSubtitle =
-    upstreamUrl.pathname.endsWith(".vtt") ||
-    upstreamUrl.pathname.endsWith(".srt") ||
+    normalizedPathname.endsWith(".vtt") ||
+    normalizedPathname.endsWith(".srt") ||
+    normalizedPathname.includes("/subtitle") ||
     contentType.includes("text/vtt") ||
-    contentType.includes("application/x-subrip") ||
-    contentType.includes("text/plain");
+    contentType.includes("application/x-subrip");
 
   if (isPlaylist) {
     const playlist = await upstreamResponse.text();
-    const rewritten = rewritePlaylist(playlist, upstreamUrl);
+    const rewritten = rewritePlaylist(playlist, responseUrl);
 
     return new Response(rewritten, {
       status: upstreamResponse.status,
@@ -78,9 +81,14 @@ export async function GET(request: NextRequest) {
 
   if (isSubtitle) {
     const subtitleText = await upstreamResponse.text();
-    const subtitleBody = upstreamUrl.pathname.endsWith(".srt")
-      ? convertSrtToVtt(subtitleText)
-      : subtitleText;
+    const subtitleBody = normalizeSubtitleToVtt(subtitleText);
+
+    if (!subtitleBody) {
+      return Response.json(
+        { error: "Unsupported subtitle format." },
+        { status: 415 },
+      );
+    }
 
     return new Response(subtitleBody, {
       status: upstreamResponse.status,
@@ -165,14 +173,27 @@ function buildProxyLine(target: string, baseUrl: URL) {
   return `/api/media?url=${encodeURIComponent(resolved)}`;
 }
 
-function convertSrtToVtt(input: string) {
+function normalizeSubtitleToVtt(input: string) {
   const normalized = input.replace(/\r+/g, "");
+
+  if (normalized.trimStart().startsWith("WEBVTT")) {
+    return normalized;
+  }
+
+  if (!looksLikeSrtSubtitle(normalized)) {
+    return null;
+  }
+
   const body = normalized.replace(
     /(\d{2}:\d{2}:\d{2}),(\d{3})/g,
     "$1.$2",
   );
 
-  return body.startsWith("WEBVTT") ? body : `WEBVTT\n\n${body}`;
+  return `WEBVTT\n\n${body}`;
+}
+
+function looksLikeSrtSubtitle(input: string) {
+  return /\d{2}:\d{2}:\d{2},\d{3}\s+-->\s+\d{2}:\d{2}:\d{2},\d{3}/.test(input);
 }
 
 function sanitizeDownloadFilename(value: string) {

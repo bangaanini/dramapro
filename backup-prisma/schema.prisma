@@ -1,0 +1,476 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ProviderName {
+  melolo
+  meloshort
+  goodshort
+  dramawave
+  dramabox
+  dramadash
+  reelshort
+  freereels
+  flickreels
+  netshort
+}
+
+enum FeedSource {
+  home
+  new
+  popular
+}
+
+enum VipPaymentStatus {
+  pending
+  paid
+  failed
+  expired
+  cancelled
+}
+
+enum PaymentGatewayProvider {
+  paymenku
+  xendit
+  midtrans
+  tripay
+  doku
+}
+
+enum UserAuthProvider {
+  local
+  telegram
+}
+
+enum AffiliateCommissionStatus {
+  approved
+  paid
+  cancelled
+}
+
+enum AffiliateWithdrawalStatus {
+  pending
+  approved
+  rejected
+  paid
+}
+
+enum ProviderHealthStatus {
+  unknown
+  healthy
+  no_data
+  stream_error
+}
+
+model Drama {
+  id              String       @id @default(uuid()) @db.Uuid
+  providerDramaId String
+  providerName    ProviderName
+  title           String
+  description     String       @default("")
+  thumbUrl        String       @default("")
+  episodeCount    Int          @default(0)
+  watchValue      String       @default("")
+  isNewBook       Boolean      @default(false)
+  tags            String[]     @default([])
+  isStreamPlayable Boolean     @default(true)
+  streamCheckMessage String    @default("")
+  streamCheckedAt  DateTime?
+  feedEntries     DramaFeed[]
+  channelBroadcasts DramaChannelBroadcast[]
+  favorites       FavoriteDrama[]
+  savedEpisodes   SavedEpisode[]
+  watchHistory    WatchHistory[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([providerName, providerDramaId])
+  @@index([providerName, updatedAt])
+  @@index([isStreamPlayable, updatedAt])
+}
+
+model DramaFeed {
+  id        String     @id @default(uuid()) @db.Uuid
+  dramaId   String     @db.Uuid
+  source    FeedSource
+  drama     Drama      @relation(fields: [dramaId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([dramaId, source])
+  @@index([source, updatedAt])
+}
+
+model AdminUser {
+  id           String         @id @default(uuid()) @db.Uuid
+  email        String         @unique
+  name         String
+  passwordHash String
+  sessions     AdminSession[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}
+
+model AdminSession {
+  id          String    @id @default(uuid()) @db.Uuid
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  adminUserId String    @db.Uuid
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@index([adminUserId, expiresAt])
+}
+
+model User {
+  id                         String                @id @default(uuid()) @db.Uuid
+  email                      String?               @unique
+  name                       String
+  authProvider               UserAuthProvider      @default(local)
+  passwordHash               String?
+  telegramId                 String?               @unique
+  telegramUsername           String?
+  telegramPhotoUrl           String?
+  telegramFirstName          String?
+  telegramLastName           String?
+  telegramLanguageCode       String?
+  vipStartedAt               DateTime?
+  vipExpiresAt               DateTime?
+  affiliateCode              String?               @unique
+  affiliateCommissionOverrideRate Int?
+  referredById               String?               @db.Uuid
+  referredByPartnerBotId     String?               @db.Uuid
+  referredBy                 User?                 @relation("AffiliateReferrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referredByPartnerBot       TelegramPartnerBot?   @relation("PartnerBotReferrals", fields: [referredByPartnerBotId], references: [id], onDelete: SetNull)
+  referrals                  User[]                @relation("AffiliateReferrals")
+  sessions                   UserSession[]
+  favorites                  FavoriteDrama[]
+  savedEpisodes              SavedEpisode[]
+  watchHistory               WatchHistory[]
+  vipPayments                VipPayment[]
+  affiliateCommissions       AffiliateCommission[] @relation("AffiliateOwner")
+  referredAffiliateSales     AffiliateCommission[] @relation("AffiliateReferred")
+  affiliateWithdrawals       AffiliateWithdrawal[]
+  affiliatePayoutProfile     AffiliatePayoutProfile?
+  ownedTelegramPartnerBots   TelegramPartnerBot[]
+  channelBroadcasts          DramaChannelBroadcast[]
+  createdAt                  DateTime              @default(now())
+  updatedAt                  DateTime              @updatedAt
+
+  @@index([referredById, createdAt])
+  @@index([referredByPartnerBotId, createdAt])
+}
+
+model UserSession {
+  id        String   @id @default(uuid()) @db.Uuid
+  tokenHash String   @unique
+  expiresAt DateTime
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId, expiresAt])
+}
+
+model FavoriteDrama {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  dramaId   String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  drama     Drama    @relation(fields: [dramaId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, dramaId])
+  @@index([userId, createdAt])
+}
+
+model SavedEpisode {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  dramaId      String   @db.Uuid
+  episodeIndex Int
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  drama        Drama    @relation(fields: [dramaId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, dramaId, episodeIndex])
+  @@index([userId, updatedAt])
+  @@index([dramaId, updatedAt])
+}
+
+model WatchHistory {
+  id                  String   @id @default(uuid()) @db.Uuid
+  userId              String   @db.Uuid
+  dramaId             String   @db.Uuid
+  episodeIndex        Int      @default(1)
+  lastPositionSeconds Int      @default(0)
+  watchedAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  drama               Drama    @relation(fields: [dramaId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dramaId])
+  @@index([userId, updatedAt])
+  @@index([dramaId, updatedAt])
+}
+
+model VipSettings {
+  id              String   @id @default("global")
+  isEnabled       Boolean  @default(false)
+  lockFromEpisode Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model VipPricePlan {
+  id           String       @id @default(uuid()) @db.Uuid
+  name         String
+  slug         String       @unique
+  description  String       @default("")
+  badgeText    String       @default("")
+  badgeColor   String       @default("")
+  priceAmount  Int
+  currency     String       @default("IDR")
+  durationDays Int
+  sortOrder    Int          @default(0)
+  isActive     Boolean      @default(true)
+  payments     VipPayment[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([isActive, sortOrder])
+}
+
+model PaymentGatewaySettings {
+  id             String                 @id @default("global")
+  activeProvider PaymentGatewayProvider?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+}
+
+model AppSettings {
+  id                           String   @id @default("global")
+  telegramBotUsername          String   @default("")
+  telegramBotTokenCiphertext   String?
+  telegramWebhookSecretCiphertext String?
+  telegramSupportUrl           String   @default("")
+  telegramMiniAppUrl           String   @default("")
+  telegramDefaultBroadcastChannel String @default("")
+  telegramBoxOfficeBotUrl      String   @default("")
+  telegramInlineButtons        Json?    @db.JsonB
+  telegramWelcomeMessage        String   @default("")
+  telegramOpenButtonText        String   @default("")
+  telegramOpenButtonUrl         String   @default("")
+  telegramSearchButtonText      String   @default("")
+  telegramSearchButtonUrl       String   @default("")
+  telegramAffiliateButtonText   String   @default("")
+  telegramAffiliateButtonUrl    String   @default("")
+  telegramDramaChannelButtonText String  @default("")
+  telegramDramaChannelUrl       String   @default("")
+  telegramMovieChannelButtonText String  @default("")
+  telegramMovieChannelUrl       String   @default("")
+  telegramSupportButtonText     String   @default("")
+  telegramSupportButtonUrl      String   @default("")
+  telegramVipButtonText         String   @default("")
+  telegramVipButtonUrl          String   @default("")
+  siteUrl                      String   @default("")
+  siteName                     String   @default("")
+  siteDescription              String   @default("")
+  siteLogoUrl                  String   @default("")
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+}
+
+model ProviderRuntimeControl {
+  providerName      ProviderName       @id
+  isHomepageVisible Boolean            @default(true)
+  healthStatus      ProviderHealthStatus @default(unknown)
+  healthMessage     String             @default("")
+  checkedDramaId    String             @default("")
+  checkedDramaTitle String             @default("")
+  lastCheckedAt     DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([isHomepageVisible, providerName])
+}
+
+model TelegramPartnerBot {
+  id                      String   @id @default(uuid()) @db.Uuid
+  botUsername             String   @unique
+  botTokenCiphertext      String
+  webhookSecretCiphertext String?
+  defaultChannelUsername  String   @default("")
+  boxOfficeBotUrl         String   @default("")
+  welcomeMessage          String   @default("")
+  inlineButtons           Json?    @db.JsonB
+  ownerUserId             String   @db.Uuid
+  owner                   User     @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  referredUsers           User[]   @relation("PartnerBotReferrals")
+  affiliateCommissions    AffiliateCommission[]
+  channelBroadcasts       DramaChannelBroadcast[]
+  isEnabled               Boolean  @default(true)
+  notes                   String   @default("")
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([ownerUserId, isEnabled])
+}
+
+model DramaChannelBroadcast {
+  id               String              @id @default(uuid()) @db.Uuid
+  dramaId          String              @db.Uuid
+  ownerUserId      String?             @db.Uuid
+  partnerBotId     String?             @db.Uuid
+  botKind          String              @default("default")
+  botUsername      String
+  channelUsername  String
+  buttonLabel      String
+  caption          String
+  telegramMessageId Int?
+  pinned           Boolean             @default(false)
+  postedAt         DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  drama            Drama               @relation(fields: [dramaId], references: [id], onDelete: Cascade)
+  owner            User?               @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
+  partnerBot       TelegramPartnerBot? @relation(fields: [partnerBotId], references: [id], onDelete: SetNull)
+
+  @@index([dramaId, createdAt])
+  @@index([ownerUserId, createdAt])
+  @@index([partnerBotId, createdAt])
+  @@index([botKind, createdAt])
+}
+
+model PaymentGatewayConfig {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  provider           PaymentGatewayProvider @unique
+  displayName        String
+  isEnabled          Boolean                @default(false)
+  defaultChannelCode String                 @default("qris")
+  merchantId         String                 @default("")
+  clientKey          String                 @default("")
+  secretCiphertext   String?
+  configJson         Json?
+  lastError          String                 @default("")
+  lastValidatedAt    DateTime?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+}
+
+model VipPayment {
+  id                    String           @id @default(uuid()) @db.Uuid
+  userId                String           @db.Uuid
+  vipPricePlanId        String           @db.Uuid
+  referenceId           String           @unique
+  gatewayProvider       PaymentGatewayProvider @default(paymenku)
+  providerTransactionId String?          @unique
+  channelCode           String
+  channelName           String           @default("")
+  amount                Int
+  paidAmount            Int?
+  currency              String           @default("IDR")
+  status                VipPaymentStatus @default(pending)
+  payUrl                String
+  qrUrl                 String?
+  qrString              String?
+  returnUrl             String
+  expiresAt             DateTime?
+  lastCheckedAt         DateTime?
+  activatedAt           DateTime?
+  providerPayload       Json?
+  statusPayload         Json?
+  user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan                  VipPricePlan     @relation(fields: [vipPricePlanId], references: [id], onDelete: Restrict)
+  affiliateCommission   AffiliateCommission?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  @@index([userId, status, createdAt])
+  @@index([vipPricePlanId, createdAt])
+}
+
+model AffiliateSettings {
+  id                         String   @id @default("global")
+  isEnabled                  Boolean  @default(true)
+  cookieTtlDays              Int      @default(30)
+  minimumWithdrawalAmount    Int      @default(10000)
+  bronzeMinActiveReferrals   Int      @default(0)
+  bronzeCommissionRate       Int      @default(10)
+  silverMinActiveReferrals   Int      @default(5)
+  silverCommissionRate       Int      @default(15)
+  goldMinActiveReferrals     Int      @default(20)
+  goldCommissionRate         Int      @default(20)
+  platinumMinActiveReferrals Int      @default(50)
+  platinumCommissionRate     Int      @default(25)
+  commissionNotes            String   @default("")
+  withdrawalNotes            String   @default("")
+  otherTerms                 String   @default("")
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+}
+
+model AffiliateCommission {
+  id             String                    @id @default(uuid()) @db.Uuid
+  affiliateUserId String                   @db.Uuid
+  referredUserId  String                   @db.Uuid
+  vipPaymentId    String                   @unique @db.Uuid
+  partnerBotId    String?                  @db.Uuid
+  baseAmount      Int
+  commissionRate  Int
+  amount          Int
+  status          AffiliateCommissionStatus @default(approved)
+  description     String                   @default("")
+  notificationSentAt DateTime?
+  notificationError  String                 @default("")
+  affiliateUser   User                     @relation("AffiliateOwner", fields: [affiliateUserId], references: [id], onDelete: Cascade)
+  referredUser    User                     @relation("AffiliateReferred", fields: [referredUserId], references: [id], onDelete: Cascade)
+  vipPayment      VipPayment               @relation(fields: [vipPaymentId], references: [id], onDelete: Cascade)
+  partnerBot      TelegramPartnerBot?      @relation(fields: [partnerBotId], references: [id], onDelete: SetNull)
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  @@index([affiliateUserId, status, createdAt])
+  @@index([referredUserId, createdAt])
+  @@index([partnerBotId, createdAt])
+}
+
+model AffiliateWithdrawal {
+  id              String                    @id @default(uuid()) @db.Uuid
+  affiliateUserId String                    @db.Uuid
+  amount          Int
+  status          AffiliateWithdrawalStatus @default(pending)
+  notes           String                    @default("")
+  payoutAccountHolderName String            @default("")
+  payoutBankName          String            @default("")
+  payoutAccountNumber     String            @default("")
+  payoutWhatsappNumber    String            @default("")
+  payoutEmail             String            @default("")
+  requestedAt     DateTime                  @default(now())
+  reviewedAt      DateTime?
+  affiliateUser   User                      @relation(fields: [affiliateUserId], references: [id], onDelete: Cascade)
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  @@index([affiliateUserId, status, createdAt])
+}
+
+model AffiliatePayoutProfile {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @db.Uuid @unique
+  accountHolderName String
+  bankName          String
+  accountNumber     String
+  whatsappNumber    String
+  payoutEmail       String
+  notes             String   @default("")
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}

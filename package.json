@@ -4,10 +4,16 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:all": "node scripts/run-services.mjs dev",
     "build": "prisma generate && next build",
     "start": "next start",
+    "start:all": "node scripts/run-services.mjs start",
     "lint": "eslint",
+    "db:seed": "npx tsx prisma/seed.ts",
+    "backfill:catalog-relations": "npx tsx scripts/backfill-catalog-relations.ts",
+    "catalog:sync:all": "npx tsx scripts/run-catalog-sync-all.ts",
     "worker:scheduler": "node scripts/ops-worker.mjs scheduler",
+    "worker:catalog-sync": "node scripts/ops-worker.mjs catalog-sync",
     "worker:sync": "node scripts/ops-worker.mjs sync",
     "worker:audit": "node scripts/ops-worker.mjs audit",
     "worker:refresh": "node scripts/ops-worker.mjs refresh",
@@ -18,14 +24,14 @@
     "@prisma/client": "^7.7.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "hls.js": "^1.6.16",
     "lucide-react": "^1.8.0",
     "next": "16.2.3",
     "pg": "^8.20.0",
     "qrcode": "^1.5.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "tailwind-merge": "^3.5.0",
-    "video.js": "^8.23.7"
+    "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -37,6 +43,7 @@
     "eslint-config-next": "16.2.3",
     "prisma": "^7.7.0",
     "tailwindcss": "^4",
+    "tsx": "^4.20.6",
     "typescript": "^5"
   }
 }

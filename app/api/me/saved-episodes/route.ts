@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 
-import { ACTIVE_PROVIDERS } from "@/lib/provider-adapter";
 import { prisma } from "@/lib/prisma";
 import { getUserFromRequest } from "@/lib/user-auth";
 
@@ -17,13 +16,14 @@ export async function GET(request: NextRequest) {
   const savedEpisodes = await prisma.savedEpisode.findMany({
     where: {
       userId: user.id,
-      drama: {
-        providerName: {
-          in: ACTIVE_PROVIDERS,
+    },
+    include: {
+      series: {
+        include: {
+          platform: true,
         },
       },
     },
-    include: { drama: true },
     orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
     take: 200,
   });
@@ -46,24 +46,24 @@ export async function GET(request: NextRequest) {
   >();
 
   for (const savedEpisode of savedEpisodes) {
-    const existingEntry = groupedEntries.get(savedEpisode.dramaId);
+    const existingEntry = groupedEntries.get(savedEpisode.seriesId);
 
     if (existingEntry) {
       existingEntry.savedCount += 1;
       continue;
     }
 
-    groupedEntries.set(savedEpisode.dramaId, {
-      id: savedEpisode.dramaId,
+    groupedEntries.set(savedEpisode.seriesId, {
+      id: savedEpisode.seriesId,
       updatedAt: savedEpisode.updatedAt.toISOString(),
       savedCount: 1,
       lastEpisodeIndex: savedEpisode.episodeIndex,
       drama: {
-        id: savedEpisode.drama.id,
-        title: savedEpisode.drama.title,
-        thumbUrl: savedEpisode.drama.thumbUrl,
-        providerName: savedEpisode.drama.providerName,
-        episodeCount: savedEpisode.drama.episodeCount,
+        id: savedEpisode.series.id,
+        title: savedEpisode.series.title,
+        thumbUrl: savedEpisode.series.coverUrl,
+        providerName: savedEpisode.series.platform.name,
+        episodeCount: savedEpisode.series.chapterCount,
       },
     });
   }
@@ -102,9 +102,9 @@ export async function POST(request: NextRequest) {
 
   const existingSavedEpisode = await prisma.savedEpisode.findUnique({
     where: {
-      userId_dramaId_episodeIndex: {
+      userId_seriesId_episodeIndex: {
         userId: user.id,
-        dramaId,
+        seriesId: dramaId,
         episodeIndex,
       },
     },
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
   await prisma.savedEpisode.create({
     data: {
       userId: user.id,
-      dramaId,
+      seriesId: dramaId,
       episodeIndex,
     },
   });

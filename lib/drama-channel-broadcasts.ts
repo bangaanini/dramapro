@@ -1,6 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { ACTIVE_PROVIDERS } from "@/lib/provider-adapter";
-import { getHomepageBroadcastDramaEntries } from "@/lib/catalog-data";
 import {
   buildDramaShareStartParam,
   buildTelegramMiniAppStartAppLinkForUsername,
@@ -141,16 +139,41 @@ export async function searchDramasForChannelBroadcast(query: string) {
   const trimmedQuery = query.trim();
 
   if (!trimmedQuery) {
-    return getHomepageBroadcastDramaEntries(20);
+    return prisma.catalogSeries.findMany({
+      where: {
+        coverUrl: {
+          not: "",
+        },
+      },
+      orderBy: {
+        updatedAt: "desc",
+      },
+      select: {
+        description: true,
+        chapterCount: true,
+        id: true,
+        platformId: true,
+        coverUrl: true,
+        title: true,
+        updatedAt: true,
+      },
+      take: 20,
+    }).then((rows) =>
+      rows.map((row) => ({
+        description: row.description,
+        episodeCount: row.chapterCount,
+        id: row.id,
+        providerName: row.platformId,
+        thumbUrl: row.coverUrl,
+        title: row.title,
+        updatedAt: row.updatedAt,
+      })),
+    );
   }
 
-  return prisma.drama.findMany({
+  return prisma.catalogSeries.findMany({
     where: {
-      isStreamPlayable: true,
-      providerName: {
-        in: ACTIVE_PROVIDERS,
-      },
-      thumbUrl: {
+      coverUrl: {
         not: "",
       },
       ...(trimmedQuery
@@ -182,15 +205,25 @@ export async function searchDramasForChannelBroadcast(query: string) {
     },
     select: {
       description: true,
-      episodeCount: true,
+      chapterCount: true,
       id: true,
-      providerName: true,
-      thumbUrl: true,
+      platformId: true,
+      coverUrl: true,
       title: true,
       updatedAt: true,
     },
     take: 20,
-  });
+  }).then((rows) =>
+    rows.map((row) => ({
+      description: row.description,
+      episodeCount: row.chapterCount,
+      id: row.id,
+      providerName: row.platformId,
+      thumbUrl: row.coverUrl,
+      title: row.title,
+      updatedAt: row.updatedAt,
+    })),
+  );
 }
 
 export async function listRecentDramaChannelBroadcasts(input?: {
@@ -199,7 +232,7 @@ export async function listRecentDramaChannelBroadcasts(input?: {
   ownerUserId?: string;
   partnerBotId?: string;
 }) {
-  return prisma.dramaChannelBroadcast.findMany({
+  const rows = await prisma.dramaChannelBroadcast.findMany({
     where: {
       ...(input?.botKind ? { botKind: input.botKind } : {}),
       ...(input?.ownerUserId ? { ownerUserId: input.ownerUserId } : {}),
@@ -213,10 +246,10 @@ export async function listRecentDramaChannelBroadcasts(input?: {
       buttonLabel: true,
       channelUsername: true,
       createdAt: true,
-      drama: {
+      series: {
         select: {
           id: true,
-          thumbUrl: true,
+          coverUrl: true,
           title: true,
         },
       },
@@ -227,6 +260,15 @@ export async function listRecentDramaChannelBroadcasts(input?: {
     },
     take: input?.limit ?? 8,
   });
+
+  return rows.map((row) => ({
+    ...row,
+    drama: {
+      id: row.series.id,
+      thumbUrl: row.series.coverUrl,
+      title: row.series.title,
+    },
+  }));
 }
 
 export async function publishDramaChannelBroadcast(
@@ -242,22 +284,21 @@ export async function publishDramaChannelBroadcast(
     );
   }
 
-  const drama = await prisma.drama.findUnique({
+  const drama = await prisma.catalogSeries.findUnique({
     where: { id: input.dramaId },
     select: {
       description: true,
       id: true,
-      isStreamPlayable: true,
-      thumbUrl: true,
+      coverUrl: true,
       title: true,
     },
   });
 
-  if (!drama || !drama.isStreamPlayable) {
-    throw new Error("Drama untuk broadcast tidak ditemukan atau sedang disembunyikan.");
+  if (!drama) {
+    throw new Error("Drama untuk broadcast tidak ditemukan.");
   }
 
-  if (!drama.thumbUrl.trim()) {
+  if (!drama.coverUrl.trim()) {
     throw new Error("Drama ini belum punya poster, jadi belum bisa dibroadcast ke channel.");
   }
 
@@ -324,7 +365,7 @@ export async function publishDramaChannelBroadcast(
       buttonLabel,
       caption,
       channelUsername: normalizedChannelUsername,
-      dramaId: drama.id,
+      seriesId: drama.id,
       ownerUserId: input.ownerUserId ?? null,
       partnerBotId: input.partnerBotId ?? null,
       pinned: false,
@@ -336,7 +377,7 @@ export async function publishDramaChannelBroadcast(
       caption,
       caption_entities: captionEntities,
       chat_id: `@${normalizedChannelUsername}`,
-      photo: drama.thumbUrl,
+      photo: drama.coverUrl,
       reply_markup: {
         inline_keyboard: inlineKeyboard,
       },

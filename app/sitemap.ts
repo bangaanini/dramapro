@@ -1,6 +1,5 @@
 import type { MetadataRoute } from "next";
 
-import { ACTIVE_PROVIDERS } from "@/lib/provider-adapter";
 import { prisma } from "@/lib/prisma";
 import { absoluteResolvedUrl } from "@/lib/site";
 
@@ -35,13 +34,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   try {
-    const dramas = await prisma.drama.findMany({
-      where: {
-        isStreamPlayable: true,
-        providerName: {
-          in: ACTIVE_PROVIDERS,
-        },
-      },
+    const dramas = await prisma.catalogSeries.findMany({
       select: {
         id: true,
         updatedAt: true,

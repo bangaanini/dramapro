@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       dramaId: resolved.drama.id,
       title: resolved.drama.title,
-      provider: resolved.drama.providerName,
+      provider: resolved.drama.platformId,
       episodeIndex,
       sourceType: bestMp4 ? "mp4" : "hls",
       downloadable: Boolean(bestMp4),

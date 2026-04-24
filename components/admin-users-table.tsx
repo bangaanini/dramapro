@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { LoaderCircle, Search, Trash2 } from "lucide-react";
 
 import {
@@ -44,6 +44,10 @@ function buildAdminUsersApiUrl(query: string, page: number, pageSize: number) {
   return `/api/admin/users?${searchParams.toString()}`;
 }
 
+function buildAdminUsersCacheKey(query: string, page: number, pageSize: number) {
+  return `${query}:${page}:${pageSize}`;
+}
+
 export function AdminUsersTable({ initialData }: AdminUsersTableProps) {
   const [query, setQuery] = useState(initialData.query);
   const deferredQuery = useDeferredValue(query);
@@ -51,18 +55,33 @@ export function AdminUsersTable({ initialData }: AdminUsersTableProps) {
   const [data, setData] = useState(initialData);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const cacheRef = useRef(new Map<string, AdminUsersTableData>());
+  const cacheRef = useRef(
+    new Map<string, AdminUsersTableData>([
+      [
+        buildAdminUsersCacheKey(
+          initialData.query,
+          initialData.page,
+          initialData.pageSize,
+        ),
+        initialData,
+      ],
+    ]),
+  );
   const pageSize = initialData.pageSize;
 
   useEffect(() => {
     cacheRef.current.set(
-      `${initialData.query}:${initialData.page}:${initialData.pageSize}`,
+      buildAdminUsersCacheKey(
+        initialData.query,
+        initialData.page,
+        initialData.pageSize,
+      ),
       initialData,
     );
   }, [initialData]);
 
   useEffect(() => {
-    const cacheKey = `${deferredQuery}:${page}:${pageSize}`;
+    const cacheKey = buildAdminUsersCacheKey(deferredQuery, page, pageSize);
     const cached = cacheRef.current.get(cacheKey);
 
     if (cached) {
@@ -131,6 +150,14 @@ export function AdminUsersTable({ initialData }: AdminUsersTableProps) {
   const redirectTo = deferredQuery
     ? `/admin/users?q=${encodeURIComponent(deferredQuery)}`
     : "/admin/users";
+  const canGoPrevious = data.page > 1;
+  const canGoNext = data.page < data.totalPages;
+  const isPreviousDisabled = !canGoPrevious || isLoading;
+  const isNextDisabled = !canGoNext || isLoading;
+  const paginationLabel = useMemo(
+    () => `Halaman ${data.page} dari ${data.totalPages}`,
+    [data.page, data.totalPages],
+  );
 
   return (
     <div className="space-y-4">
@@ -226,14 +253,14 @@ export function AdminUsersTable({ initialData }: AdminUsersTableProps) {
 
       <div className="flex flex-col gap-3 border-t border-white/10 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-[var(--muted)]">
-          Halaman {data.page} dari {data.totalPages}
+          {paginationLabel}
         </p>
         <div className="flex items-center gap-2">
           <Button
             type="button"
             variant="secondary"
             size="sm"
-            disabled={data.page <= 1 || isLoading}
+            disabled={isPreviousDisabled}
             onClick={() => setPage((current) => Math.max(1, current - 1))}
             className="rounded-xl"
           >
@@ -243,7 +270,7 @@ export function AdminUsersTable({ initialData }: AdminUsersTableProps) {
             type="button"
             variant="secondary"
             size="sm"
-            disabled={data.page >= data.totalPages || isLoading}
+            disabled={isNextDisabled}
             onClick={() =>
               setPage((current) => Math.min(data.totalPages, current + 1))
             }

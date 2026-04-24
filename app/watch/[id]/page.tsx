@@ -1,25 +1,19 @@
 import type { Metadata } from "next";
 import { cache } from "react";
 import Image from "next/image";
-import Link from "next/link";
-import {
-  Clapperboard,
-  Layers3,
-  Share2,
-  Sparkles,
-} from "lucide-react";
 import { notFound } from "next/navigation";
+import { Layers3, Sparkles } from "lucide-react";
 
 import { DramaDetailShareButton } from "@/components/drama-detail-share-button";
 import { EpisodeGridLink } from "@/components/episode-grid-link";
 import { FavoriteDramaButton } from "@/components/favorite-drama-button";
 import { PlayDramaButton } from "@/components/play-drama-button";
+import { DramaCard } from "@/components/drama-card";
 import { SiteFooter } from "@/components/site-footer";
-
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
 import { getAppSettings } from "@/lib/app-settings";
+import { ensureSeriesHydrated } from "@/lib/catalog";
 import { prisma } from "@/lib/prisma";
 import {
   DEFAULT_OG_IMAGE,
@@ -41,29 +35,18 @@ import {
   isEpisodeVipLocked,
   isVipActive,
 } from "@/lib/vip";
-import { ACTIVE_PROVIDERS } from "@/lib/provider-adapter";
 
 export const dynamic = "force-dynamic";
 
-const getDramaById = cache(async (id: string) =>
-  prisma.drama.findFirst({
-    where: {
-      id,
-      isStreamPlayable: true,
-      providerName: {
-        in: ACTIVE_PROVIDERS,
-      },
-    },
-  }),
-);
+const getSeriesById = cache(async (id: string) => ensureSeriesHydrated(id));
 
 export async function generateMetadata(
   props: PageProps<"/watch/[id]">,
 ): Promise<Metadata> {
   const { id } = await props.params;
-  const [drama, settings] = await Promise.all([getDramaById(id), getAppSettings()]);
+  const [series, settings] = await Promise.all([getSeriesById(id), getAppSettings()]);
 
-  if (!drama) {
+  if (!series) {
     return {
       title: "Drama tidak ditemukan",
       robots: {
@@ -74,33 +57,33 @@ export async function generateMetadata(
   }
 
   const description = toSeoDescription(
-    drama.description,
-    `${drama.title} dari ${drama.providerName} dengan ${drama.episodeCount} episode di ${settings.site.name}.`,
+    series.description,
+    `${series.title} dengan ${series.chapterCount} episode di ${settings.site.name}.`,
   );
-  const image = normalizeDisplayImageUrl(drama.thumbUrl) || DEFAULT_OG_IMAGE;
+  const image = normalizeDisplayImageUrl(series.coverUrl) || DEFAULT_OG_IMAGE;
 
   return {
-    title: drama.title,
+    title: series.title,
     description,
-    keywords: [drama.title, drama.providerName, ...drama.tags].slice(0, 12),
+    keywords: [series.title, series.platformId, ...series.tags].slice(0, 12),
     alternates: {
-      canonical: `/watch/${drama.id}`,
+      canonical: `/watch/${series.id}`,
     },
     openGraph: {
       type: "website",
-      title: drama.title,
+      title: series.title,
       description,
-      url: `/watch/${drama.id}`,
+      url: `/watch/${series.id}`,
       images: [
         {
           url: image,
-          alt: drama.title,
+          alt: series.title,
         },
       ],
     },
     twitter: {
       card: "summary_large_image",
-      title: drama.title,
+      title: series.title,
       description,
       images: [image],
     },
@@ -111,15 +94,15 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
   const { id } = await props.params;
   const user = await getCurrentUser();
 
-  const [drama, watchHistory, favorite, vipSettings, settings, hasAdminBypass] =
+  const [series, watchHistory, favorite, vipSettings, settings, hasAdminBypass] =
     await Promise.all([
-      getDramaById(id),
+      getSeriesById(id),
       user
         ? prisma.watchHistory.findUnique({
             where: {
-              userId_dramaId: {
+              userId_seriesId: {
                 userId: user.id,
-                dramaId: id,
+                seriesId: id,
               },
             },
             select: {
@@ -131,9 +114,9 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
       user
         ? prisma.favoriteDrama.findUnique({
             where: {
-              userId_dramaId: {
+              userId_seriesId: {
                 userId: user.id,
-                dramaId: id,
+                seriesId: id,
               },
             },
             select: { id: true },
@@ -150,226 +133,140 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
       userHasAdminVideoBypass(user),
     ]);
 
-  if (!drama) {
+  if (!series) {
     notFound();
   }
 
-  const dramaThumbUrl = normalizeDisplayImageUrl(drama.thumbUrl);
+  const coverUrl = normalizeDisplayImageUrl(series.coverUrl);
   const detailDescription = toSeoDescription(
-    drama.description,
-    `${drama.title} dari ${drama.providerName} dengan ${drama.episodeCount} episode di ${settings.site.name}.`,
+    series.description,
+    `${series.title} dengan ${series.chapterCount} episode di ${settings.site.name}.`,
   );
   const vipLockFromEpisode = hasAdminBypass || isVipActive(user?.vipExpiresAt)
     ? null
     : getVipLockStartEpisode(vipSettings);
   const preferredInitialEpisode = clampEpisodeForVipAccess(
     watchHistory?.episodeIndex ?? 1,
-    drama.episodeCount,
+    Math.max(series.chapterCount, 1),
     vipLockFromEpisode,
   );
-  const watchHistoryIsLocked = Boolean(
-    watchHistory &&
-      vipLockFromEpisode &&
-      watchHistory.episodeIndex >= vipLockFromEpisode,
-  );
 
-  const relatedFilters =
-    drama.tags.length > 0
-      ? [
-          { providerName: drama.providerName },
-          { tags: { hasSome: drama.tags.slice(0, 4) } },
-        ]
-      : [{ providerName: drama.providerName }];
-
-  const relatedDramas = await prisma.drama.findMany({
+  const relatedSeries = await prisma.catalogSeries.findMany({
     where: {
-      id: { not: drama.id },
-      isStreamPlayable: true,
-      providerName: {
-        in: ACTIVE_PROVIDERS,
-      },
-      OR: relatedFilters,
+      id: { not: series.id },
+      OR: [
+        { tags: { hasSome: series.tags.slice(0, 4) } },
+        { platformId: series.platformId },
+      ],
     },
-    orderBy: [{ updatedAt: "desc" }],
+    include: {
+      platform: true,
+    },
     take: 6,
+    orderBy: [{ updatedAt: "desc" }],
   });
 
-  const playHref = `/watch/${drama.id}/play?episode=${preferredInitialEpisode}`;
-  const shareUrl = await absoluteResolvedUrl(`/watch/${drama.id}`);
+  const playHref = `/watch/${series.id}/play?episode=${preferredInitialEpisode}`;
+  const shareUrl = await absoluteResolvedUrl(`/watch/${series.id}`);
   const telegramShareUrl =
     user?.authProvider === "telegram"
       ? await buildTelegramMiniAppStartAppLink(
           buildDramaShareStartParam({
-            dramaId: drama.id,
+            dramaId: series.id,
             referralCode: user.affiliateCode ?? null,
           }),
         )
       : null;
-  const structuredData = {
-    "@context": "https://schema.org",
-    "@graph": [
-      {
-        "@type": "BreadcrumbList",
-        itemListElement: [
-          {
-            "@type": "ListItem",
-            position: 1,
-            name: "Home",
-            item: await absoluteResolvedUrl("/"),
-          },
-          {
-            "@type": "ListItem",
-            position: 2,
-            name: drama.title,
-            item: await absoluteResolvedUrl(`/watch/${drama.id}`),
-          },
-        ],
-      },
-      {
-        "@type": "TVSeries",
-        name: drama.title,
-        description: detailDescription,
-        image: await absoluteResolvedUrl(dramaThumbUrl || DEFAULT_OG_IMAGE),
-        url: await absoluteResolvedUrl(`/watch/${drama.id}`),
-        inLanguage: "id-ID",
-        numberOfEpisodes: drama.episodeCount > 0 ? drama.episodeCount : undefined,
-        genre: drama.tags.length > 0 ? drama.tags : undefined,
-      },
-    ],
-  };
 
   return (
     <main className="route-transition-shell mx-auto min-h-screen w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-      <script
-        type="application/ld+json"
-        suppressHydrationWarning
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
-      />
-
-      <section className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)] lg:items-start">
+      <section className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)] lg:items-start">
         <Card className="glass-panel overflow-hidden rounded-[2.2rem] border-white/10">
           <CardContent className="p-0">
             <div className="relative aspect-[9/14] overflow-hidden bg-black sm:aspect-[9/12]">
-              {dramaThumbUrl ? (
+              {coverUrl ? (
                 <Image
-                  src={dramaThumbUrl}
-                  alt={drama.title}
+                  src={coverUrl}
+                  alt={series.title}
                   fill
                   priority
                   className="object-cover"
                   sizes="(max-width: 1024px) 100vw, 60vw"
-                  unoptimized={shouldBypassImageOptimization(dramaThumbUrl)}
+                  unoptimized={shouldBypassImageOptimization(coverUrl)}
                 />
-              ) : null}
-              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(8,8,8,0.03)_18%,rgba(8,8,8,0.12)_58%,rgba(8,8,8,0.68)_100%)]" />
-
-              <div className="absolute inset-x-0 bottom-0 space-y-3 p-5 pb-4 sm:p-6">
-                <div className="flex flex-wrap gap-2">
-                  <Badge className="border-accent/25 bg-accent-soft text-accent">
-                    <Sparkles className="mr-1.5 size-3.5" />
-                    Detail drama
-                  </Badge>
-                  <Badge variant="secondary">{settings.site.name}</Badge>
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-white/65">
+                  Poster belum tersedia
                 </div>
-
-                <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-white drop-shadow-[0_8px_24px_rgba(0,0,0,0.55)] sm:text-4xl">
-                  {drama.title}
+              )}
+              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,7,8,0.02),rgba(7,7,8,0.86))]" />
+              <div className="absolute inset-x-0 bottom-0 p-6 sm:p-8">
+                <Badge className="border-accent/30 bg-accent-soft text-accent">
+                  {series.platformId}
+                </Badge>
+                <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                  {series.title}
                 </h1>
-
-                <p className="text-sm text-white/78">
-                  {drama.episodeCount} episode
-                  {drama.watchValue ? ` · ${drama.watchValue}` : ""}
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-5 border-t border-white/8 bg-[linear-gradient(180deg,rgba(23,16,16,0.98),rgba(12,9,9,0.98))] p-4 sm:p-6">
-              <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 sm:gap-3">
-                <PlayDramaButton
-                  href={playHref}
-                  label={
-                    watchHistory && !watchHistoryIsLocked
-                      ? `Lanjutkan EP.${preferredInitialEpisode}`
-                      : "Mulai Nonton"
-                  }
-                  className={cn("h-12 min-w-0 rounded-full px-4 sm:px-6")}
-                />
-                <DramaDetailShareButton
-                  title={drama.title}
-                  shareUrl={shareUrl}
-                  telegramShareUrl={telegramShareUrl}
-                  compact
-                />
-                <FavoriteDramaButton
-                  dramaId={drama.id}
-                  redirectTo={`/watch/${drama.id}`}
-                  isFavorite={Boolean(favorite)}
-                  size="lg"
-                  compact
-                  className="h-12 min-w-12 rounded-full px-0 sm:px-5"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
-                  Sinopsis
-                </p>
-                <p className="text-sm leading-7 text-white/78 sm:text-base">
-                  {drama.description || "Sinopsis belum tersedia untuk drama ini."}
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Badge variant="secondary">
+                    {Math.max(series.chapterCount, series.episodes.length)} episode
+                  </Badge>
+                  {series.playCount ? (
+                    <Badge variant="secondary">{series.playCount} tayangan</Badge>
+                  ) : null}
+                  {series.lastDetailSyncedAt ? (
+                    <Badge variant="secondary">Episode siap diputar</Badge>
+                  ) : null}
+                </div>
+                <p className="mt-4 max-w-2xl text-sm leading-7 text-white/78">
+                  {detailDescription}
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <div className="space-y-5">
+        <div className="space-y-6">
           <Card className="glass-panel rounded-[2rem] border-white/10">
-            <CardContent className="space-y-4 p-6">
-                <div className="grid gap-3 rounded-[1.6rem] border border-white/10 bg-black/18 p-4 text-sm sm:grid-cols-3">
-                  <div className="flex items-center gap-3 text-white">
-                    <Clapperboard className="size-4 text-accent" />
-                    <span>{drama.episodeCount} episode</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-white">
-                    <Layers3 className="size-4 text-accent" />
-                    <span>{drama.watchValue || "Fresh sync"}</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-white">
-                    <Share2 className="size-4 text-accent" />
-                    <span>Bagikan ke Telegram</span>
-                  </div>
-                </div>
+            <CardContent className="space-y-5 p-6">
+              <div className="flex flex-wrap gap-3">
+                <PlayDramaButton href={playHref} label="Tonton sekarang" />
+                <FavoriteDramaButton
+                  dramaId={series.id}
+                  redirectTo={`/watch/${series.id}`}
+                  isFavorite={Boolean(favorite)}
+                  className="h-12 rounded-full px-5"
+                />
+                <DramaDetailShareButton
+                  title={series.title}
+                  shareUrl={shareUrl}
+                  telegramShareUrl={telegramShareUrl}
+                />
+              </div>
 
-              {vipLockFromEpisode ? (
-                <div className="rounded-[1.4rem] border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                  Upgrade ke VIP untk membuka semua episode.
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-[1.35rem] border border-white/10 bg-black/20 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                    Episode siap
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold text-white">
+                    {series.episodes.length}
+                  </p>
                 </div>
-              ) : null}
-
-              {watchHistory ? (
-                <div className="rounded-[1.4rem] border border-accent/20 bg-accent-soft px-4 py-3 text-sm text-white/90">
-                  {watchHistoryIsLocked ? (
-                    <>
-                      Riwayat terakhir ada di EP.{watchHistory.episodeIndex}, tetapi episode
-                      itu sekarang terkunci. Tombol tonton akan memulai dari EP.
-                      {preferredInitialEpisode}.
-                    </>
-                  ) : (
-                    <>
-                      Lanjutkan menonton di EP.{preferredInitialEpisode} pada{" "}
-                      {Math.max(0, watchHistory.lastPositionSeconds)} detik.
-                    </>
-                  )}
+                <div className="rounded-[1.35rem] border border-white/10 bg-black/20 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                    Lanjut nonton
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold text-white">
+                    EP.{preferredInitialEpisode}
+                  </p>
                 </div>
-              ) : null}
+              </div>
 
-              {drama.tags.length > 0 ? (
+              {series.tags.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
-                  {drama.tags.map((tag) => (
-                    <Badge
-                      key={tag}
-                      className="border-white/10 bg-white/6 px-4 py-2 text-sm text-white"
-                    >
+                  {series.tags.map((tag) => (
+                    <Badge key={tag} variant="secondary">
                       {tag}
                     </Badge>
                   ))}
@@ -379,107 +276,69 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
           </Card>
 
           <Card className="glass-panel rounded-[2rem] border-white/10">
-            <CardContent className="space-y-5 p-6">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-foreground)]">
-                    Episode
-                  </p>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">
-                    Pilih episode
-                  </h2>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-accent">
+                  <Layers3 className="size-5" />
                 </div>
-                <Badge variant="secondary">{drama.episodeCount} total</Badge>
+                <div>
+                  <h2 className="text-xl font-semibold text-white">Daftar episode</h2>
+                  <p className="text-sm text-[var(--muted)]">
+                    Episode VIP akan terkunci sesuai aturan akunmu.
+                  </p>
+                </div>
               </div>
-
-              <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
-                {Array.from({ length: drama.episodeCount }, (_, index) => index + 1).map(
-                  (episode) => {
-                    const isLocked = isEpisodeVipLocked(episode, vipLockFromEpisode);
-                    const isResume = preferredInitialEpisode === episode;
-
-                    if (isLocked) {
-                      return (
-                        <EpisodeGridLink
-                          key={episode}
-                          episode={episode}
-                          locked
-                          href={`/vip?next=${encodeURIComponent(
-                            `/watch/${drama.id}/play?episode=${episode}`,
-                          )}`}
-                        />
-                      );
-                    }
-
-                    return (
-                      <EpisodeGridLink
-                        key={episode}
-                        episode={episode}
-                        isResume={isResume}
-                        href={`/watch/${drama.id}/play?episode=${episode}`}
-                      />
-                    );
-                  },
-                )}
+              <div className="mt-5 grid grid-cols-4 gap-3 sm:grid-cols-5 lg:grid-cols-4 xl:grid-cols-5">
+                {Array.from({
+                  length: Math.max(series.chapterCount, series.episodes.length, 1),
+                }).map((_, index) => {
+                  const episode = index + 1;
+                  return (
+                    <EpisodeGridLink
+                      key={episode}
+                      href={`/watch/${series.id}/play?episode=${episode}`}
+                      episode={episode}
+                      locked={isEpisodeVipLocked(episode, vipLockFromEpisode)}
+                      isResume={episode === preferredInitialEpisode}
+                    />
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
+
+          {relatedSeries.length > 0 ? (
+            <Card className="glass-panel rounded-[2rem] border-white/10">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-accent">
+                    <Sparkles className="size-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-white">Drama serupa</h2>
+                    <p className="text-sm text-[var(--muted)]">
+                      Dipilih dari tag dan katalog platform yang sama.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3">
+                  {relatedSeries.map((item) => (
+                    <DramaCard
+                      key={item.id}
+                      href={`/watch/${item.id}`}
+                      title={item.title}
+                      thumbUrl={item.coverUrl}
+                      providerName={item.platform.name}
+                      episodeCount={item.chapterCount}
+                      extraMeta={item.tags.slice(0, 2).join(" • ") || item.playCount}
+                    />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
       </section>
-
-      {relatedDramas.length > 0 ? (
-        <section className="mt-8">
-          <Card className="glass-panel rounded-[2rem] border-white/10">
-            <CardContent className="space-y-5 p-6">
-              <div>
-                <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-foreground)]">
-                  Drama serupa
-                </p>
-                <h2 className="mt-2 text-2xl font-semibold text-white">
-                  Lanjut lihat judul berikutnya
-                </h2>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-                {relatedDramas.map((relatedDrama) => (
-                  <Link key={relatedDrama.id} href={`/watch/${relatedDrama.id}`} className="group">
-                    <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/5 transition duration-300 hover:-translate-y-1 hover:border-accent/35">
-                      <div className="relative aspect-[3/4] overflow-hidden bg-black/30">
-                        {normalizeDisplayImageUrl(relatedDrama.thumbUrl) ? (
-                          <Image
-                            src={normalizeDisplayImageUrl(relatedDrama.thumbUrl)}
-                            alt={relatedDrama.title}
-                            fill
-                            className="object-cover transition duration-500 group-hover:scale-[1.04]"
-                            sizes="(max-width: 640px) 45vw, 200px"
-                            unoptimized={shouldBypassImageOptimization(
-                              normalizeDisplayImageUrl(relatedDrama.thumbUrl),
-                            )}
-                          />
-                        ) : (
-                          <div className="flex h-full items-center justify-center text-sm text-[var(--muted-foreground)]">
-                            No Cover
-                          </div>
-                        )}
-                      </div>
-                      <div className="space-y-2 p-3">
-                        <p className="line-clamp-2 text-sm font-semibold text-white">
-                          {relatedDrama.title}
-                        </p>
-                        <p className="text-xs text-[var(--muted-foreground)]">
-                          {relatedDrama.episodeCount > 0
-                            ? `${relatedDrama.episodeCount} episodes`
-                            : "Episode info unavailable"}
-                        </p>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </section>
-      ) : null}
 
       <SiteFooter />
     </main>

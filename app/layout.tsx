@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import Script from "next/script";
 import "./globals.css";
-import "video.js/dist/video-js.css";
 
 import { TelegramMiniAppBridge } from "@/components/telegram-mini-app-bridge";
 import {

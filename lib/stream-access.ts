@@ -1,16 +1,24 @@
 import { buildMediaProxyUrl, shouldProxyMediaUrl } from "@/lib/media-proxy";
 import { prisma } from "@/lib/prisma";
-import {
-  getProviderPayloadError,
-  isActiveProviderType,
-  ProviderType,
-  StreamResponse,
-  UpstreamHttpError,
-  fetchProviderJson,
-  normalizeStreamPayload,
-  resolveStreamRequest,
-} from "@/lib/provider-adapter";
+import { ensureSeriesHydrated } from "@/lib/catalog";
 import { isEpisodeVipLocked } from "@/lib/vip";
+
+export type StreamResponse = {
+  dramaId: string;
+  provider: string;
+  episodeIndex: number;
+  defaultQuality: string | null;
+  qualities: {
+    label: string;
+    url: string;
+    mimeType: "application/x-mpegURL" | "video/mp4";
+  }[];
+  subtitles: {
+    label: string;
+    language: string;
+    url: string;
+  }[];
+};
 
 export class DramaStreamResolutionError extends Error {
   constructor(
@@ -29,36 +37,105 @@ type ResolveDramaStreamInput = {
   vipLockFromEpisode?: number | null;
 };
 
+type StreamQuality = StreamResponse["qualities"][number];
+
+function isLikelyHlsUrl(url: string) {
+  const normalizedUrl = url.toLowerCase();
+
+  return (
+    normalizedUrl.includes(".m3u8") ||
+    normalizedUrl.includes("m3u8") ||
+    normalizedUrl.includes("mpegurl")
+  );
+}
+
+function getStreamQualityLabel(quality: number | null) {
+  return quality ? `${quality}p` : "Auto";
+}
+
+function buildStreamQuality(url: string, quality: number | null): StreamQuality {
+  return {
+    label: getStreamQualityLabel(quality),
+    url: shouldProxyMediaUrl(url) ? buildMediaProxyUrl(url) : url,
+    mimeType: isLikelyHlsUrl(url) ? "application/x-mpegURL" : "video/mp4",
+  };
+}
+
+function buildAutoQuality(quality: StreamQuality): StreamQuality {
+  return {
+    ...quality,
+    label: "Auto",
+  };
+}
+
+function decodeBase64Url(value: string) {
+  return Buffer.from(value, "base64url").toString("utf8");
+}
+
+function encodeBase64Url(value: string) {
+  return Buffer.from(value, "utf8").toString("base64url");
+}
+
+function buildAliplayUrlFromDecodedUrl(url: URL, decodedUrl: string) {
+  const nextUrl = new URL(url.toString());
+  const parts = nextUrl.pathname.split("/");
+  parts[parts.length - 1] = encodeBase64Url(decodedUrl);
+  nextUrl.pathname = parts.join("/");
+  return nextUrl.toString();
+}
+
+function inferAdditionalHlsQualities(sourceUrl: string) {
+  const inferred: StreamQuality[] = [];
+
+  try {
+    const parsedUrl = new URL(sourceUrl);
+    const parts = parsedUrl.pathname.split("/");
+    const encodedUrl = parts.at(-1);
+
+    if (
+      parsedUrl.hostname !== "api.dracinku.site" ||
+      !parsedUrl.pathname.includes("/aliplay/dw-m3u8/") ||
+      !encodedUrl
+    ) {
+      return inferred;
+    }
+
+    const decodedUrl = decodeBase64Url(encodedUrl);
+
+    if (!decodedUrl.includes("akamai-static.shorttv.live") || !decodedUrl.includes("_720/")) {
+      return inferred;
+    }
+
+    inferred.push(
+      buildStreamQuality(
+        buildAliplayUrlFromDecodedUrl(
+          parsedUrl,
+          decodedUrl.replace("_720/", "_480/"),
+        ),
+        480,
+      ),
+    );
+  } catch {
+    return inferred;
+  }
+
+  return inferred;
+}
+
 export async function resolveDramaStreamSources({
   internalDramaId,
   episodeIndex,
   bypassVipLock = false,
   vipLockFromEpisode = null,
 }: ResolveDramaStreamInput) {
-  const drama = await prisma.drama.findUnique({
-    where: { id: internalDramaId },
-    select: {
-      id: true,
-      title: true,
-      providerName: true,
-      providerDramaId: true,
-      episodeCount: true,
-    },
-  });
+  const series = await ensureSeriesHydrated(internalDramaId);
 
-  if (!drama) {
+  if (!series) {
     throw new DramaStreamResolutionError("Drama not found.", 404);
   }
 
   if (!Number.isInteger(episodeIndex) || episodeIndex < 1) {
     throw new DramaStreamResolutionError("Episode index is invalid.", 400);
-  }
-
-  if (episodeIndex > drama.episodeCount) {
-    throw new DramaStreamResolutionError(
-      "Requested episode is out of range.",
-      400,
-    );
   }
 
   if (
@@ -71,71 +148,83 @@ export async function resolveDramaStreamSources({
     );
   }
 
-  const provider = drama.providerName as ProviderType;
+  const episode = series.episodes.find((item) => item.episodeIndex === episodeIndex);
 
-  if (!isActiveProviderType(provider)) {
+  if (!episode) {
     throw new DramaStreamResolutionError(
-      "Provider untuk drama ini sedang dinonaktifkan.",
-      410,
+      "Requested episode is out of range.",
+      400,
     );
   }
 
-  const resolved = await resolveStreamRequest({
-    provider,
-    providerDramaId: drama.providerDramaId,
-    episodeIndex,
-  });
-
-  const streamPayload = await fetchProviderJson(
-    "stream",
-    provider,
-    resolved.streamArgs,
-    { cacheMode: "no-store" },
+  const primaryQuality = buildStreamQuality(
+    episode.videoUrl,
+    episode.quality ?? null,
   );
+  const inferredQualities = inferAdditionalHlsQualities(episode.videoUrl);
+  const manualQualities =
+    series.platformId === "shortmax" && inferredQualities.length > 0
+      ? [...inferredQualities, primaryQuality]
+      : [primaryQuality, ...inferredQualities];
+  const qualities =
+    manualQualities.length > 0
+      ? [buildAutoQuality(manualQualities[0]), ...manualQualities]
+      : [];
+  const subtitleEntries = Array.isArray(episode.subtitles)
+    ? episode.subtitles
+    : [];
 
-  const upstreamPayloadError = getProviderPayloadError(streamPayload);
-
-  if (upstreamPayloadError) {
-    throw new DramaStreamResolutionError(
-      `Upstream stream resolution failed. ${upstreamPayloadError}`,
-      502,
-    );
-  }
-
-  const normalized = normalizeStreamPayload({
-    dramaId: drama.id,
-    provider,
+  const stream: StreamResponse = {
+    dramaId: series.id,
+    provider: series.platformId,
     episodeIndex,
-    payload: streamPayload,
-  });
+    defaultQuality: "Auto",
+    qualities,
+    subtitles: subtitleEntries
+      .map((item) => {
+        if (!item || typeof item !== "object" || Array.isArray(item)) {
+          return null;
+        }
 
-  const proxiedNormalized = {
-    ...normalized,
-    qualities: normalized.qualities.map((quality) => ({
-      ...quality,
-      url: shouldProxyMediaUrl(quality.url)
-        ? buildMediaProxyUrl(quality.url)
-        : quality.url,
-    })),
-    subtitles: normalized.subtitles.map((subtitle) => ({
-      ...subtitle,
-      url: shouldProxyMediaUrl(subtitle.url)
-        ? buildMediaProxyUrl(subtitle.url)
-        : subtitle.url,
-    })),
-  } satisfies StreamResponse;
+        const language = typeof item.language === "string" ? item.language : "unknown";
+        const displayName =
+          typeof item.display_name === "string" ? item.display_name : language;
+        const subtitleUrl =
+          typeof item.subtitle === "string" ? item.subtitle : "";
 
-  if (!proxiedNormalized.qualities.length) {
-    throw new DramaStreamResolutionError(
-      "No playable stream qualities were found.",
-      502,
-    );
-  }
+        return subtitleUrl
+          ? {
+              label: displayName,
+              language,
+              url: shouldProxyMediaUrl(subtitleUrl)
+                ? buildMediaProxyUrl(subtitleUrl)
+                : subtitleUrl,
+            }
+          : null;
+      })
+      .filter(
+        (
+          item,
+        ): item is {
+          label: string;
+          language: string;
+          url: string;
+        } => Boolean(item?.url),
+      ),
+  };
 
   return {
-    drama,
-    stream: proxiedNormalized,
-    streamPayload,
+    drama: await prisma.catalogSeries.findUniqueOrThrow({
+      where: { id: series.id },
+      select: {
+        id: true,
+        title: true,
+        platformId: true,
+        upstreamSeriesId: true,
+        chapterCount: true,
+      },
+    }),
+    stream,
   };
 }
 
@@ -145,26 +234,6 @@ export function toStreamErrorResponse(error: unknown) {
       status: error.status,
       body: {
         error: error.message,
-      },
-    };
-  }
-
-  if (error instanceof RangeError) {
-    return {
-      status: 400,
-      body: {
-        error: error.message,
-      },
-    };
-  }
-
-  if (error instanceof UpstreamHttpError) {
-    return {
-      status: 502,
-      body: {
-        error: "Upstream stream resolution failed.",
-        status: error.status,
-        detail: error.message,
       },
     };
   }

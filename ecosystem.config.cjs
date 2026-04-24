@@ -1,8 +1,27 @@
+const projectRoot = __dirname;
+
 module.exports = {
   apps: [
     {
+      name: "layardrama-web",
+      cwd: projectRoot,
+      script: "node_modules/next/dist/bin/next",
+      args: "start",
+      interpreter: "node",
+      exec_mode: "fork",
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: "700M",
+      time: true,
+      merge_logs: true,
+      env: {
+        NODE_ENV: "production",
+      },
+    },
+    {
       name: "layardrama-ops",
-      cwd: "/root/dramapro",
+      cwd: projectRoot,
       script: "scripts/ops-worker.mjs",
       args: "scheduler",
       interpreter: "node",

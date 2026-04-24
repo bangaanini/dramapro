@@ -55,9 +55,18 @@ export async function GET(request: NextRequest) {
       vipLockFromEpisode,
     });
 
-    return Response.json(resolved.stream);
+    return Response.json(resolved.stream, {
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    });
   } catch (error) {
     const resolvedError = toStreamErrorResponse(error);
-    return Response.json(resolvedError.body, { status: resolvedError.status });
+    return Response.json(resolvedError.body, {
+      status: resolvedError.status,
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    });
   }
 }

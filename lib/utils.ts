@@ -1,11 +1,13 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
-const UNOPTIMIZED_IMAGE_HOSTS = new Set(["awscover.netshort.com"]);
-const PROVIDER_LABELS: Record<string, string> = {
-  goodshort: "GoodShort",
-  dramabox: "DramaBox",
-};
+import { CATALOG_PLATFORM_LABELS } from "@/lib/catalog-upstream";
+
+const UNOPTIMIZED_IMAGE_HOSTS = new Set([
+  "awscover.netshort.com",
+  "hwztchapter.dramaboxdb.com",
+  "hwztvideo.dramaboxdb.com",
+]);
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -38,8 +40,11 @@ export function normalizeDisplayImageUrl(imageUrl: string) {
 
 export function shouldBypassImageOptimization(imageUrl: string) {
   try {
-    return UNOPTIMIZED_IMAGE_HOSTS.has(
-      new URL(normalizeDisplayImageUrl(imageUrl)).hostname,
+    const hostname = new URL(normalizeDisplayImageUrl(imageUrl)).hostname;
+
+    return (
+      UNOPTIMIZED_IMAGE_HOSTS.has(hostname) ||
+      hostname.endsWith(".dramaboxdb.com")
     );
   } catch {
     return false;
@@ -47,5 +52,5 @@ export function shouldBypassImageOptimization(imageUrl: string) {
 }
 
 export function formatProviderName(providerName: string) {
-  return PROVIDER_LABELS[providerName] ?? providerName;
+  return CATALOG_PLATFORM_LABELS[providerName as keyof typeof CATALOG_PLATFORM_LABELS] ?? providerName;
 }

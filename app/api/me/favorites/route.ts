@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 
-import { ACTIVE_PROVIDERS } from "@/lib/provider-adapter";
 import { prisma } from "@/lib/prisma";
 import { getUserFromRequest } from "@/lib/user-auth";
 
@@ -17,13 +16,14 @@ export async function GET(request: NextRequest) {
   const favorites = await prisma.favoriteDrama.findMany({
     where: {
       userId: user.id,
-      drama: {
-        providerName: {
-          in: ACTIVE_PROVIDERS,
+    },
+    include: {
+      series: {
+        include: {
+          platform: true,
         },
       },
     },
-    include: { drama: true },
     orderBy: { createdAt: "desc" },
     take: 120,
   });
@@ -33,11 +33,11 @@ export async function GET(request: NextRequest) {
       id: favorite.id,
       createdAt: favorite.createdAt.toISOString(),
       drama: {
-        id: favorite.drama.id,
-        title: favorite.drama.title,
-        thumbUrl: favorite.drama.thumbUrl,
-        providerName: favorite.drama.providerName,
-        episodeCount: favorite.drama.episodeCount,
+        id: favorite.series.id,
+        title: favorite.series.title,
+        thumbUrl: favorite.series.coverUrl,
+        providerName: favorite.series.platform.name,
+        episodeCount: favorite.series.chapterCount,
       },
     })),
   });
@@ -61,14 +61,14 @@ export async function POST(request: NextRequest) {
 
   const existingFavorite = await prisma.favoriteDrama.findUnique({
     where: {
-      userId_dramaId: {
+      userId_seriesId: {
         userId: user.id,
-        dramaId,
+        seriesId: dramaId,
       },
     },
     select: {
       id: true,
-      dramaId: true,
+      seriesId: true,
     },
   });
 
@@ -89,12 +89,12 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  await prisma.favoriteDrama.create({
-    data: {
-      userId: user.id,
-      dramaId,
-    },
-  });
+    await prisma.favoriteDrama.create({
+      data: {
+        userId: user.id,
+        seriesId: dramaId,
+      },
+    });
 
   revalidatePath("/library");
   revalidatePath("/profile");

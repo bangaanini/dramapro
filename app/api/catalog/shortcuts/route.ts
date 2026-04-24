@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 
-import { getSearchShortcuts } from "@/lib/search-shortcuts";
+import { getCatalogShortcuts } from "@/lib/catalog";
 
 export const runtime = "nodejs";
 
 export async function GET() {
-  const shortcuts = await getSearchShortcuts();
+  const shortcuts = await getCatalogShortcuts();
 
   return NextResponse.json(shortcuts, {
     headers: {

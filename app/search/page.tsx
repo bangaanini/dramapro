@@ -2,6 +2,8 @@ import { SearchPanelContainer } from "@/components/search-panel-container";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 
+export const dynamic = "force-dynamic";
+
 export default function SearchPage() {
   return (
     <main className="route-transition-shell mx-auto min-h-screen w-full max-w-none px-0 py-0">

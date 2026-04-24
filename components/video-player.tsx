@@ -10,8 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
-import videojs from "video.js";
-import type Player from "video.js/dist/types/player";
+import Hls from "hls.js";
 import {
   AlertCircle,
   Bookmark,
@@ -97,7 +96,7 @@ export function VideoPlayer({
   const router = useRouter();
   const playerStageRef = useRef<HTMLDivElement | null>(null);
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
-  const playerRef = useRef<Player | null>(null);
+  const hlsRef = useRef<Hls | null>(null);
   const surfaceGestureRef = useRef<{
     startX: number;
     startY: number;
@@ -115,6 +114,8 @@ export function VideoPlayer({
   const hasAttemptedAutoFullscreenRef = useRef(false);
   const saveEpisodeRequestRef = useRef(false);
   const attemptedSourceUrlsRef = useRef<Set<string>>(new Set());
+  const isMutedRef = useRef(false);
+  const selectedSubtitleRef = useRef("off");
   const initialResumeRef = useRef({
     episodeIndex: initialEpisode,
     positionSeconds: initialPositionSeconds,
@@ -132,6 +133,7 @@ export function VideoPlayer({
   const [selectedSubtitle, setSelectedSubtitle] = useState<string>("off");
   const [stream, setStream] = useState<StreamState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasMounted, setHasMounted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -163,59 +165,65 @@ export function VideoPlayer({
     : null;
 
   useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  useEffect(() => {
     setSavedEpisodeIndices(initialSavedEpisodes);
   }, [initialSavedEpisodes]);
 
   useEffect(() => {
-    if (!videoElementRef.current || playerRef.current) {
+    const video = videoElementRef.current;
+
+    if (!video) {
       return;
     }
 
-    const player = videojs(videoElementRef.current, {
-      autoplay: true,
-      controls: false,
-      fluid: false,
-      loop: false,
-      muted: false,
-      preload: "auto",
-      responsive: true,
-      playsinline: true,
-      userActions: {
-        hotkeys: false,
-      },
-    });
-
-    player.muted(false);
-    player.on("play", () => setIsPlaying(true));
-    player.on("pause", () => setIsPlaying(false));
-    player.on("timeupdate", () => {
-      setCurrentTimeSeconds(player.currentTime() ?? 0);
-    });
-    player.on("loadedmetadata", () => {
-      setDurationSeconds(player.duration() ?? 0);
-      setCurrentTimeSeconds(player.currentTime() ?? 0);
-    });
-    player.on("durationchange", () => {
-      setDurationSeconds(player.duration() ?? 0);
-    });
-    player.on("ended", () => {
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+    const handleTimeUpdate = () => {
+      setCurrentTimeSeconds(video.currentTime || 0);
+    };
+    const handleLoadedMetadata = () => {
+      setDurationSeconds(video.duration || 0);
+      setCurrentTimeSeconds(video.currentTime || 0);
+    };
+    const handleDurationChange = () => {
+      setDurationSeconds(video.duration || 0);
+    };
+    const handleEnded = () => {
       setIsPlaying(false);
-      setCurrentTimeSeconds(player.duration() ?? 0);
+      setCurrentTimeSeconds(video.duration || 0);
       setSelectedEpisode((currentEpisode) =>
         currentEpisode < lastUnlockedEpisode
           ? Math.min(lastUnlockedEpisode, currentEpisode + 1)
           : currentEpisode,
       );
-    });
-    player.on("error", () => {
+    };
+    const handleError = () => {
       void handlePlayerSourceError();
-    });
+    };
 
-    playerRef.current = player;
+    video.muted = false;
+    video.addEventListener("play", handlePlay);
+    video.addEventListener("pause", handlePause);
+    video.addEventListener("timeupdate", handleTimeUpdate);
+    video.addEventListener("loadedmetadata", handleLoadedMetadata);
+    video.addEventListener("durationchange", handleDurationChange);
+    video.addEventListener("ended", handleEnded);
+    video.addEventListener("error", handleError);
 
     return () => {
-      player.dispose();
-      playerRef.current = null;
+      video.removeEventListener("play", handlePlay);
+      video.removeEventListener("pause", handlePause);
+      video.removeEventListener("timeupdate", handleTimeUpdate);
+      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      video.removeEventListener("durationchange", handleDurationChange);
+      video.removeEventListener("ended", handleEnded);
+      video.removeEventListener("error", handleError);
+
+      hlsRef.current?.destroy();
+      hlsRef.current = null;
     };
   }, [episodeCount, lastUnlockedEpisode]);
 
@@ -224,13 +232,18 @@ export function VideoPlayer({
   }, [internalDramaId, selectedEpisode]);
 
   useEffect(() => {
-    const player = playerRef.current;
+    selectedSubtitleRef.current = selectedSubtitle;
+  }, [selectedSubtitle]);
 
-    if (!player) {
+  useEffect(() => {
+    const video = videoElementRef.current;
+    isMutedRef.current = isMuted;
+
+    if (!video) {
       return;
     }
 
-    player.muted(isMuted);
+    video.muted = isMuted;
   }, [isMuted]);
 
   useEffect(() => {
@@ -298,6 +311,10 @@ export function VideoPlayer({
   }, [isChromeVisible, isEpisodeSheetOpen, isPlaying]);
 
   useEffect(() => {
+    if (!hasMounted) {
+      return;
+    }
+
     const controller = new AbortController();
 
     async function loadStream() {
@@ -316,6 +333,7 @@ export function VideoPlayer({
         const response = await fetch(
           `/api/stream?internalDramaId=${encodeURIComponent(internalDramaId)}&episodeIndex=${selectedEpisode}`,
           {
+            cache: "no-store",
             signal: controller.signal,
           },
         );
@@ -333,7 +351,7 @@ export function VideoPlayer({
         const nextStream = payload as StreamState;
         setStream(nextStream);
         setSelectedQuality(nextStream.defaultQuality);
-        setSelectedSubtitle(getPreferredSubtitleLabel(nextStream.subtitles));
+        setSelectedSubtitle("off");
         setIsChromeVisible(true);
         setCurrentTimeSeconds(0);
         setDurationSeconds(0);
@@ -362,15 +380,16 @@ export function VideoPlayer({
     return () => controller.abort();
   }, [
     hasUnlockedEpisodes,
+    hasMounted,
     internalDramaId,
     selectedEpisode,
     selectedEpisodeIsLocked,
   ]);
 
   useEffect(() => {
-    const player = playerRef.current;
+    const video = videoElementRef.current;
 
-    if (!player || !stream) {
+    if (!video || !stream) {
       return;
     }
 
@@ -392,7 +411,7 @@ export function VideoPlayer({
 
     const currentTime =
       lastLoadedEpisodeRef.current === stream.episodeIndex
-        ? player.currentTime() ?? 0
+        ? video.currentTime || 0
         : shouldResumeInitialPosition
           ? initialResumeRef.current.positionSeconds
           : 0;
@@ -405,76 +424,117 @@ export function VideoPlayer({
       };
     }
 
-    player.src({
-      src: selectedSource.url,
-      type: selectedSource.mimeType,
-    });
-
-    player.ready(() => {
-      const existingTracks = player.remoteTextTracks();
-      const trackArrayLike = existingTracks as unknown as ArrayLike<TextTrack>;
-      const tracks = Array.from(
-        { length: existingTracks.length },
-        (_, index) => trackArrayLike[index],
-      ).filter((track): track is TextTrack => Boolean(track));
-
-      for (const track of tracks) {
-        player.removeRemoteTextTrack(track);
+    let hasStartedPlayback = false;
+    let disposed = false;
+    const startPlayback = () => {
+      if (disposed) {
+        return;
       }
 
-      for (const subtitle of stream.subtitles) {
-        player.addRemoteTextTrack(
-          {
-            src: subtitle.url,
-            kind: "subtitles",
-            srclang: subtitle.language || "und",
-            label: subtitle.label,
-            default: subtitle.label === selectedSubtitle,
-          },
-          false,
-        );
+      if (currentTime > 0) {
+        video.currentTime = currentTime;
       }
 
-      player.one("loadedmetadata", () => {
-        if (currentTime > 0) {
-          player.currentTime(currentTime);
-        }
+      video.muted = isMutedRef.current;
+      applySubtitleSelection(video, selectedSubtitleRef.current);
 
-        player.muted(isMuted);
-        applySubtitleSelection(player, selectedSubtitle);
+      if (hasStartedPlayback) {
+        return;
+      }
 
-        const playAttempt = player.play();
+      hasStartedPlayback = true;
+      const playAttempt = video.play();
 
-        if (playAttempt && typeof playAttempt.catch === "function") {
-          void playAttempt.catch(async () => {
-            player.muted(true);
-            setIsMuted(true);
+      if (playAttempt && typeof playAttempt.catch === "function") {
+        void playAttempt.catch(async () => {
+          video.muted = true;
+          setIsMuted(true);
 
-            try {
-              await player.play();
-              setToast({
-                message: "Browser menyalakan autoplay dalam mode mute.",
-                tone: "info",
-              });
-            } catch {
-              // Ignore blocked autoplay.
-            }
-          });
-        }
+          try {
+            await video.play();
+            setToast({
+              message: "Browser menyalakan autoplay dalam mode mute.",
+              tone: "info",
+            });
+          } catch {
+            hasStartedPlayback = false;
+          }
+        });
+      }
 
-        void requestBestEffortFullscreen();
+      void requestBestEffortFullscreen();
+    };
+
+    video.pause();
+    hlsRef.current?.destroy();
+    hlsRef.current = null;
+    video.removeAttribute("src");
+    video.load();
+    clearVideoTrackElements(video);
+
+    for (const subtitle of stream.subtitles) {
+      const track = document.createElement("track");
+      track.src = subtitle.url;
+      track.kind = "subtitles";
+      track.srclang = subtitle.language || "und";
+      track.label = subtitle.label;
+      track.default = false;
+      video.appendChild(track);
+    }
+
+    video.addEventListener("loadedmetadata", startPlayback, { once: true });
+    video.addEventListener("canplay", startPlayback, { once: true });
+
+    if (
+      selectedSource.mimeType === "application/x-mpegURL" &&
+      Hls.isSupported()
+    ) {
+      const hls = new Hls({
+        enableWorker: true,
+        maxBufferLength: 30,
+        backBufferLength: 30,
       });
-    });
-  }, [isMuted, selectedQuality, selectedSubtitle, stream]);
+
+      hlsRef.current = hls;
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+        if (!disposed) {
+          hls.loadSource(selectedSource.url);
+        }
+      });
+      hls.on(Hls.Events.MANIFEST_PARSED, startPlayback);
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (!data.fatal) {
+          return;
+        }
+
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          hls.recoverMediaError();
+          return;
+        }
+
+        void handlePlayerSourceError();
+      });
+    } else {
+      video.src = selectedSource.url;
+      video.load();
+    }
+
+    return () => {
+      disposed = true;
+      video.removeEventListener("loadedmetadata", startPlayback);
+      video.removeEventListener("canplay", startPlayback);
+    };
+  }, [selectedQuality, stream]);
 
   const handlePlayerSourceError = useEffectEvent(async () => {
-    const player = playerRef.current;
+    const video = videoElementRef.current;
 
-    if (!player || !stream) {
+    if (!video || !stream) {
       return;
     }
 
-    const currentSourceUrl = player.currentSrc() ?? "";
+    const currentSourceUrl = video.currentSrc || video.src || "";
     const currentIndex = stream.qualities.findIndex(
       (quality) =>
         quality.url === currentSourceUrl || quality.label === selectedQuality,
@@ -494,7 +554,7 @@ export function VideoPlayer({
       return;
     }
 
-    const playerError = player.error();
+    const playerError = video.error;
     setError(
       playerError?.message ||
         "Media tidak bisa diputar dari semua kualitas yang tersedia.",
@@ -502,13 +562,13 @@ export function VideoPlayer({
   });
 
   useEffect(() => {
-    const player = playerRef.current;
+    const video = videoElementRef.current;
 
-    if (!player || !stream) {
+    if (!video || !stream) {
       return;
     }
 
-    applySubtitleSelection(player, selectedSubtitle);
+    applySubtitleSelection(video, selectedSubtitle);
   }, [selectedSubtitle, stream]);
 
   useEffect(() => {
@@ -536,9 +596,9 @@ export function VideoPlayer({
   );
 
   function togglePlayback() {
-    const player = playerRef.current;
+    const video = videoElementRef.current;
 
-    if (!player || selectedEpisodeIsLocked || !hasUnlockedEpisodes) {
+    if (!video || selectedEpisodeIsLocked || !hasUnlockedEpisodes) {
       if (selectedEpisodeIsLocked || !hasUnlockedEpisodes) {
         setToast({
           message:
@@ -551,8 +611,8 @@ export function VideoPlayer({
 
     setIsChromeVisible(true);
 
-    if (player.paused()) {
-      const playAttempt = player.play();
+    if (video.paused) {
+      const playAttempt = video.play();
 
       if (playAttempt && typeof playAttempt.catch === "function") {
         void playAttempt.catch(() => undefined);
@@ -560,21 +620,21 @@ export function VideoPlayer({
       return;
     }
 
-    player.pause();
+    video.pause();
   }
 
   const persistWatchHistory = useEffectEvent(
     async (positionSecondsOverride?: number) => {
-      const player = playerRef.current;
+      const video = videoElementRef.current;
 
-      if (!player || !internalDramaId) {
+      if (!video || !internalDramaId) {
         return;
       }
 
       const resolvedPosition =
         typeof positionSecondsOverride === "number"
           ? positionSecondsOverride
-          : Math.max(0, Math.floor(player.currentTime() ?? 0));
+          : Math.max(0, Math.floor(video.currentTime || 0));
 
       if (resolvedPosition < 3) {
         return;
@@ -609,38 +669,38 @@ export function VideoPlayer({
   );
 
   function seekBy(seconds: number) {
-    const player = playerRef.current;
+    const video = videoElementRef.current;
 
-    if (!player) {
+    if (!video) {
       return;
     }
 
-    const currentTime = player.currentTime() ?? 0;
-    const duration = player.duration() ?? Number.NaN;
+    const currentTime = video.currentTime || 0;
+    const duration = video.duration || Number.NaN;
     const nextTime = currentTime + seconds;
     const resolvedTime = Number.isFinite(duration)
       ? Math.min(Math.max(0, nextTime), duration)
       : Math.max(0, nextTime);
 
-    player.currentTime(resolvedTime);
+    video.currentTime = resolvedTime;
     setIsChromeVisible(true);
     setCurrentTimeSeconds(resolvedTime);
     setSeekNotice(seconds > 0 ? `+${seconds} detik` : `${seconds} detik`);
   }
 
   function seekTo(seconds: number) {
-    const player = playerRef.current;
+    const video = videoElementRef.current;
 
-    if (!player) {
+    if (!video) {
       return;
     }
 
-    const duration = player.duration() ?? Number.NaN;
+    const duration = video.duration || Number.NaN;
     const resolvedTime = Number.isFinite(duration)
       ? Math.min(Math.max(0, seconds), duration)
       : Math.max(0, seconds);
 
-    player.currentTime(resolvedTime);
+    video.currentTime = resolvedTime;
     setCurrentTimeSeconds(resolvedTime);
     setIsChromeVisible(true);
   }
@@ -716,12 +776,12 @@ export function VideoPlayer({
   async function minimizePlayer() {
     setIsChromeVisible(true);
 
-    const player = playerRef.current;
+    const video = videoElementRef.current;
 
-    if (player && internalDramaId) {
+    if (video && internalDramaId) {
       const resolvedPosition = Math.max(
         0,
-        Math.floor(player.currentTime() ?? currentTimeSeconds),
+        Math.floor(video.currentTime || currentTimeSeconds),
       );
 
       if (resolvedPosition >= 3) {
@@ -745,7 +805,7 @@ export function VideoPlayer({
       void document.exitFullscreen().catch(() => undefined);
     }
 
-    player?.pause();
+    video?.pause();
     router.replace(`/watch/${internalDramaId}`, { scroll: false });
   }
 
@@ -1217,9 +1277,9 @@ export function VideoPlayer({
   }
 
   useEffect(() => {
-    const player = playerRef.current;
+    const video = videoElementRef.current;
 
-    if (!player || isLoading || error) {
+    if (!video || isLoading || error) {
       return;
     }
 
@@ -1257,6 +1317,12 @@ export function VideoPlayer({
     ? Math.max(0, durationSeconds)
     : 0;
   const progressMax = resolvedDurationSeconds > 0 ? resolvedDurationSeconds : 0;
+  const progressDisabled = hasMounted
+    ? isLoading ||
+      selectedEpisodeIsLocked ||
+      !hasUnlockedEpisodes ||
+      progressMax <= 0
+    : undefined;
 
   return (
     <div className={cn("space-y-5", immersive && "space-y-0")}>
@@ -1284,8 +1350,10 @@ export function VideoPlayer({
           >
             <video
               ref={videoElementRef}
-              className="video-js drama-player"
+              className="drama-player-native absolute inset-0 size-full bg-black"
               aria-label={title}
+              playsInline
+              preload="auto"
             />
 
             <button
@@ -1432,12 +1500,7 @@ export function VideoPlayer({
                       onChange={(event) => handleProgressInput(event.target.value)}
                       onPointerUp={(event) => commitProgressInput(event.currentTarget.value)}
                       onTouchEnd={(event) => commitProgressInput(event.currentTarget.value)}
-                      disabled={
-                        isLoading ||
-                        selectedEpisodeIsLocked ||
-                        !hasUnlockedEpisodes ||
-                        progressMax <= 0
-                      }
+                      disabled={progressDisabled}
                       className="h-2 w-full cursor-pointer appearance-none rounded-full bg-white/15 accent-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50"
                     />
                     <div className="flex items-center justify-between text-[11px] tabular-nums text-white/70">
@@ -1694,34 +1757,15 @@ export function VideoPlayer({
   );
 }
 
-function getPreferredSubtitleLabel(subtitles: StreamSubtitle[]) {
-  if (subtitles.length === 0) {
-    return "off";
-  }
-
-  const preferredSubtitle = subtitles.find((subtitle) =>
-    matchesIndonesianSubtitle(subtitle),
-  );
-
-  return preferredSubtitle?.label ?? subtitles[0]?.label ?? "off";
+function clearVideoTrackElements(video: HTMLVideoElement) {
+  video.querySelectorAll("track").forEach((track) => track.remove());
 }
 
-function matchesIndonesianSubtitle(subtitle: StreamSubtitle) {
-  const language = subtitle.language.toLowerCase();
-  const label = subtitle.label.toLowerCase();
-
-  return (
-    language === "id" ||
-    language === "id-id" ||
-    language.includes("indo") ||
-    language.includes("indones") ||
-    label.includes("indo") ||
-    label.includes("indones")
-  );
-}
-
-function applySubtitleSelection(player: Player, selectedSubtitle: string) {
-  const trackList = player.remoteTextTracks();
+function applySubtitleSelection(
+  video: HTMLVideoElement,
+  selectedSubtitle: string,
+) {
+  const trackList = video.textTracks;
   const trackArrayLike = trackList as unknown as ArrayLike<TextTrack>;
   const tracks = Array.from(
     { length: trackList.length },

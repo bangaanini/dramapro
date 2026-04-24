@@ -1,17 +1,25 @@
 "use client";
 
-import {
-  startTransition,
-  useDeferredValue,
-  useEffect,
-  useState,
-} from "react";
+import { startTransition, useDeferredValue, useEffect, useState } from "react";
 import { LoaderCircle, Search, Sparkles } from "lucide-react";
 
 import { DramaCard } from "@/components/drama-card";
 import { Badge } from "@/components/ui/badge";
-
 import { Card, CardContent } from "@/components/ui/card";
+
+type SearchFilter = {
+  id: string;
+  type: string;
+  name: string;
+};
+
+type SearchPanelProps = {
+  filters: SearchFilter[];
+  tags: Array<{
+    value: string;
+    count: number;
+  }>;
+};
 
 type SearchResult = {
   id: string;
@@ -20,6 +28,8 @@ type SearchResult = {
   providerName: string;
   episodeCount: number;
   tags: string[];
+  description: string;
+  playCount: string;
 };
 
 type SearchResponse = {
@@ -31,13 +41,13 @@ type SearchResponse = {
 const DEFAULT_EMPTY_RESPONSE: SearchResponse = {
   results: [],
   total: 0,
-  minimumQueryLength: 3,
+  minimumQueryLength: 2,
 };
 
-export function SearchPanel() {
+export function SearchPanel({ filters, tags }: SearchPanelProps) {
   const [query, setQuery] = useState("");
-  const [selectedProvider] = useState<string | null>(null);
-  const [selectedTag] = useState<string | null>(null);
+  const [selectedTabId, setSelectedTabId] = useState<string | null>(null);
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [results, setResults] = useState<SearchResponse>(DEFAULT_EMPTY_RESPONSE);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +55,7 @@ export function SearchPanel() {
   const deferredQuery = useDeferredValue(query.trim());
   const canSearch =
     deferredQuery.length >= DEFAULT_EMPTY_RESPONSE.minimumQueryLength ||
-    Boolean(selectedProvider) ||
+    Boolean(selectedTabId) ||
     Boolean(selectedTag);
 
   useEffect(() => {
@@ -63,8 +73,8 @@ export function SearchPanel() {
       searchParams.set("q", deferredQuery);
     }
 
-    if (selectedProvider) {
-      searchParams.set("provider", selectedProvider);
+    if (selectedTabId) {
+      searchParams.set("tabId", selectedTabId);
     }
 
     if (selectedTag) {
@@ -89,11 +99,7 @@ export function SearchPanel() {
         }
 
         startTransition(() => {
-          setResults({
-            results: payload.results,
-            total: payload.total,
-            minimumQueryLength: payload.minimumQueryLength,
-          });
+          setResults(payload);
         });
       } catch (searchError) {
         if (controller.signal.aborted) {
@@ -116,35 +122,97 @@ export function SearchPanel() {
     void runSearch();
 
     return () => controller.abort();
-  }, [canSearch, deferredQuery, selectedProvider, selectedTag]);
+  }, [canSearch, deferredQuery, selectedTabId, selectedTag]);
+
+  const groupedFilters = filters.reduce<Record<string, SearchFilter[]>>((acc, filter) => {
+    acc[filter.type] ??= [];
+    acc[filter.type].push(filter);
+    return acc;
+  }, {});
 
   return (
     <section id="search" className="mt-4 scroll-mt-24 sm:mt-5">
       <Card className="glass-panel overflow-hidden rounded-[2rem] border-white/10">
         <CardContent className="space-y-6 p-6 sm:p-7">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-2">
-              <div>
-                <h2 className="text-2xl font-semibold text-white">
-                  Cari drama favoritmu
-                </h2>
-              </div>
-            </div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-semibold text-white">
+              Cari judul dari katalog lokal
+            </h2>
+            <p className="text-sm text-[var(--muted)]">
+              Gabungkan keyword, filter tab, dan tag yang sudah tersimpan dari API baru.
+            </p>
           </div>
 
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-white">Keyword</span>
+            <div className="flex items-center gap-3 rounded-[1.4rem] border border-white/10 bg-black/20 px-4 py-3">
+              <Search className="size-4 text-[var(--muted-foreground)]" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Contoh: cinta, CEO, mafia"
+                className="w-full bg-transparent text-sm text-white outline-none placeholder:text-[var(--muted-foreground)]"
+              />
+            </div>
+          </label>
+
           <div className="space-y-4">
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-white">Keyword</span>
-              <div className="flex items-center gap-3 rounded-[1.4rem] border border-white/10 bg-black/20 px-4 py-3">
-                <Search className="size-4 text-[var(--muted-foreground)]" />
-                <input
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Contoh: CEO"
-                  className="w-full bg-transparent text-sm text-white outline-none placeholder:text-[var(--muted-foreground)]"
-                />
+            {Object.entries(groupedFilters).map(([type, items]) => (
+              <div key={type} className="space-y-2">
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">
+                  {type}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {items.slice(0, 12).map((filter) => {
+                    const active = selectedTabId === filter.id;
+                    return (
+                      <button
+                        key={filter.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedTabId(active ? null : filter.id);
+                        }}
+                        className={
+                          active
+                            ? "rounded-full border border-accent/30 bg-accent px-4 py-2 text-sm font-medium text-white"
+                            : "rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 transition hover:border-white/20 hover:bg-white/8"
+                        }
+                      >
+                        {filter.name}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </label>
+            ))}
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">
+              Tag populer
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {tags.slice(0, 12).map((tag) => {
+                const active = selectedTag === tag.value;
+                return (
+                  <button
+                    key={tag.value}
+                    type="button"
+                    onClick={() => {
+                      setSelectedTag(active ? null : tag.value);
+                    }}
+                    className={
+                      active
+                        ? "rounded-full border border-accent/30 bg-accent px-4 py-2 text-sm font-medium text-white"
+                        : "rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 transition hover:border-white/20 hover:bg-white/8"
+                    }
+                  >
+                    #{tag.value}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           <div className="rounded-[1.5rem] border border-white/10 bg-black/18 p-4">
             {!canSearch ? (
@@ -152,6 +220,9 @@ export function SearchPanel() {
                 <div className="rounded-full border border-white/10 bg-white/5 p-3">
                   <Sparkles className="size-6 text-accent" />
                 </div>
+                <p className="max-w-md text-sm text-[var(--muted)]">
+                  Mulai dengan keyword atau pilih filter tab untuk menjelajah katalog.
+                </p>
               </div>
             ) : isLoading ? (
               <div className="flex min-h-36 items-center justify-center gap-3 text-sm text-white">
@@ -168,19 +239,17 @@ export function SearchPanel() {
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex flex-wrap gap-2">
-                    {selectedProvider ? (
-                      <Badge className="border-white/10 bg-black/35 text-white">
-                        Filter sumber aktif
-                      </Badge>
-                    ) : null}
-                    {selectedTag ? (
-                      <Badge className="border-white/10 bg-black/35 text-white">
-                        Tag: #{selectedTag}
-                      </Badge>
-                    ) : null}
-                  </div>
+                <div className="flex flex-wrap gap-2">
+                  {selectedTabId ? (
+                    <Badge className="border-white/10 bg-black/35 text-white">
+                      Filter tab aktif
+                    </Badge>
+                  ) : null}
+                  {selectedTag ? (
+                    <Badge className="border-white/10 bg-black/35 text-white">
+                      Tag: #{selectedTag}
+                    </Badge>
+                  ) : null}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
@@ -192,24 +261,13 @@ export function SearchPanel() {
                       thumbUrl={drama.thumbUrl}
                       providerName={drama.providerName}
                       episodeCount={drama.episodeCount}
-                      extraMeta={
-                        drama.tags.length > 0
-                          ? drama.tags.slice(0, 2).join(" • ")
-                          : null
-                      }
+                      extraMeta={drama.tags.slice(0, 2).join(" • ") || drama.playCount}
                     />
                   ))}
                 </div>
               </div>
             )}
           </div>
-
-
-
-
-          </div>
-
-
         </CardContent>
       </Card>
     </section>

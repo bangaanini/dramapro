@@ -24,9 +24,9 @@ export async function toggleFavoriteDramaAction(formData: FormData) {
 
   const existingFavorite = await prisma.favoriteDrama.findUnique({
     where: {
-      userId_dramaId: {
+      userId_seriesId: {
         userId: user.id,
-        dramaId,
+        seriesId: dramaId,
       },
     },
     select: { id: true },
@@ -40,7 +40,7 @@ export async function toggleFavoriteDramaAction(formData: FormData) {
     await prisma.favoriteDrama.create({
       data: {
         userId: user.id,
-        dramaId,
+        seriesId: dramaId,
       },
     });
   }

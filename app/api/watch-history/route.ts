@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const drama = await prisma.drama.findUnique({
+  const drama = await prisma.catalogSeries.findUnique({
     where: { id: internalDramaId },
     select: { id: true },
   });
@@ -59,14 +59,14 @@ export async function POST(request: NextRequest) {
 
   await prisma.watchHistory.upsert({
     where: {
-      userId_dramaId: {
+      userId_seriesId: {
         userId: user.id,
-        dramaId: drama.id,
+        seriesId: drama.id,
       },
     },
     create: {
       userId: user.id,
-      dramaId: drama.id,
+      seriesId: drama.id,
       episodeIndex,
       lastPositionSeconds: Math.max(0, lastPositionSeconds),
       watchedAt: new Date(),

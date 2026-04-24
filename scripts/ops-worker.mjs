@@ -12,6 +12,7 @@ const DEFAULT_SOURCES = ["home", "new", "popular"];
 const SUCCESS_ICON = "[ok]";
 const ERROR_ICON = "[error]";
 const INFO_ICON = "[info]";
+const CATALOG_SYNC_READY_BACKOFF_MS = 15_000;
 
 function loadEnvFile(fileName) {
   const filePath = resolve(process.cwd(), fileName);
@@ -129,6 +130,13 @@ function createConfig() {
   return {
     baseUrl: baseUrl.replace(/\/+$/u, ""),
     secret,
+    catalogSyncRunnerId:
+      parseOptionalString(process.env.WORKER_CATALOG_SYNC_RUNNER_ID) ||
+      `catalog-sync:${process.env.HOSTNAME || "worker"}:${process.pid}:${Date.now().toString(36)}`,
+    catalogSyncIntervalMs: parsePositiveInt(
+      process.env.WORKER_CATALOG_SYNC_INTERVAL_MS,
+      3000,
+    ),
     providers: intersectCsv(workerProviders, activeProviders),
     sources: parseCsv(process.env.WORKER_SOURCES, DEFAULT_SOURCES),
     pages: parsePositiveInt(process.env.WORKER_SYNC_PAGES, 2),
@@ -180,6 +188,18 @@ function logSuccess(message) {
 
 function logError(message) {
   console.error(`${ERROR_ICON} ${nowStamp()} ${message}`);
+}
+
+function trimErrorMessage(value, maxLength = 240) {
+  const normalized = String(value ?? "")
+    .replace(/\s+/gu, " ")
+    .trim();
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxLength - 1)}…`;
 }
 
 function formatDuration(startedAt) {
@@ -278,11 +298,13 @@ async function requestJson(config, path, init = {}) {
 
     if (!response.ok) {
       throw new Error(
-        payload?.error ||
-          payload?.detail ||
-          payload?.message ||
-          payload?.raw ||
-          `HTTP ${response.status} ${response.statusText}`.trim(),
+        trimErrorMessage(
+          payload?.error ||
+            payload?.detail ||
+            payload?.message ||
+            payload?.raw ||
+            `HTTP ${response.status} ${response.statusText}`.trim(),
+        ),
       );
     }
 
@@ -295,6 +317,35 @@ async function requestJson(config, path, init = {}) {
     throw error;
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+async function waitForCatalogSyncEndpoint(config) {
+  let hasLoggedWaiting = false;
+
+  while (true) {
+    try {
+      await requestJson(config, "/api/admin/catalog-sync", {
+        headers: {
+          accept: "application/json",
+        },
+      });
+      return;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unexpected error";
+
+      if (!hasLoggedWaiting) {
+        logInfo(
+          `Menunggu endpoint catalog sync siap: ${trimErrorMessage(message, 160)}.`,
+        );
+        hasLoggedWaiting = true;
+      }
+
+      await new Promise((resolve) => {
+        setTimeout(resolve, CATALOG_SYNC_READY_BACKOFF_MS);
+      });
+    }
   }
 }
 
@@ -516,6 +567,73 @@ async function runAuditOnce(config) {
   };
 }
 
+function createCatalogSyncLogger() {
+  let lastSignature = null;
+
+  return function logCatalogSyncState(syncJob) {
+    if (!syncJob) {
+      if (lastSignature !== "idle") {
+        logInfo("Catalog sync idle. Tidak ada job aktif.");
+        lastSignature = "idle";
+      }
+      return;
+    }
+
+    const signature = [
+      syncJob.id,
+      syncJob.status,
+      syncJob.phase,
+      syncJob.currentPlatformId || "",
+      syncJob.currentTabName || "",
+      syncJob.lastMessage || "",
+      syncJob.updatedAt || "",
+    ].join("|");
+
+    if (signature === lastSignature) {
+      return;
+    }
+
+    const scope = [
+      syncJob.currentPlatformId,
+      syncJob.currentTabName,
+    ]
+      .filter(Boolean)
+      .join(" / ");
+    const prefix = scope ? `${scope}: ` : "";
+
+    if (syncJob.status === "failed") {
+      logError(`Catalog sync ${prefix}${syncJob.lastMessage || "job gagal."}`);
+    } else if (
+      syncJob.status === "completed" ||
+      syncJob.status === "cancelled"
+    ) {
+      logSuccess(`Catalog sync ${prefix}${syncJob.lastMessage || syncJob.status}.`);
+    } else {
+      logInfo(
+        `Catalog sync ${prefix}${syncJob.lastMessage || syncJob.status} (${syncJob.progressPercent ?? 0}%).`,
+      );
+    }
+
+    lastSignature = signature;
+  };
+}
+
+const logCatalogSyncState = createCatalogSyncLogger();
+
+async function runCatalogSyncStepOnce(config) {
+  const payload = await requestJson(config, "/api/admin/catalog-sync", {
+    method: "POST",
+    body: JSON.stringify({
+      mode: "run-sync-all-step",
+      runnerId: config.catalogSyncRunnerId,
+    }),
+  });
+
+  const syncJob = payload?.syncJob ?? null;
+  logCatalogSyncState(syncJob);
+  return syncJob;
+}
+
 function createLoopRunner(name, intervalMs, task) {
   let running = false;
   let timer = null;
@@ -575,7 +693,7 @@ function createExclusiveJobRunner() {
 
 async function runScheduler(config) {
   logInfo(
-    `Scheduler aktif. sync=${config.syncIntervalMinutes}m, audit=${config.auditIntervalMinutes}m, auditDelay=${config.auditInitialDelayMinutes}m.`,
+    `Scheduler aktif. sync=${config.syncIntervalMinutes}m, audit=${config.auditIntervalMinutes}m, auditDelay=${config.auditInitialDelayMinutes}m, catalogSync=${config.catalogSyncIntervalMs}ms.`,
   );
 
   const runExclusive = createExclusiveJobRunner();
@@ -598,8 +716,21 @@ async function runScheduler(config) {
     config.auditIntervalMinutes * 60 * 1000,
     () => runExclusive("audit", () => runAuditOnce(config)),
   );
+  const catalogSyncLoop = createLoopRunner(
+    "catalog-sync",
+    config.catalogSyncIntervalMs,
+    () => runExclusive("catalog-sync", () => runCatalogSyncStepOnce(config)),
+  );
 
+  try {
+    await runExclusive("catalog-sync", () => runCatalogSyncStepOnce(config));
+  } catch (error) {
+    logError(
+      `Catalog sync startup gagal: ${error instanceof Error ? error.message : "Unexpected error"}.`,
+    );
+  }
   syncLoop.start();
+  catalogSyncLoop.start();
   setTimeout(() => {
     auditLoop.start();
   }, config.auditInitialDelayMinutes * 60 * 1000);
@@ -608,6 +739,39 @@ async function runScheduler(config) {
     logInfo(`Menerima ${signal}, menghentikan scheduler worker.`);
     syncLoop.stop();
     auditLoop.stop();
+    catalogSyncLoop.stop();
+    process.exit(0);
+  };
+
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+}
+
+async function runCatalogSyncLoop(config) {
+  logInfo(
+    `Catalog sync worker aktif. interval=${config.catalogSyncIntervalMs}ms runner=${config.catalogSyncRunnerId}.`,
+  );
+  await waitForCatalogSyncEndpoint(config);
+  logSuccess("Endpoint catalog sync siap. Worker mulai polling job.");
+
+  const catalogSyncLoop = createLoopRunner(
+    "catalog-sync",
+    config.catalogSyncIntervalMs,
+    () => runCatalogSyncStepOnce(config),
+  );
+
+  try {
+    await runCatalogSyncStepOnce(config);
+  } catch (error) {
+    logError(
+      `Catalog sync startup gagal: ${error instanceof Error ? error.message : "Unexpected error"}.`,
+    );
+  }
+  catalogSyncLoop.start();
+
+  const shutdown = (signal) => {
+    logInfo(`Menerima ${signal}, menghentikan catalog sync worker.`);
+    catalogSyncLoop.stop();
     process.exit(0);
   };
 
@@ -636,13 +800,25 @@ async function main() {
     return;
   }
 
+  if (command === "catalog-sync" || command === "catalog-sync-worker") {
+    await runCatalogSyncLoop(config);
+    return;
+  }
+
+  if (command === "catalog-sync-once") {
+    await runCatalogSyncStepOnce(config);
+    return;
+  }
+
   if (command === "scheduler") {
     await runScheduler(config);
     return;
   }
 
   console.log(`Unknown command: ${command}`);
-  console.log("Available commands: scheduler, sync, audit, refresh");
+  console.log(
+    "Available commands: scheduler, sync, audit, refresh, catalog-sync, catalog-sync-once",
+  );
   process.exitCode = 1;
 }
 

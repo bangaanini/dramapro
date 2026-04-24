@@ -1,6 +1,16 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  async rewrites() {
+    return {
+      beforeFiles: [
+        {
+          source: "/watch/:id/play",
+          destination: "/watch-player/:id",
+        },
+      ],
+    };
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "p19-novel-sg.ibyteimg.com" },
@@ -16,6 +26,11 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "hwztchapter.dramaboxdb.com" },
       { protocol: "https", hostname: "hwztvideo.dramaboxdb.com" },
       { protocol: "https", hostname: "cdn.dramadash.app" },
+      { protocol: "https", hostname: "ccdn.dramahub.me" },
+      { protocol: "https", hostname: "volcengine-forward.shorttv.live" },
+      { protocol: "https", hostname: "akamai-static.shorttv.live" },
+      { protocol: "https", hostname: "pbcdnw.aoneroom.com" },
+      { protocol: "https", hostname: "api.dracinku.site" },
     ],
   },
 };

@@ -1,8 +1,9 @@
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@/app/generated/prisma/client";
+import { Prisma, PrismaClient } from "@/app/generated/prisma/client";
 
 const globalForPrisma = globalThis as typeof globalThis & {
   prisma?: PrismaClient;
+  prismaSchemaSignature?: string;
 };
 
 const connectionString = process.env.DATABASE_URL;
@@ -15,12 +16,30 @@ const adapter = new PrismaPg({
   connectionString,
 });
 
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
+const prismaSchemaSignature = Object.keys(
+  Prisma.CatalogSeriesScalarFieldEnum,
+).join("|");
+
+function createPrismaClient() {
+  return new PrismaClient({
     adapter,
   });
+}
+
+const shouldReusePrisma =
+  globalForPrisma.prisma &&
+  globalForPrisma.prismaSchemaSignature === prismaSchemaSignature;
+
+if (globalForPrisma.prisma && !shouldReusePrisma) {
+  void globalForPrisma.prisma.$disconnect().catch(() => undefined);
+  globalForPrisma.prisma = undefined;
+}
+
+export const prisma: PrismaClient = shouldReusePrisma
+  ? (globalForPrisma.prisma as PrismaClient)
+  : createPrismaClient();
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
+  globalForPrisma.prismaSchemaSignature = prismaSchemaSignature;
 }

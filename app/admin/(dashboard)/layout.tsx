@@ -4,23 +4,56 @@ import { redirect } from "next/navigation";
 import { AdminSidebar } from "@/components/admin-sidebar";
 import { getCurrentAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { isPrismaDatabaseConnectionError } from "@/lib/prisma-errors";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminDashboardLayout({
   children,
 }: LayoutProps<"/admin">) {
-  const [admin, pendingAffiliateWithdrawals] = await Promise.all([
-    getCurrentAdmin(),
-    prisma.affiliateWithdrawal.count({
-      where: {
-        status: "pending",
-      },
-    }),
-  ]);
+  let admin: Awaited<ReturnType<typeof getCurrentAdmin>> = null;
+
+  try {
+    admin = await getCurrentAdmin();
+  } catch (error) {
+    if (!isPrismaDatabaseConnectionError(error)) {
+      throw error;
+    }
+
+    return (
+      <main className="mx-auto flex min-h-screen w-full max-w-none items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
+        <section className="glass-panel w-full max-w-xl rounded-[2rem] border border-red-400/20 p-6">
+          <p className="text-xs uppercase tracking-[0.18em] text-red-200/80">
+            Database offline
+          </p>
+          <h1 className="mt-3 text-2xl font-semibold text-white">
+            Dashboard admin belum bisa dimuat
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
+            Server aplikasi berhasil hidup, tetapi koneksi ke database Supabase
+            sedang gagal. Coba lagi setelah koneksi database pulih.
+          </p>
+        </section>
+      </main>
+    );
+  }
 
   if (!admin) {
     redirect("/admin/login");
+  }
+
+  let pendingAffiliateWithdrawals = 0;
+
+  try {
+    pendingAffiliateWithdrawals = await prisma.affiliateWithdrawal.count({
+      where: {
+        status: "pending",
+      },
+    });
+  } catch (error) {
+    if (!isPrismaDatabaseConnectionError(error)) {
+      throw error;
+    }
   }
 
   return (
