@@ -140,6 +140,7 @@ export function VideoPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isChromeVisible, setIsChromeVisible] = useState(true);
   const [isEpisodeSheetOpen, setIsEpisodeSheetOpen] = useState(false);
+  const [isSubtitleSheetOpen, setIsSubtitleSheetOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [savedEpisodeIndices, setSavedEpisodeIndices] = useState(initialSavedEpisodes);
   const [isSavePending, setIsSavePending] = useState(false);
@@ -248,7 +249,7 @@ export function VideoPlayer({
   }, [isMuted]);
 
   useEffect(() => {
-    if (!isEpisodeSheetOpen && !isFullscreen) {
+    if (!isEpisodeSheetOpen && !isSubtitleSheetOpen && !isFullscreen) {
       return;
     }
 
@@ -258,7 +259,7 @@ export function VideoPlayer({
     return () => {
       document.body.style.overflow = overflow;
     };
-  }, [isEpisodeSheetOpen, isFullscreen]);
+  }, [isEpisodeSheetOpen, isSubtitleSheetOpen, isFullscreen]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -1435,6 +1436,38 @@ export function VideoPlayer({
                 icon={<ListVideo className="size-4" />}
               />
               <PlayerAction
+                label={
+                  selectedSubtitle === "off"
+                    ? "Subtitle"
+                    : `Sub: ${selectedSubtitle}`
+                }
+                onClick={() => {
+                  setIsChromeVisible(true);
+
+                  if (selectedEpisodeIsLocked || !hasUnlockedEpisodes) {
+                    setToast({
+                      message:
+                        "Subtitle akan tersedia setelah episode bisa diputar.",
+                      tone: "info",
+                    });
+                    return;
+                  }
+
+                  if (subtitleOptions.length === 0) {
+                    setToast({
+                      message: "Episode ini tidak menyediakan subtitle terpisah.",
+                      tone: "info",
+                    });
+                    return;
+                  }
+
+                  setIsSubtitleSheetOpen(true);
+                }}
+                hapticStyle="selection"
+                active={selectedSubtitle !== "off"}
+                icon={<Captions className="size-4" />}
+              />
+              <PlayerAction
                 label={immersive ? "Perkecil" : isFullscreen ? "Keluar" : "Fullscreen"}
                 onClick={() => {
                   if (immersive) {
@@ -1629,6 +1662,67 @@ export function VideoPlayer({
                 </div>
                 <div className="grid max-h-[55vh] grid-cols-4 gap-2 overflow-y-auto pr-1 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:grid-cols-5">
                   {renderEpisodeButtons(() => setIsEpisodeSheetOpen(false))}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {isSubtitleSheetOpen ? (
+          <div className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm">
+            <button
+              type="button"
+              onClick={() => setIsSubtitleSheetOpen(false)}
+              className="absolute inset-0"
+              aria-label="Close subtitle picker"
+            />
+            <div className="absolute inset-x-0 bottom-0 rounded-t-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(46,33,43,0.96),rgba(22,16,20,0.98))] p-5 shadow-[0_-24px_60px_rgba(0,0,0,0.4)]">
+              <div className="mx-auto mb-4 h-1.5 w-20 rounded-full bg-white/25" />
+              <div className="mx-auto w-full max-w-[460px] space-y-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+                <div className="text-center">
+                  <h3 className="text-2xl font-semibold text-white">Pilih Subtitle</h3>
+                  <p className="mt-2 text-sm text-[var(--muted)]">
+                    Pilih subtitle terpisah yang ingin ditampilkan.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerSelectionHaptic();
+                      setSelectedSubtitle("off");
+                      setIsSubtitleSheetOpen(false);
+                    }}
+                    className={cn(
+                      "rounded-full border px-4 py-2 text-sm font-medium transition",
+                      selectedSubtitle === "off"
+                        ? "border-accent/35 bg-accent text-white"
+                        : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:text-white",
+                    )}
+                  >
+                    Off
+                  </button>
+
+                  {subtitleOptions.map((subtitle) => (
+                    <button
+                      key={`${subtitle.label}-${subtitle.language}-${subtitle.url}-sheet`}
+                      type="button"
+                      onClick={() => {
+                        triggerSelectionHaptic();
+                        setSelectedSubtitle(subtitle.label);
+                        setIsSubtitleSheetOpen(false);
+                      }}
+                      className={cn(
+                        "rounded-full border px-4 py-2 text-sm font-medium transition",
+                        selectedSubtitle === subtitle.label
+                          ? "border-accent/35 bg-accent text-white"
+                          : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:text-white",
+                      )}
+                    >
+                      {subtitle.label}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>

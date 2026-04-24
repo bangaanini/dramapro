@@ -1,3 +1,4 @@
+import { Prisma } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   buildDramaShareStartParam,
@@ -232,41 +233,59 @@ export async function listRecentDramaChannelBroadcasts(input?: {
   ownerUserId?: string;
   partnerBotId?: string;
 }) {
-  const rows = await prisma.dramaChannelBroadcast.findMany({
-    where: {
-      ...(input?.botKind ? { botKind: input.botKind } : {}),
-      ...(input?.ownerUserId ? { ownerUserId: input.ownerUserId } : {}),
-      ...(input?.partnerBotId ? { partnerBotId: input.partnerBotId } : {}),
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-    select: {
-      botUsername: true,
-      buttonLabel: true,
-      channelUsername: true,
-      createdAt: true,
-      series: {
-        select: {
-          id: true,
-          coverUrl: true,
-          title: true,
-        },
-      },
-      id: true,
-      pinned: true,
-      postedAt: true,
-      telegramMessageId: true,
-    },
-    take: input?.limit ?? 8,
-  });
+  const limit = input?.limit ?? 8;
+
+  const rows = await prisma.$queryRaw<
+    Array<{
+      id: string;
+      botUsername: string;
+      buttonLabel: string;
+      channelUsername: string;
+      createdAt: Date;
+      pinned: boolean;
+      postedAt: Date | null;
+      telegramMessageId: number | null;
+      dramaId: string;
+      dramaThumbUrl: string;
+      dramaTitle: string;
+    }>
+  >(Prisma.sql`
+    SELECT
+      b.id,
+      b."botUsername",
+      b."buttonLabel",
+      b."channelUsername",
+      b."createdAt",
+      b.pinned,
+      b."postedAt",
+      b."telegramMessageId",
+      s.id AS "dramaId",
+      s."coverUrl" AS "dramaThumbUrl",
+      s.title AS "dramaTitle"
+    FROM "DramaChannelBroadcast" b
+    INNER JOIN "CatalogSeries" s
+      ON s.id = b."seriesId"
+    WHERE 1 = 1
+      ${input?.botKind ? Prisma.sql`AND b."botKind" = ${input.botKind}` : Prisma.empty}
+      ${input?.ownerUserId ? Prisma.sql`AND b."ownerUserId" = ${input.ownerUserId}` : Prisma.empty}
+      ${input?.partnerBotId ? Prisma.sql`AND b."partnerBotId" = ${input.partnerBotId}` : Prisma.empty}
+    ORDER BY b."createdAt" DESC
+    LIMIT ${limit}
+  `);
 
   return rows.map((row) => ({
-    ...row,
+    id: row.id,
+    botUsername: row.botUsername,
+    buttonLabel: row.buttonLabel,
+    channelUsername: row.channelUsername,
+    createdAt: row.createdAt,
+    pinned: row.pinned,
+    postedAt: row.postedAt,
+    telegramMessageId: row.telegramMessageId,
     drama: {
-      id: row.series.id,
-      thumbUrl: row.series.coverUrl,
-      title: row.series.title,
+      id: row.dramaId,
+      thumbUrl: row.dramaThumbUrl,
+      title: row.dramaTitle,
     },
   }));
 }

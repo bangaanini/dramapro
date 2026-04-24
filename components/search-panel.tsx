@@ -4,22 +4,7 @@ import { startTransition, useDeferredValue, useEffect, useState } from "react";
 import { LoaderCircle, Search, Sparkles } from "lucide-react";
 
 import { DramaCard } from "@/components/drama-card";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-
-type SearchFilter = {
-  id: string;
-  type: string;
-  name: string;
-};
-
-type SearchPanelProps = {
-  filters: SearchFilter[];
-  tags: Array<{
-    value: string;
-    count: number;
-  }>;
-};
 
 type SearchResult = {
   id: string;
@@ -44,19 +29,15 @@ const DEFAULT_EMPTY_RESPONSE: SearchResponse = {
   minimumQueryLength: 2,
 };
 
-export function SearchPanel({ filters, tags }: SearchPanelProps) {
+export function SearchPanel() {
   const [query, setQuery] = useState("");
-  const [selectedTabId, setSelectedTabId] = useState<string | null>(null);
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [results, setResults] = useState<SearchResponse>(DEFAULT_EMPTY_RESPONSE);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const deferredQuery = useDeferredValue(query.trim());
   const canSearch =
-    deferredQuery.length >= DEFAULT_EMPTY_RESPONSE.minimumQueryLength ||
-    Boolean(selectedTabId) ||
-    Boolean(selectedTag);
+    deferredQuery.length >= DEFAULT_EMPTY_RESPONSE.minimumQueryLength;
 
   useEffect(() => {
     if (!canSearch) {
@@ -71,14 +52,6 @@ export function SearchPanel({ filters, tags }: SearchPanelProps) {
 
     if (deferredQuery.length >= DEFAULT_EMPTY_RESPONSE.minimumQueryLength) {
       searchParams.set("q", deferredQuery);
-    }
-
-    if (selectedTabId) {
-      searchParams.set("tabId", selectedTabId);
-    }
-
-    if (selectedTag) {
-      searchParams.set("tag", selectedTag);
     }
 
     searchParams.set("limit", "18");
@@ -122,29 +95,23 @@ export function SearchPanel({ filters, tags }: SearchPanelProps) {
     void runSearch();
 
     return () => controller.abort();
-  }, [canSearch, deferredQuery, selectedTabId, selectedTag]);
-
-  const groupedFilters = filters.reduce<Record<string, SearchFilter[]>>((acc, filter) => {
-    acc[filter.type] ??= [];
-    acc[filter.type].push(filter);
-    return acc;
-  }, {});
+  }, [canSearch, deferredQuery]);
 
   return (
     <section id="search" className="mt-4 scroll-mt-24 sm:mt-5">
       <Card className="glass-panel overflow-hidden rounded-[2rem] border-white/10">
-        <CardContent className="space-y-6 p-6 sm:p-7">
+        <CardContent className="space-y-5 p-6 sm:p-7">
           <div className="space-y-2">
             <h2 className="text-2xl font-semibold text-white">
-              Cari judul dari katalog lokal
+              Cari judul drama
             </h2>
             <p className="text-sm text-[var(--muted)]">
-              Gabungkan keyword, filter tab, dan tag yang sudah tersimpan dari API baru.
+              Temukan Drama Favoritmu
             </p>
           </div>
 
           <label className="block space-y-2">
-            <span className="text-sm font-medium text-white">Keyword</span>
+            <span className="text-sm font-medium text-white">Pencarian</span>
             <div className="flex items-center gap-3 rounded-[1.4rem] border border-white/10 bg-black/20 px-4 py-3">
               <Search className="size-4 text-[var(--muted-foreground)]" />
               <input
@@ -156,64 +123,6 @@ export function SearchPanel({ filters, tags }: SearchPanelProps) {
             </div>
           </label>
 
-          <div className="space-y-4">
-            {Object.entries(groupedFilters).map(([type, items]) => (
-              <div key={type} className="space-y-2">
-                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">
-                  {type}
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {items.slice(0, 12).map((filter) => {
-                    const active = selectedTabId === filter.id;
-                    return (
-                      <button
-                        key={filter.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedTabId(active ? null : filter.id);
-                        }}
-                        className={
-                          active
-                            ? "rounded-full border border-accent/30 bg-accent px-4 py-2 text-sm font-medium text-white"
-                            : "rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 transition hover:border-white/20 hover:bg-white/8"
-                        }
-                      >
-                        {filter.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="space-y-2">
-            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">
-              Tag populer
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {tags.slice(0, 12).map((tag) => {
-                const active = selectedTag === tag.value;
-                return (
-                  <button
-                    key={tag.value}
-                    type="button"
-                    onClick={() => {
-                      setSelectedTag(active ? null : tag.value);
-                    }}
-                    className={
-                      active
-                        ? "rounded-full border border-accent/30 bg-accent px-4 py-2 text-sm font-medium text-white"
-                        : "rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 transition hover:border-white/20 hover:bg-white/8"
-                    }
-                  >
-                    #{tag.value}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
           <div className="rounded-[1.5rem] border border-white/10 bg-black/18 p-4">
             {!canSearch ? (
               <div className="flex min-h-36 flex-col items-center justify-center gap-3 text-center">
@@ -221,7 +130,7 @@ export function SearchPanel({ filters, tags }: SearchPanelProps) {
                   <Sparkles className="size-6 text-accent" />
                 </div>
                 <p className="max-w-md text-sm text-[var(--muted)]">
-                  Mulai dengan keyword atau pilih filter tab untuk menjelajah katalog.
+                  Masukkan minimal {DEFAULT_EMPTY_RESPONSE.minimumQueryLength} karakter untuk mulai mencari judul drama.
                 </p>
               </div>
             ) : isLoading ? (
@@ -239,19 +148,6 @@ export function SearchPanel({ filters, tags }: SearchPanelProps) {
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="flex flex-wrap gap-2">
-                  {selectedTabId ? (
-                    <Badge className="border-white/10 bg-black/35 text-white">
-                      Filter tab aktif
-                    </Badge>
-                  ) : null}
-                  {selectedTag ? (
-                    <Badge className="border-white/10 bg-black/35 text-white">
-                      Tag: #{selectedTag}
-                    </Badge>
-                  ) : null}
-                </div>
-
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
                   {results.results.map((drama) => (
                     <DramaCard
