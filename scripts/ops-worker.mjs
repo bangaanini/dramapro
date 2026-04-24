@@ -3,12 +3,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const DEFAULT_PROVIDERS = [
-  "goodshort",
-  "dramabox",
-];
-
-const DEFAULT_SOURCES = ["home", "new", "popular"];
 const SUCCESS_ICON = "[ok]";
 const ERROR_ICON = "[error]";
 const INFO_ICON = "[info]";
@@ -57,28 +51,9 @@ function bootstrapEnv() {
   loadEnvFile(".env.local");
 }
 
-function parseCsv(value, fallback) {
-  const normalized = String(value ?? "")
-    .split(",")
-    .map((item) => item.trim().toLowerCase())
-    .filter(Boolean);
-
-  return normalized.length > 0 ? normalized : fallback;
-}
-
 function parseOptionalString(value) {
   const normalized = String(value ?? "").trim();
   return normalized ? normalized : null;
-}
-
-function intersectCsv(primary, fallback) {
-  if (!Array.isArray(primary) || primary.length === 0) {
-    return fallback;
-  }
-
-  const fallbackSet = new Set(fallback);
-  const filtered = primary.filter((item) => fallbackSet.has(item));
-  return filtered.length > 0 ? filtered : fallback;
 }
 
 function parsePositiveInt(value, fallback) {
@@ -121,12 +96,6 @@ function createConfig() {
     throw new Error("CRON_SECRET wajib diisi untuk worker.");
   }
 
-  const configuredProviders =
-    parseOptionalString(process.env.WORKER_PROVIDERS) ||
-    parseOptionalString(process.env.ACTIVE_PROVIDERS);
-  const activeProviders = parseCsv(process.env.ACTIVE_PROVIDERS, DEFAULT_PROVIDERS);
-  const workerProviders = parseCsv(configuredProviders, DEFAULT_PROVIDERS);
-
   return {
     baseUrl: baseUrl.replace(/\/+$/u, ""),
     secret,
@@ -136,22 +105,6 @@ function createConfig() {
     catalogSyncIntervalMs: parsePositiveInt(
       process.env.WORKER_CATALOG_SYNC_INTERVAL_MS,
       3000,
-    ),
-    providers: intersectCsv(workerProviders, activeProviders),
-    sources: parseCsv(process.env.WORKER_SOURCES, DEFAULT_SOURCES),
-    pages: parsePositiveInt(process.env.WORKER_SYNC_PAGES, 2),
-    auditBatchSize: parsePositiveInt(process.env.WORKER_AUDIT_BATCH_SIZE, 10),
-    syncIntervalMinutes: parsePositiveInt(
-      process.env.WORKER_SYNC_INTERVAL_MINUTES,
-      30,
-    ),
-    auditIntervalMinutes: parsePositiveInt(
-      process.env.WORKER_AUDIT_INTERVAL_MINUTES,
-      60,
-    ),
-    auditInitialDelayMinutes: parsePositiveInt(
-      process.env.WORKER_AUDIT_INITIAL_DELAY_MINUTES,
-      15,
     ),
     requestTimeoutMs: parsePositiveInt(
       process.env.WORKER_REQUEST_TIMEOUT_MS,
@@ -168,9 +121,6 @@ function createConfig() {
     ),
     notifyOnSuccess: parseBoolean(process.env.WORKER_NOTIFY_ON_SUCCESS, true),
     notifyOnFailure: parseBoolean(process.env.WORKER_NOTIFY_ON_FAILURE, true),
-    refreshAfterRun: parseBoolean(process.env.WORKER_REFRESH_AFTER_RUN, true),
-    syncOnStart: parseBoolean(process.env.WORKER_SYNC_ON_START, true),
-    auditOnStart: parseBoolean(process.env.WORKER_AUDIT_ON_START, false),
   };
 }
 
@@ -200,10 +150,6 @@ function trimErrorMessage(value, maxLength = 240) {
   }
 
   return `${normalized.slice(0, maxLength - 1)}…`;
-}
-
-function formatDuration(startedAt) {
-  return `${Math.round((Date.now() - startedAt) / 1000)} detik`;
 }
 
 function truncateLines(items, max = 5) {
@@ -357,216 +303,6 @@ async function refreshCatalogCache(config) {
   return result;
 }
 
-async function runSyncOnce(config) {
-  const startedAt = Date.now();
-  let processed = 0;
-  let hidden = 0;
-  let errors = 0;
-  let created = 0;
-  let updated = 0;
-  let skipped = 0;
-  const failedTasks = [];
-
-  logInfo(
-    `Memulai sync worker untuk ${config.sources.join(", ")} page 1-${config.pages}.`,
-  );
-
-  for (const source of config.sources) {
-    for (let page = 1; page <= config.pages; page += 1) {
-      for (const provider of config.providers) {
-        const query = new URLSearchParams({
-          provider,
-          page: String(page),
-          source,
-        });
-
-        try {
-          const result = await requestJson(
-            config,
-            `/api/cron/sync?${query.toString()}`,
-          );
-
-          processed += Number(result?.processed ?? 0);
-          created += Number(result?.created ?? 0);
-          updated += Number(result?.updated ?? 0);
-          hidden += Number(result?.hidden ?? 0);
-          skipped += Number(result?.skipped ?? 0);
-          errors += Array.isArray(result?.errors) ? result.errors.length : 0;
-
-          logSuccess(
-            `Sync ${provider} ${source} page ${page}: processed=${result.processed}, created=${result.created}, updated=${result.updated}, hidden=${result.hidden}, skipped=${result.skipped}, errors=${Array.isArray(result.errors) ? result.errors.length : 0}.`,
-          );
-        } catch (error) {
-          errors += 1;
-          failedTasks.push(
-            `${provider} ${source} page ${page}: ${error instanceof Error ? error.message : "Unexpected error"}`,
-          );
-          logError(
-            `Sync ${provider} ${source} page ${page} gagal: ${error instanceof Error ? error.message : "Unexpected error"}.`,
-          );
-        }
-      }
-    }
-  }
-
-  if (config.refreshAfterRun) {
-    await refreshCatalogCache(config).catch((error) => {
-      logError(
-        `Refresh cache setelah sync gagal: ${error instanceof Error ? error.message : "Unexpected error"}.`,
-      );
-    });
-  }
-
-  const duration = formatDuration(startedAt);
-
-  logSuccess(
-    `Sync worker selesai dalam ${duration}. processed=${processed}, hidden=${hidden}, errors=${errors}.`,
-  );
-
-  await notifyIfNeeded(config, {
-    name: "sync",
-    level: errors > 0 ? "error" : "success",
-    lines: [
-      errors > 0 ? "Laporan sync selesai dengan error" : "Laporan sync selesai",
-      "",
-      `Base URL: ${config.baseUrl}`,
-      `Sources: ${config.sources.join(", ")}`,
-      `Pages: 1-${config.pages}`,
-      `Processed: ${processed}`,
-      `Created: ${created}`,
-      `Updated: ${updated}`,
-      `Hidden: ${hidden}`,
-      `Skipped: ${skipped}`,
-      `Errors: ${errors}`,
-      `Durasi: ${duration}`,
-      ...(failedTasks.length > 0
-        ? ["", "Error utama:", ...truncateLines(failedTasks).map((item) => `- ${item}`)]
-        : []),
-    ],
-  });
-
-  return {
-    processed,
-    created,
-    updated,
-    hidden,
-    skipped,
-    errors,
-    duration,
-  };
-}
-
-async function runAuditSource(config, source) {
-  let cursor = null;
-  let batch = 0;
-  let totalChecked = 0;
-  let totalHidden = 0;
-  let totalRestored = 0;
-  let totalErrors = 0;
-
-  while (true) {
-    batch += 1;
-    const result = await requestJson(config, "/api/admin/drama-stream-audit", {
-      method: "POST",
-      body: JSON.stringify({
-        source,
-        cursor,
-        batchSize: config.auditBatchSize,
-      }),
-    });
-
-    totalChecked += Number(result?.checked ?? 0);
-    totalHidden += Number(result?.hidden ?? 0);
-    totalRestored += Number(result?.restored ?? 0);
-    totalErrors += Array.isArray(result?.errors) ? result.errors.length : 0;
-
-    logSuccess(
-      `Audit ${source} batch ${batch}: checked=${result.checked}, hidden=${result.hidden}, restored=${result.restored}, alreadyHidden=${result.alreadyHidden}, errors=${Array.isArray(result.errors) ? result.errors.length : 0}, hasMore=${result.hasMore}.`,
-    );
-
-    if (!result?.hasMore || !result?.nextCursor) {
-      return {
-        checked: totalChecked,
-        hidden: totalHidden,
-        restored: totalRestored,
-        errors: totalErrors,
-      };
-    }
-
-    cursor = result.nextCursor;
-  }
-}
-
-async function runAuditOnce(config) {
-  const startedAt = Date.now();
-  let checked = 0;
-  let hidden = 0;
-  let restored = 0;
-  let errors = 0;
-  const failedSources = [];
-
-  logInfo(`Memulai audit worker untuk ${config.sources.join(", ")}.`);
-
-  for (const source of config.sources) {
-    try {
-      const result = await runAuditSource(config, source);
-      checked += result.checked;
-      hidden += result.hidden;
-      restored += result.restored;
-      errors += result.errors;
-    } catch (error) {
-      errors += 1;
-      failedSources.push(
-        `${source}: ${error instanceof Error ? error.message : "Unexpected error"}`,
-      );
-      logError(
-        `Audit ${source} gagal: ${error instanceof Error ? error.message : "Unexpected error"}.`,
-      );
-    }
-  }
-
-  if (config.refreshAfterRun) {
-    await refreshCatalogCache(config).catch((error) => {
-      logError(
-        `Refresh cache setelah audit gagal: ${error instanceof Error ? error.message : "Unexpected error"}.`,
-      );
-    });
-  }
-
-  const duration = formatDuration(startedAt);
-
-  logSuccess(
-    `Audit worker selesai dalam ${duration}. checked=${checked}, hidden=${hidden}, restored=${restored}, errors=${errors}.`,
-  );
-
-  await notifyIfNeeded(config, {
-    name: "audit",
-    level: errors > 0 ? "error" : "success",
-    lines: [
-      errors > 0 ? "Laporan audit selesai dengan error" : "Laporan audit selesai",
-      "",
-      `Base URL: ${config.baseUrl}`,
-      `Sources: ${config.sources.join(", ")}`,
-      `Checked: ${checked}`,
-      `Hidden: ${hidden}`,
-      `Restored: ${restored}`,
-      `Errors: ${errors}`,
-      `Durasi: ${duration}`,
-      ...(failedSources.length > 0
-        ? ["", "Error utama:", ...truncateLines(failedSources).map((item) => `- ${item}`)]
-        : []),
-    ],
-  });
-
-  return {
-    checked,
-    hidden,
-    restored,
-    errors,
-    duration,
-  };
-}
-
 function createCatalogSyncLogger() {
   let lastSignature = null;
 
@@ -620,6 +356,93 @@ function createCatalogSyncLogger() {
 
 const logCatalogSyncState = createCatalogSyncLogger();
 
+function formatCatalogSyncDuration(syncJob) {
+  const startedAt = syncJob?.startedAt ? Date.parse(syncJob.startedAt) : NaN;
+  const endedAt =
+    syncJob?.finishedAt
+      ? Date.parse(syncJob.finishedAt)
+      : syncJob?.updatedAt
+        ? Date.parse(syncJob.updatedAt)
+        : Date.now();
+
+  if (Number.isNaN(startedAt) || Number.isNaN(endedAt) || endedAt < startedAt) {
+    return "n/a";
+  }
+
+  return `${Math.round((endedAt - startedAt) / 1000)} detik`;
+}
+
+function createCatalogSyncNotifier() {
+  let lastNotifiedSignature = null;
+
+  return async function notifyCatalogSyncState(config, syncJob) {
+    if (!syncJob) {
+      return;
+    }
+
+    const isFinalStatus = ["completed", "failed", "cancelled"].includes(
+      syncJob.status,
+    );
+
+    if (!isFinalStatus) {
+      return;
+    }
+
+    const signature = [
+      syncJob.id,
+      syncJob.status,
+      syncJob.finishedAt || "",
+      syncJob.updatedAt || "",
+      syncJob.errorCount ?? 0,
+    ].join("|");
+
+    if (signature === lastNotifiedSignature) {
+      return;
+    }
+
+    lastNotifiedSignature = signature;
+
+    const recentErrors = Array.isArray(syncJob.recentErrors)
+      ? syncJob.recentErrors
+          .map((item) => item?.message)
+          .filter(Boolean)
+      : [];
+
+    await notifyIfNeeded(config, {
+      name: "catalog-sync",
+      level: syncJob.status === "failed" ? "error" : "success",
+      lines: [
+        syncJob.status === "failed"
+          ? "Catalog sync gagal"
+          : syncJob.status === "cancelled"
+            ? "Catalog sync dibatalkan"
+            : "Catalog sync selesai",
+        "",
+        `Base URL: ${config.baseUrl}`,
+        `Job ID: ${syncJob.id}`,
+        `Status: ${syncJob.status}`,
+        `Phase: ${syncJob.phase}`,
+        `Platform: ${syncJob.currentPlatformId || "-"}`,
+        `Progress: ${syncJob.progressPercent ?? 0}%`,
+        `Provider selesai: ${syncJob.completedPlatforms}/${syncJob.totalPlatforms}`,
+        `Tab selesai: ${syncJob.completedTabs}/${syncJob.totalTabs}`,
+        `Total judul: ${syncJob.totalTitles}`,
+        `Total episode: ${syncJob.totalEpisodes}`,
+        `Pending audit: ${syncJob.pendingDetails}`,
+        `Processed audit: ${syncJob.processedDetails}`,
+        `Errors: ${syncJob.errorCount}`,
+        `Durasi: ${formatCatalogSyncDuration(syncJob)}`,
+        `Pesan: ${syncJob.lastMessage || "-"}`,
+        ...(recentErrors.length > 0
+          ? ["", "Error utama:", ...truncateLines(recentErrors).map((item) => `- ${item}`)]
+          : []),
+      ],
+    });
+  };
+}
+
+const notifyCatalogSyncState = createCatalogSyncNotifier();
+
 async function runCatalogSyncStepOnce(config) {
   const payload = await requestJson(config, "/api/admin/catalog-sync", {
     method: "POST",
@@ -631,6 +454,7 @@ async function runCatalogSyncStepOnce(config) {
 
   const syncJob = payload?.syncJob ?? null;
   logCatalogSyncState(syncJob);
+  await notifyCatalogSyncState(config, syncJob);
   return syncJob;
 }
 
@@ -671,82 +495,6 @@ function createLoopRunner(name, intervalMs, task) {
   };
 }
 
-function createExclusiveJobRunner() {
-  let activeJob = null;
-
-  return async function runExclusive(name, task) {
-    if (activeJob) {
-      logInfo(`Job ${name} dilewati karena ${activeJob} masih berjalan.`);
-      return false;
-    }
-
-    activeJob = name;
-
-    try {
-      await task();
-      return true;
-    } finally {
-      activeJob = null;
-    }
-  };
-}
-
-async function runScheduler(config) {
-  logInfo(
-    `Scheduler aktif. sync=${config.syncIntervalMinutes}m, audit=${config.auditIntervalMinutes}m, auditDelay=${config.auditInitialDelayMinutes}m, catalogSync=${config.catalogSyncIntervalMs}ms.`,
-  );
-
-  const runExclusive = createExclusiveJobRunner();
-
-  if (config.syncOnStart) {
-    await runExclusive("sync", () => runSyncOnce(config));
-  }
-
-  if (config.auditOnStart) {
-    await runExclusive("audit", () => runAuditOnce(config));
-  }
-
-  const syncLoop = createLoopRunner(
-    "sync",
-    config.syncIntervalMinutes * 60 * 1000,
-    () => runExclusive("sync", () => runSyncOnce(config)),
-  );
-  const auditLoop = createLoopRunner(
-    "audit",
-    config.auditIntervalMinutes * 60 * 1000,
-    () => runExclusive("audit", () => runAuditOnce(config)),
-  );
-  const catalogSyncLoop = createLoopRunner(
-    "catalog-sync",
-    config.catalogSyncIntervalMs,
-    () => runExclusive("catalog-sync", () => runCatalogSyncStepOnce(config)),
-  );
-
-  try {
-    await runExclusive("catalog-sync", () => runCatalogSyncStepOnce(config));
-  } catch (error) {
-    logError(
-      `Catalog sync startup gagal: ${error instanceof Error ? error.message : "Unexpected error"}.`,
-    );
-  }
-  syncLoop.start();
-  catalogSyncLoop.start();
-  setTimeout(() => {
-    auditLoop.start();
-  }, config.auditInitialDelayMinutes * 60 * 1000);
-
-  const shutdown = (signal) => {
-    logInfo(`Menerima ${signal}, menghentikan scheduler worker.`);
-    syncLoop.stop();
-    auditLoop.stop();
-    catalogSyncLoop.stop();
-    process.exit(0);
-  };
-
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
-}
-
 async function runCatalogSyncLoop(config) {
   logInfo(
     `Catalog sync worker aktif. interval=${config.catalogSyncIntervalMs}ms runner=${config.catalogSyncRunnerId}.`,
@@ -783,25 +531,10 @@ async function main() {
   bootstrapEnv();
 
   const config = createConfig();
-  const command = (process.argv[2] || "scheduler").trim().toLowerCase();
-
-  if (command === "sync" || command === "sync-once") {
-    await runSyncOnce(config);
-    return;
-  }
-
-  if (command === "audit" || command === "audit-once") {
-    await runAuditOnce(config);
-    return;
-  }
+  const command = (process.argv[2] || "catalog-sync").trim().toLowerCase();
 
   if (command === "refresh") {
     await refreshCatalogCache(config);
-    return;
-  }
-
-  if (command === "catalog-sync" || command === "catalog-sync-worker") {
-    await runCatalogSyncLoop(config);
     return;
   }
 
@@ -810,14 +543,18 @@ async function main() {
     return;
   }
 
-  if (command === "scheduler") {
-    await runScheduler(config);
+  if (
+    command === "catalog-sync" ||
+    command === "catalog-sync-worker" ||
+    command === "scheduler"
+  ) {
+    await runCatalogSyncLoop(config);
     return;
   }
 
   console.log(`Unknown command: ${command}`);
   console.log(
-    "Available commands: scheduler, sync, audit, refresh, catalog-sync, catalog-sync-once",
+    "Available commands: scheduler, refresh, catalog-sync, catalog-sync-once",
   );
   process.exitCode = 1;
 }
