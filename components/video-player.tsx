@@ -14,6 +14,7 @@ import Hls from "hls.js";
 import {
   AlertCircle,
   Bookmark,
+  Captions,
   CheckCircle2,
   Crown,
   Lock,
@@ -586,6 +587,7 @@ export function VideoPlayer({
   }, [episodeCount, vipLockFromEpisode]);
 
   const qualityOptions = stream?.qualities ?? [];
+  const subtitleOptions = stream?.subtitles ?? [];
   const episodeNumbers = Array.from(
     { length: Math.max(episodeCount, 0) },
     (_, index) => index + 1,
@@ -1711,6 +1713,62 @@ export function VideoPlayer({
                         : "Kualitas akan segera muncul."}
                     </div>
                   )}
+                </div>
+
+                <div className="space-y-3 border-t border-white/8 pt-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
+                      <Captions className="size-4" />
+                      Subtitle
+                    </h3>
+                    <span className="text-xs text-[var(--muted)]">
+                      {selectedSubtitle === "off"
+                        ? "Mati"
+                        : `Aktif: ${selectedSubtitle}`}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {selectedEpisodeIsLocked || !hasUnlockedEpisodes ? (
+                      <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-[var(--muted)]">
+                        Subtitle akan tersedia setelah episode bisa diputar.
+                      </div>
+                    ) : subtitleOptions.length > 0 ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedSubtitle("off")}
+                          className={cn(
+                            "rounded-full border px-3 py-2 text-sm font-medium transition",
+                            selectedSubtitle === "off"
+                              ? "border-accent/35 bg-accent text-white"
+                              : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:text-white",
+                          )}
+                        >
+                          Off
+                        </button>
+                        {subtitleOptions.map((subtitle) => (
+                          <button
+                            key={`${subtitle.label}-${subtitle.language}-${subtitle.url}`}
+                            type="button"
+                            onClick={() => setSelectedSubtitle(subtitle.label)}
+                            className={cn(
+                              "rounded-full border px-3 py-2 text-sm font-medium transition",
+                              selectedSubtitle === subtitle.label
+                                ? "border-accent/35 bg-accent text-white"
+                                : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:text-white",
+                            )}
+                          >
+                            {subtitle.label}
+                          </button>
+                        ))}
+                      </>
+                    ) : (
+                      <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-[var(--muted)]">
+                        Episode ini tidak menyediakan subtitle terpisah.
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {vipLockFromEpisode ? (

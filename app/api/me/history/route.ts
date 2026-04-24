@@ -4,6 +4,20 @@ import { prisma } from "@/lib/prisma";
 import { getUserFromRequest } from "@/lib/user-auth";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+type HistoryRow = {
+  id: string;
+  episodeIndex: number;
+  lastPositionSeconds: number;
+  updatedAt: Date;
+  dramaId: string;
+  title: string;
+  thumbUrl: string;
+  providerName: string;
+  episodeCount: number;
+  tags: string[] | null;
+};
 
 export async function GET(request: NextRequest) {
   const user = await getUserFromRequest(request);
@@ -12,20 +26,28 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const historyEntries = await prisma.watchHistory.findMany({
-    where: {
-      userId: user.id,
-    },
-    include: {
-      series: {
-        include: {
-          platform: true,
-        },
-      },
-    },
-    orderBy: { updatedAt: "desc" },
-    take: 120,
-  });
+  const historyEntries = await prisma.$queryRaw<HistoryRow[]>`
+    SELECT
+      w."id",
+      w."episodeIndex",
+      w."lastPositionSeconds",
+      w."updatedAt",
+      s."id" AS "dramaId",
+      s."title",
+      s."coverUrl" AS "thumbUrl",
+      p."name" AS "providerName",
+      s."chapterCount" AS "episodeCount",
+      s."tags"
+    FROM "WatchHistory" w
+    JOIN "CatalogSeries" s
+      ON s."id" = w."seriesId"
+    JOIN "CatalogPlatform" p
+      ON p."id" = s."platformId"
+    WHERE w."userId" = ${user.id}::uuid
+      AND w."seriesId" IS NOT NULL
+    ORDER BY w."updatedAt" DESC
+    LIMIT 120
+  `;
 
   return NextResponse.json({
     entries: historyEntries.map((entry) => ({
@@ -34,12 +56,12 @@ export async function GET(request: NextRequest) {
       lastPositionSeconds: entry.lastPositionSeconds,
       updatedAt: entry.updatedAt.toISOString(),
       drama: {
-        id: entry.series.id,
-        title: entry.series.title,
-        thumbUrl: entry.series.coverUrl,
-        providerName: entry.series.platform.name,
-        episodeCount: entry.series.chapterCount,
-        tags: entry.series.tags,
+        id: entry.dramaId,
+        title: entry.title,
+        thumbUrl: entry.thumbUrl,
+        providerName: entry.providerName,
+        episodeCount: entry.episodeCount,
+        tags: entry.tags ?? [],
       },
     })),
   });

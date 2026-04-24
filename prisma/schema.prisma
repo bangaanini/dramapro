@@ -56,6 +56,7 @@ model CatalogPlatform {
   id          String            @id
   name        String
   isActive    Boolean           @default(true)
+  isHomepageVisible Boolean     @default(true)
   languages   CatalogLanguage[]
   tabs        CatalogTab[]
   series      CatalogSeries[]

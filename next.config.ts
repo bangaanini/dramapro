@@ -31,6 +31,8 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "akamai-static.shorttv.live" },
       { protocol: "https", hostname: "pbcdnw.aoneroom.com" },
       { protocol: "https", hostname: "api.dracinku.site" },
+      { protocol: "https", hostname: "dl.lite.tv" },
+      { protocol: "https", hostname: "rtp.topinnovations.co" },
     ],
   },
 };

@@ -62,6 +62,7 @@ export async function POST(request: NextRequest) {
     initializeCatalog,
     initializeCatalogForPlatform,
     runCatalogSyncAllStep,
+    setCatalogPlatformHomepageVisibility,
     startCatalogSyncAllJob,
     syncTabFirstPage,
     syncTabNextPage,
@@ -75,6 +76,7 @@ export async function POST(request: NextRequest) {
         runnerId?: string;
         platform?: string;
         language?: string;
+        isHomepageVisible?: boolean;
       }
     | null;
   const mode = String(body?.mode ?? "").trim();
@@ -83,6 +85,7 @@ export async function POST(request: NextRequest) {
   const runnerId = String(body?.runnerId ?? "").trim();
   const platform = String(body?.platform ?? "").trim() || DEFAULT_CATALOG_PLATFORM;
   const language = String(body?.language ?? "").trim() || DEFAULT_CATALOG_LANGUAGE;
+  const isHomepageVisible = body?.isHomepageVisible === true;
 
   if (!mode) {
     return Response.json({ error: "Mode wajib diisi." }, { status: 400 });
@@ -127,6 +130,11 @@ export async function POST(request: NextRequest) {
         platformId: platform,
         languageCode: language,
       });
+    } else if (mode === "set-provider-homepage-visibility") {
+      result = await setCatalogPlatformHomepageVisibility(
+        platform,
+        isHomepageVisible,
+      );
     } else {
       return Response.json({ error: "Mode tidak dikenali." }, { status: 400 });
     }

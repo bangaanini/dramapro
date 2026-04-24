@@ -174,6 +174,7 @@ async function ensureCatalogPlatformsRegistered() {
         id: platformId,
         name: CATALOG_PLATFORM_LABELS[platformId],
         isActive: true,
+        isHomepageVisible: true,
       },
       update: {
         name: CATALOG_PLATFORM_LABELS[platformId],
@@ -1927,12 +1928,18 @@ export async function getHomeCatalogData() {
       where: {
         series: {
           isHomepageVisible: true,
+          platform: {
+            isHomepageVisible: true,
+          },
         },
       },
     }),
     prisma.catalogSeries.count({
       where: {
         isHomepageVisible: true,
+        platform: {
+          isHomepageVisible: true,
+        },
       },
     }),
   ]);
@@ -1957,6 +1964,9 @@ export async function getCatalogFeedPage(
     prisma.catalogSeries.findMany({
       where: {
         isHomepageVisible: true,
+        platform: {
+          isHomepageVisible: true,
+        },
       },
       include: {
         platform: true,
@@ -1968,6 +1978,9 @@ export async function getCatalogFeedPage(
     prisma.catalogSeries.count({
       where: {
         isHomepageVisible: true,
+        platform: {
+          isHomepageVisible: true,
+        },
       },
     }),
   ]);
@@ -1985,8 +1998,10 @@ export async function getCatalogShortcuts() {
     SELECT tag, COUNT(*)::int AS count
     FROM (
       SELECT UNNEST(tags) AS tag
-      FROM "CatalogSeries"
-      WHERE "isHomepageVisible" = true
+      FROM "CatalogSeries" s
+      JOIN "CatalogPlatform" p ON p."id" = s."platformId"
+      WHERE s."isHomepageVisible" = true
+        AND p."isHomepageVisible" = true
     ) AS tags_expanded
     WHERE tag <> ''
     GROUP BY tag
@@ -2180,6 +2195,7 @@ export async function getCatalogSyncDashboardForPlatform(
       id: item.id,
       name: item.name,
       isCurrent: item.id === platform.id,
+      isHomepageVisible: item.isHomepageVisible,
       languageCount: languageCountByPlatform.get(item.id) ?? 0,
       tabCount: tabCountByPlatform.get(item.id) ?? 0,
       titleCount: seriesCountByPlatform.get(item.id) ?? 0,
@@ -2204,5 +2220,24 @@ export async function getCatalogSyncDashboardForPlatform(
       lastSyncedAt: tab.syncState?.lastSyncedAt?.toISOString() ?? null,
       lastError: tab.syncState?.lastError ?? "",
     })),
+  };
+}
+
+export async function setCatalogPlatformHomepageVisibility(
+  platformId: string,
+  isHomepageVisible: boolean,
+) {
+  const platform = await prisma.catalogPlatform.update({
+    where: {
+      id: platformId,
+    },
+    data: {
+      isHomepageVisible,
+    },
+  });
+
+  return {
+    id: platform.id,
+    isHomepageVisible: platform.isHomepageVisible,
   };
 }

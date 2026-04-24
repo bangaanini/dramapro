@@ -69,6 +69,7 @@ export type DashboardPayload = {
     id: string;
     name: string;
     isCurrent: boolean;
+    isHomepageVisible: boolean;
     languageCount: number;
     tabCount: number;
     titleCount: number;
@@ -230,8 +231,16 @@ export function AdminSyncPanel({
     syncJob?.id,
   ]);
 
-  async function runSyncRequest(mode: "start-sync-all") {
-    setBusyKey(mode);
+  async function runSyncRequest(
+    mode: "start-sync-all" | "set-provider-homepage-visibility",
+    options?: {
+      platform?: string;
+      isHomepageVisible?: boolean;
+      successMessage?: string;
+      busyKey?: string;
+    },
+  ) {
+    setBusyKey(options?.busyKey ?? mode);
     setMessage(null);
     setError(null);
 
@@ -244,8 +253,9 @@ export function AdminSyncPanel({
         body: JSON.stringify({
           mode,
           jobId: syncJob?.id,
-          platform: selectedPlatform,
+          platform: options?.platform ?? selectedPlatform,
           language: selectedLanguage,
+          isHomepageVisible: options?.isHomepageVisible,
         }),
       });
       const payload = (await response.json()) as ActionResult;
@@ -262,9 +272,13 @@ export function AdminSyncPanel({
 
       if (payload.syncJob) {
         setSyncJob(payload.syncJob);
-        setMessage(payload.syncJob.lastMessage || "Job sync masuk antrean.");
+        setMessage(
+          options?.successMessage ||
+            payload.syncJob.lastMessage ||
+            "Job sync masuk antrean.",
+        );
       } else {
-        setMessage("Job sync masuk antrean.");
+        setMessage(options?.successMessage || "Perubahan berhasil disimpan.");
       }
     } catch (actionError) {
       setError(
@@ -279,6 +293,20 @@ export function AdminSyncPanel({
 
   async function startSyncAll() {
     await runSyncRequest("start-sync-all");
+  }
+
+  async function setProviderHomepageVisibility(
+    platformId: string,
+    isHomepageVisible: boolean,
+  ) {
+    await runSyncRequest("set-provider-homepage-visibility", {
+      platform: platformId,
+      isHomepageVisible,
+      successMessage: isHomepageVisible
+        ? "Provider ditampilkan lagi di homepage."
+        : "Provider disembunyikan dari homepage.",
+      busyKey: `provider-visibility:${platformId}`,
+    });
   }
 
   const canResumeSync = hasActiveSyncJob;
@@ -526,6 +554,7 @@ export function AdminSyncPanel({
                 <thead className="bg-white/5 text-xs uppercase tracking-[0.16em] text-[var(--muted)]">
                   <tr>
                     <th className="px-4 py-3">Provider</th>
+                    <th className="px-4 py-3">Homepage</th>
                     <th className="px-4 py-3">Bahasa</th>
                     <th className="px-4 py-3">Tab</th>
                     <th className="px-4 py-3">Judul</th>
@@ -545,6 +574,37 @@ export function AdminSyncPanel({
                           ) : null}
                         </div>
                         <p className="mt-1 text-xs text-[var(--muted)]">{item.id}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            className={
+                              item.isHomepageVisible
+                                ? "rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-emerald-100"
+                                : "rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-amber-100"
+                            }
+                          >
+                            {item.isHomepageVisible ? "Tampil" : "Hidden"}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            disabled={Boolean(busyKey)}
+                            onClick={() => {
+                              void setProviderHomepageVisibility(
+                                item.id,
+                                !item.isHomepageVisible,
+                              );
+                            }}
+                            className="rounded-full"
+                          >
+                            {busyKey === `provider-visibility:${item.id}` ? (
+                              <LoaderCircle className="mr-2 size-4 animate-spin" />
+                            ) : null}
+                            {item.isHomepageVisible ? "Hide" : "Unhide"}
+                          </Button>
+                        </div>
                       </td>
                       <td className="px-4 py-3">{numberFormatter.format(item.languageCount)}</td>
                       <td className="px-4 py-3">{numberFormatter.format(item.tabCount)}</td>
