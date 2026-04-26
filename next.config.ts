@@ -34,6 +34,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "dl.lite.tv" },
       { protocol: "https", hostname: "rtp.topinnovations.co" },
       { protocol: "https", hostname: "image.fishnovel.com" },
+      { protocol: "https", hostname: "cdn.shorten.watch" },
     ],
   },
 };

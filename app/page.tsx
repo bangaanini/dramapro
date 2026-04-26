@@ -99,6 +99,7 @@ export default async function HomePage(props: PageProps<"/">) {
       nextOffset: 0,
       hasMore: false,
     },
+    providerTabs: [],
     stats: {
       totalSeries: 0,
       totalEpisodes: 0,

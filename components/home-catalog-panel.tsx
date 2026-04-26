@@ -1,5 +1,5 @@
 import { HomeCatalogGrid } from "@/components/home-catalog-grid";
-import type { HomeFeedEntry } from "@/lib/catalog-data";
+import type { HomeFeedEntry, HomeProviderTab } from "@/lib/catalog-data";
 
 type CatalogHomePayload = {
   initialFeed: {
@@ -8,6 +8,7 @@ type CatalogHomePayload = {
     nextOffset: number;
     hasMore: boolean;
   };
+  providerTabs: HomeProviderTab[];
   stats: {
     totalSeries: number;
     totalEpisodes: number;

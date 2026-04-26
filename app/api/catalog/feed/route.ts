@@ -8,6 +8,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const offset = Number.parseInt(searchParams.get("offset") ?? "0", 10);
   const limit = Number.parseInt(searchParams.get("limit") ?? "18", 10);
+  const platform = searchParams.get("platform")?.trim() || null;
 
   if (!Number.isFinite(offset) || offset < 0) {
     return NextResponse.json(
@@ -23,13 +24,13 @@ export async function GET(request: Request) {
     );
   }
 
-  const payload = await getHomepageFeedPage(offset, limit);
+  const payload = await getHomepageFeedPage(offset, limit, platform);
 
   return NextResponse.json(payload, {
     headers: {
       "Cache-Control":
         "public, max-age=60, s-maxage=300, stale-while-revalidate=86400",
-      "Netlify-Vary": "query=offset|limit",
+      "Netlify-Vary": "query=offset|limit|platform",
     },
   });
 }

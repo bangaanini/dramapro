@@ -26,6 +26,28 @@ const CATALOG_DETAIL_TTL_MINUTES = Number.parseInt(
 );
 const SHOULD_AUDIT_AFTER_INDEX =
   process.env.CATALOG_SYNC_AUDIT_AFTER_INDEX?.trim().toLowerCase() === "true";
+const PROVIDER_LOGO_PATHS: Record<string, string> = {
+  chill: "/provider-logos/chillshorts.webp",
+  dramabox: "/provider-logos/dramabox.png",
+  dramadash: "/provider-logos/dramadash.png",
+  dramamax: "/provider-logos/dramamax.webp",
+  dramanova: "/provider-logos/dramanova.webp",
+  dramarush: "/provider-logos/dramarush.webp",
+  dramawave: "/provider-logos/dramawave.png",
+  flickreels: "/provider-logos/flickreels.png",
+  flickshort: "/provider-logos/flickshort.png",
+  freereels: "/provider-logos/freereels.webp",
+  goodshort: "/provider-logos/goodshort.png",
+  hishort: "/provider-logos/hishort.webp",
+  litetv: "/provider-logos/liteTv.webp",
+  meloshort: "/provider-logos/meloshorts.webp",
+  microdrama: "/provider-logos/microdrama.webp",
+  netshort: "/provider-logos/netshort.png",
+  radreels: "/provider-logos/radreels.webp",
+  reelbuzz: "/provider-logos/reelbuzz.png",
+  shorten: "/provider-logos/shorten.webp",
+  shortmax: "/provider-logos/shortmax.png",
+};
 
 const SYNC_ALL_RUNNING_STATUSES = ["queued", "running"] as const;
 
@@ -55,11 +77,19 @@ export type CatalogSeriesCard = {
   id: string;
   title: string;
   thumbUrl: string;
+  platformId: string;
   platformName: string;
   episodeCount: number;
   description: string;
   playCount: string;
   tags: string[];
+};
+
+export type CatalogProviderTab = {
+  id: string;
+  name: string;
+  logoUrl: string | null;
+  seriesCount: number;
 };
 
 export type CatalogSyncAllJobPayload = {
@@ -340,6 +370,7 @@ function toCatalogSeriesCard(
     description: string;
     playCount: string;
     tags: string[];
+    platformId: string;
     platform: {
       name: string;
     };
@@ -349,12 +380,17 @@ function toCatalogSeriesCard(
     id: series.id,
     title: series.title,
     thumbUrl: series.coverUrl,
+    platformId: series.platformId,
     platformName: series.platform.name,
     episodeCount: series.chapterCount,
     description: series.description,
     playCount: series.playCount,
     tags: series.tags,
   };
+}
+
+function getProviderLogoUrl(platformId: string) {
+  return PROVIDER_LOGO_PATHS[platformId] ?? null;
 }
 
 async function upsertCatalogSeriesSummaries(
@@ -2080,7 +2116,7 @@ export async function importSearchResults(keyword: string) {
 export async function getHomeCatalogData() {
   const initialFeed = await getCatalogFeedPage(0, DEFAULT_HOME_PAGE_SIZE);
 
-  const [episodeCount, totalSeries] = await Promise.all([
+  const [episodeCount, totalSeries, providerTabs] = await Promise.all([
     prisma.catalogEpisode.count({
       where: {
         series: {
@@ -2099,10 +2135,12 @@ export async function getHomeCatalogData() {
         },
       },
     }),
+    getHomepageProviderTabs(),
   ]);
 
   return {
     initialFeed,
+    providerTabs,
     stats: {
       totalSeries,
       totalEpisodes: episodeCount,
@@ -2113,18 +2151,24 @@ export async function getHomeCatalogData() {
 export async function getCatalogFeedPage(
   offset = 0,
   limit = DEFAULT_HOME_PAGE_SIZE,
+  options?: {
+    platformId?: string | null;
+  },
 ) {
   const safeOffset = Math.max(0, offset);
   const safeLimit = Math.min(Math.max(1, limit), 30);
+  const platformId = options?.platformId?.trim() ?? "";
+  const where: Prisma.CatalogSeriesWhereInput = {
+    isHomepageVisible: true,
+    ...(platformId ? { platformId } : {}),
+    platform: {
+      isHomepageVisible: true,
+    },
+  };
 
   const [seriesEntries, total] = await Promise.all([
     prisma.catalogSeries.findMany({
-      where: {
-        isHomepageVisible: true,
-        platform: {
-          isHomepageVisible: true,
-        },
-      },
+      where,
       include: {
         platform: true,
       },
@@ -2133,12 +2177,7 @@ export async function getCatalogFeedPage(
       take: safeLimit,
     }),
     prisma.catalogSeries.count({
-      where: {
-        isHomepageVisible: true,
-        platform: {
-          isHomepageVisible: true,
-        },
-      },
+      where,
     }),
   ]);
 
@@ -2148,6 +2187,49 @@ export async function getCatalogFeedPage(
     nextOffset: safeOffset + seriesEntries.length,
     hasMore: safeOffset + seriesEntries.length < total,
   };
+}
+
+async function getHomepageProviderTabs(): Promise<CatalogProviderTab[]> {
+  const providerGroups = await prisma.catalogSeries.groupBy({
+    by: ["platformId"],
+    where: {
+      isHomepageVisible: true,
+      platform: {
+        isHomepageVisible: true,
+      },
+    },
+    _count: {
+      _all: true,
+    },
+  });
+  const countsByProvider = new Map(
+    providerGroups.map((item) => [item.platformId, item._count._all]),
+  );
+  const platforms = await prisma.catalogPlatform.findMany({
+    where: {
+      id: {
+        in: providerGroups.map((item) => item.platformId),
+      },
+      isHomepageVisible: true,
+    },
+    orderBy: {
+      name: "asc",
+    },
+  });
+
+  return platforms
+    .map((platform) => ({
+      id: platform.id,
+      name: platform.name,
+      logoUrl: getProviderLogoUrl(platform.id),
+      seriesCount: countsByProvider.get(platform.id) ?? 0,
+    }))
+    .filter((platform) => platform.seriesCount > 0)
+    .sort((left, right) => {
+      const countDifference = right.seriesCount - left.seriesCount;
+
+      return countDifference || left.name.localeCompare(right.name);
+    });
 }
 
 export async function getCatalogShortcuts() {
@@ -2199,6 +2281,8 @@ export async function getCatalogSyncDashboardForPlatform(
   platformId = DEFAULT_CATALOG_PLATFORM,
   languageCode = DEFAULT_CATALOG_LANGUAGE,
 ) {
+  await ensureCatalogPlatformsRegistered();
+
   const { platform, language } = await getCatalogPlatformWithLanguage(
     platformId,
     languageCode,

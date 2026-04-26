@@ -5,6 +5,7 @@ import { LoaderCircle, Search, Trash2 } from "lucide-react";
 
 import {
   deleteUserAction,
+  grantUserVipAccessAction,
   updateUserAffiliateCommissionOverrideAction,
 } from "@/app/admin/actions";
 import { Badge } from "@/components/ui/badge";
@@ -228,6 +229,7 @@ export function AdminUsersTable({ initialData }: AdminUsersTableProps) {
                   key={user.id}
                   user={user}
                   redirectTo={redirectTo}
+                  vipPlans={data.vipPlans}
                 />
               ))
             ) : (
@@ -287,9 +289,11 @@ export function AdminUsersTable({ initialData }: AdminUsersTableProps) {
 function AdminUserTableRow({
   user,
   redirectTo,
+  vipPlans,
 }: {
   user: AdminUsersTableRow;
   redirectTo: string;
+  vipPlans: AdminUsersTableData["vipPlans"];
 }) {
   return (
     <tr className="border-b border-white/6 last:border-b-0">
@@ -332,6 +336,48 @@ function AdminUserTableRow({
               Aktif sampai {formatDate(user.vipExpiresAt)}
             </p>
           ) : null}
+          <form action={grantUserVipAccessAction} className="space-y-2">
+            <input type="hidden" name="userId" value={user.id} />
+            <input type="hidden" name="redirectTo" value={redirectTo} />
+            {vipPlans.length > 0 ? (
+              <select
+                name="vipPricePlanId"
+                defaultValue=""
+                className="h-9 w-full min-w-40 rounded-xl border border-white/10 bg-black/24 px-3 text-xs text-white outline-none transition focus:border-accent/45"
+              >
+                <option value="" className="bg-slate-950">
+                  Pilih durasi VIP
+                </option>
+                {vipPlans.map((plan) => (
+                  <option key={plan.id} value={plan.id} className="bg-slate-950">
+                    {plan.name} ({plan.durationDays} hari)
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <p className="text-xs text-[var(--muted-foreground)]">
+                Belum ada paket VIP aktif. Pakai durasi manual.
+              </p>
+            )}
+            <div className="flex items-center gap-2">
+              <input
+                name="vipDurationDays"
+                type="number"
+                min={1}
+                max={3650}
+                placeholder="Hari"
+                className="h-9 w-20 rounded-xl border border-white/10 bg-black/24 px-3 text-xs text-white outline-none transition placeholder:text-white/35 focus:border-accent/45"
+              />
+              <Button
+                type="submit"
+                size="sm"
+                variant="secondary"
+                className="h-9 rounded-xl px-3 text-xs"
+              >
+                Beri VIP
+              </Button>
+            </div>
+          </form>
         </div>
       </td>
       <td className="px-5 py-4">

@@ -1,6 +1,4 @@
 
-import { redirect } from "next/navigation";
-
 import { AdminSidebar } from "@/components/admin-sidebar";
 import { getCurrentAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
@@ -39,7 +37,28 @@ export default async function AdminDashboardLayout({
   }
 
   if (!admin) {
-    redirect("/admin/login");
+    return (
+      <main className="mx-auto flex min-h-screen w-full max-w-none items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
+        <section className="glass-panel w-full max-w-xl rounded-[2rem] border border-white/10 p-6">
+          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">
+            Admin
+          </p>
+          <h1 className="mt-3 text-2xl font-semibold text-white">
+            Sesi admin belum aktif
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
+            Masuk lagi untuk membuka dashboard admin. Ini biasanya terjadi
+            setelah cookie admin kedaluwarsa atau berpindah browser/perangkat.
+          </p>
+          <a
+            href="/admin/login"
+            className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-[var(--accent)] px-5 text-sm font-semibold text-white transition hover:opacity-90"
+          >
+            Masuk admin
+          </a>
+        </section>
+      </main>
+    );
   }
 
   let pendingAffiliateWithdrawals = 0;

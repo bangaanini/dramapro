@@ -14,6 +14,7 @@ const UPSTREAM_MAX_RETRIES = Number.parseInt(
 export const CATALOG_PLATFORM_IDS = [
   "dramabox",
   "shortmax",
+  "shorten",
   "dramadash",
   "flickreels",
   "goodshort",
@@ -42,6 +43,7 @@ export type CatalogPlatformId = (typeof CATALOG_PLATFORM_IDS)[number];
 export const CATALOG_PLATFORM_LABELS: Record<CatalogPlatformId, string> = {
   dramabox: "DramaBox",
   shortmax: "ShortMax",
+  shorten: "Shorten",
   dramadash: "DramaDash",
   flickreels: "FlickReels",
   goodshort: "GoodShort",

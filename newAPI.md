@@ -14,6 +14,7 @@ Replace {platform} in any path with one of:
 
 dramabox
 shortmax
+shorten
 dramadash
 flickreels
 goodshort

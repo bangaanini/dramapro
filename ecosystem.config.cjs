@@ -2,7 +2,7 @@ const projectRoot = __dirname;
 const appPort = "3001";
 const workerBaseUrl = `http://127.0.0.1:${appPort}`;
 const workerProviders =
-  "dramabox,shortmax,dramadash,flickreels,goodshort,melolo,netshort,reelbuzz,freereels,dramamax,flickshort,radreels,hishort,dramawave,litetv,chill,dramarush,movietv,drakor,cachebjav,meloshort,dramanova,microdrama";
+  "dramabox,shortmax,shorten,dramadash,flickreels,goodshort,melolo,netshort,reelbuzz,freereels,dramamax,flickshort,radreels,hishort,dramawave,litetv,chill,dramarush,movietv,drakor,cachebjav,meloshort,dramanova,microdrama";
 
 const loadEnvScript = [
   "set -a",

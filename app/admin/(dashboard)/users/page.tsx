@@ -62,6 +62,12 @@ export default async function AdminUsersPage(props: PageProps<"/admin/users">) {
           </div>
         ) : null}
 
+        {saved === "vip" ? (
+          <div className="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+            Akses VIP user berhasil diperbarui.
+          </div>
+        ) : null}
+
         {error ? (
           <div className="mt-4 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
             {error}

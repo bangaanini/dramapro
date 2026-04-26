@@ -1294,3 +1294,92 @@ export async function updateUserAffiliateCommissionOverrideAction(formData: Form
   revalidatePath("/affiliate");
   redirect(`${safeRedirectTo}${safeRedirectTo.includes("?") ? "&" : "?"}saved=commission`);
 }
+
+export async function grantUserVipAccessAction(formData: FormData) {
+  await requireAdminSession();
+
+  const userId = String(formData.get("userId") ?? "").trim();
+  const vipPricePlanId = String(formData.get("vipPricePlanId") ?? "").trim();
+  const vipDurationDays = parsePositiveInt(formData.get("vipDurationDays"), 0);
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/users").trim();
+  const safeRedirectTo = redirectTo.startsWith("/admin/users")
+    ? redirectTo
+    : "/admin/users";
+  const appendParam = (key: "error" | "saved", value: string) =>
+    `${safeRedirectTo}${safeRedirectTo.includes("?") ? "&" : "?"}${key}=${encodeURIComponent(value)}`;
+
+  if (!userId) {
+    redirect(appendParam("error", "User tidak ditemukan"));
+  }
+
+  if (!vipPricePlanId && vipDurationDays <= 0) {
+    redirect(appendParam("error", "Pilih paket VIP atau isi durasi manual"));
+  }
+
+  let durationDays = vipDurationDays;
+
+  if (vipPricePlanId) {
+    const plan = await prisma.vipPricePlan.findFirst({
+      where: {
+        id: vipPricePlanId,
+        isActive: true,
+      },
+      select: {
+        durationDays: true,
+      },
+    });
+
+    if (!plan) {
+      redirect(appendParam("error", "Paket VIP tidak ditemukan atau sedang nonaktif"));
+    }
+
+    durationDays = plan.durationDays;
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({
+        where: {
+          id: userId,
+        },
+        select: {
+          id: true,
+          vipExpiresAt: true,
+        },
+      });
+
+      if (!user) {
+        throw new Error("USER_NOT_FOUND");
+      }
+
+      const now = new Date();
+      const isCurrentlyVip =
+        Boolean(user.vipExpiresAt && user.vipExpiresAt.getTime() > now.getTime());
+      const baseExpiry = isCurrentlyVip && user.vipExpiresAt ? user.vipExpiresAt : now;
+      const nextExpiry = new Date(baseExpiry);
+
+      nextExpiry.setDate(nextExpiry.getDate() + durationDays);
+
+      await tx.user.update({
+        where: {
+          id: user.id,
+        },
+        data: {
+          vipStartedAt: isCurrentlyVip ? undefined : now,
+          vipExpiresAt: nextExpiry,
+        },
+      });
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "USER_NOT_FOUND") {
+      redirect(appendParam("error", "User tidak ditemukan"));
+    }
+
+    throw error;
+  }
+
+  revalidatePath("/admin/users");
+  revalidatePath("/profile");
+  revalidatePath("/vip");
+  redirect(appendParam("saved", "vip"));
+}

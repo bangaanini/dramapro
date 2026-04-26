@@ -198,6 +198,17 @@ export async function getAdminUsersTableData(input?: {
   }
 
   const resolvedAffiliateSettings = affiliateSettings ?? DEFAULT_AFFILIATE_SETTINGS;
+  const vipPlans = await prisma.vipPricePlan.findMany({
+    where: {
+      isActive: true,
+    },
+    orderBy: [{ sortOrder: "asc" }, { durationDays: "asc" }, { priceAmount: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      durationDays: true,
+    },
+  });
 
   return {
     query,
@@ -205,6 +216,7 @@ export async function getAdminUsersTableData(input?: {
     pageSize,
     total,
     totalPages,
+    vipPlans,
     users: users.map((user) => {
       const activeReferralCount = activeReferralMap.get(user.id) ?? 0;
       const commissionSummary = commissionSummaryMap.get(user.id) ?? {
