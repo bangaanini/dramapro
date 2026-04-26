@@ -1,6 +1,6 @@
 import { buildMediaProxyUrl, shouldProxyMediaUrl } from "@/lib/media-proxy";
 import { prisma } from "@/lib/prisma";
-import { ensureSeriesHydrated } from "@/lib/catalog";
+import { ensureSeriesPlayableFresh } from "@/lib/catalog";
 import { isEpisodeVipLocked } from "@/lib/vip";
 
 export type StreamResponse = {
@@ -76,6 +76,50 @@ function encodeBase64Url(value: string) {
   return Buffer.from(value, "utf8").toString("base64url");
 }
 
+function readSignedUrlExpiry(sourceUrl: string): number | null {
+  try {
+    const parsedUrl = new URL(sourceUrl);
+    const directExpires = parsedUrl.searchParams.get("Expires");
+
+    if (directExpires) {
+      const parsedExpires = Number.parseInt(directExpires, 10);
+      return Number.isFinite(parsedExpires) ? parsedExpires : null;
+    }
+
+    const encodedUrl = parsedUrl.pathname.split("/").at(-1);
+
+    if (
+      parsedUrl.hostname !== "api.dracinku.site" ||
+      !parsedUrl.pathname.includes("/aliplay/") ||
+      !encodedUrl
+    ) {
+      return null;
+    }
+
+    const decodedUrl = decodeBase64Url(encodedUrl);
+    const decodedExpires = new URL(decodedUrl).searchParams.get("Expires");
+
+    if (!decodedExpires) {
+      return null;
+    }
+
+    const parsedExpires = Number.parseInt(decodedExpires, 10);
+    return Number.isFinite(parsedExpires) ? parsedExpires : null;
+  } catch {
+    return null;
+  }
+}
+
+function isSignedStreamUrlExpired(sourceUrl: string) {
+  const expiresAtSeconds = readSignedUrlExpiry(sourceUrl);
+
+  if (!expiresAtSeconds) {
+    return false;
+  }
+
+  return expiresAtSeconds * 1000 <= Date.now() + 5 * 60 * 1000;
+}
+
 function buildAliplayUrlFromDecodedUrl(url: URL, decodedUrl: string) {
   const nextUrl = new URL(url.toString());
   const parts = nextUrl.pathname.split("/");
@@ -128,7 +172,9 @@ export async function resolveDramaStreamSources({
   bypassVipLock = false,
   vipLockFromEpisode = null,
 }: ResolveDramaStreamInput) {
-  const series = await ensureSeriesHydrated(internalDramaId);
+  let series = await ensureSeriesPlayableFresh(internalDramaId, {
+    allowStaleOnFailure: true,
+  });
 
   if (!series) {
     throw new DramaStreamResolutionError("Drama not found.", 404);
@@ -148,9 +194,32 @@ export async function resolveDramaStreamSources({
     );
   }
 
-  const episode = series.episodes.find((item) => item.episodeIndex === episodeIndex);
+  let episode = series.episodes.find((item) => item.episodeIndex === episodeIndex);
 
   if (!episode) {
+    series = await ensureSeriesPlayableFresh(internalDramaId, {
+      force: true,
+      hideOnFailure: true,
+    });
+    episode = series?.episodes.find((item) => item.episodeIndex === episodeIndex);
+  }
+
+  if (episode && isSignedStreamUrlExpired(episode.videoUrl)) {
+    const refreshedSeries = await ensureSeriesPlayableFresh(internalDramaId, {
+      force: true,
+      hideOnFailure: true,
+    });
+    const refreshedEpisode = refreshedSeries?.episodes.find(
+      (item) => item.episodeIndex === episodeIndex,
+    );
+
+    if (refreshedSeries && refreshedEpisode) {
+      series = refreshedSeries;
+      episode = refreshedEpisode;
+    }
+  }
+
+  if (!series || !episode) {
     throw new DramaStreamResolutionError(
       "Requested episode is out of range.",
       400,

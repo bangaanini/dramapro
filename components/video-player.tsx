@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import Hls from "hls.js";
+import dynamic from "next/dynamic";
 import {
   AlertCircle,
   Bookmark,
@@ -42,6 +43,14 @@ import {
   getLastUnlockedEpisode,
   isEpisodeVipLocked,
 } from "@/lib/vip";
+
+const H265HlsPlayer = dynamic(
+  () =>
+    import("@/components/h265-hls-player").then((module) => module.H265HlsPlayer),
+  {
+    ssr: false,
+  },
+);
 
 type StreamQuality = {
   label: string;
@@ -115,6 +124,7 @@ export function VideoPlayer({
   const hasAttemptedAutoFullscreenRef = useRef(false);
   const saveEpisodeRequestRef = useRef(false);
   const attemptedSourceUrlsRef = useRef<Set<string>>(new Set());
+  const h265FallbackAttemptedUrlsRef = useRef<Set<string>>(new Set());
   const isMutedRef = useRef(false);
   const selectedSubtitleRef = useRef("off");
   const initialResumeRef = useRef({
@@ -133,6 +143,7 @@ export function VideoPlayer({
   const [selectedQuality, setSelectedQuality] = useState<string | null>(null);
   const [selectedSubtitle, setSelectedSubtitle] = useState<string>("off");
   const [stream, setStream] = useState<StreamState | null>(null);
+  const [h265SourceUrl, setH265SourceUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [hasMounted, setHasMounted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -231,6 +242,7 @@ export function VideoPlayer({
 
   useEffect(() => {
     attemptedSourceUrlsRef.current.clear();
+    h265FallbackAttemptedUrlsRef.current.clear();
   }, [internalDramaId, selectedEpisode]);
 
   useEffect(() => {
@@ -404,6 +416,7 @@ export function VideoPlayer({
     }
 
     attemptedSourceUrlsRef.current.add(selectedSource.url);
+    setH265SourceUrl(null);
     setError(null);
 
     const shouldResumeInitialPosition =
@@ -553,6 +566,27 @@ export function VideoPlayer({
         tone: "info",
       });
       setSelectedQuality(nextQuality.label);
+      return;
+    }
+
+    const currentQuality =
+      stream.qualities.find((quality) => quality.label === selectedQuality) ??
+      stream.qualities[0];
+
+    if (
+      currentQuality?.mimeType === "application/x-mpegURL" &&
+      !h265FallbackAttemptedUrlsRef.current.has(currentQuality.url) &&
+      (await probeH265Hls(currentQuality.url))
+    ) {
+      h265FallbackAttemptedUrlsRef.current.add(currentQuality.url);
+      hlsRef.current?.destroy();
+      hlsRef.current = null;
+      setError(null);
+      setToast({
+        message: "Stream HEVC terdeteksi, mengaktifkan decoder fallback.",
+        tone: "info",
+      });
+      setH265SourceUrl(currentQuality.url);
       return;
     }
 
@@ -1351,13 +1385,43 @@ export function VideoPlayer({
               immersive ? "h-screen min-h-screen" : "aspect-[9/16]",
             )}
           >
-            <video
-              ref={videoElementRef}
-              className="drama-player-native absolute inset-0 size-full bg-black"
-              aria-label={title}
-              playsInline
-              preload="auto"
-            />
+            {h265SourceUrl ? (
+              <H265HlsPlayer
+                src={h265SourceUrl}
+                bindVideoElement={(video) => {
+                  videoElementRef.current = video;
+                }}
+                onReady={() => {
+                  setIsLoading(false);
+                  setIsPlaying(true);
+                }}
+                onError={(message) => {
+                  setError(message);
+                  setIsPlaying(false);
+                }}
+                onEnded={() => {
+                  setIsPlaying(false);
+                  setCurrentTimeSeconds(resolvedDurationSeconds);
+                }}
+                onPause={() => setIsPlaying(false)}
+                onPlay={() => setIsPlaying(true)}
+                onTimeUpdate={(currentTime, duration) => {
+                  setCurrentTimeSeconds(currentTime);
+
+                  if (duration) {
+                    setDurationSeconds(duration);
+                  }
+                }}
+              />
+            ) : (
+              <video
+                ref={videoElementRef}
+                className="drama-player-native absolute inset-0 size-full bg-black"
+                aria-label={title}
+                playsInline
+                preload="auto"
+              />
+            )}
 
             <button
               type="button"
@@ -1911,6 +1975,127 @@ export function VideoPlayer({
 
 function clearVideoTrackElements(video: HTMLVideoElement) {
   video.querySelectorAll("track").forEach((track) => track.remove());
+}
+
+async function probeH265Hls(sourceUrl: string) {
+  try {
+    const playlist = await fetchTextWithTimeout(sourceUrl, 8_000);
+    const mediaPlaylist = await resolveMediaPlaylist(playlist, sourceUrl);
+    const codecMatch = mediaPlaylist.text.match(/CODECS="([^"]+)"/iu);
+
+    if (codecMatch) {
+      const codecs = codecMatch[1].toLowerCase();
+      return (
+        codecs.includes("hev1") ||
+        codecs.includes("hvc1") ||
+        codecs.includes("h265")
+      );
+    }
+
+    const firstSegmentUrl = findFirstPlaylistUri(mediaPlaylist.text, mediaPlaylist.url);
+
+    if (!firstSegmentUrl) {
+      return false;
+    }
+
+    const response = await fetch(firstSegmentUrl, {
+      headers: {
+        Range: "bytes=0-131071",
+      },
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (!response.ok) {
+      return false;
+    }
+
+    const bytes = new Uint8Array(await response.arrayBuffer());
+
+    for (let index = 0; index < bytes.length - 5; index += 1) {
+      if (
+        bytes[index] === 0x00 &&
+        bytes[index + 1] === 0x00 &&
+        bytes[index + 2] === 0x00 &&
+        bytes[index + 3] === 0x01
+      ) {
+        const nalType = (bytes[index + 4] >> 1) & 0x3f;
+
+        if (nalType >= 32 && nalType <= 40) {
+          return true;
+        }
+
+        index += 3;
+      }
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
+async function fetchTextWithTimeout(url: string, timeoutMs: number) {
+  const response = await fetch(url, {
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`);
+  }
+
+  return response.text();
+}
+
+async function resolveMediaPlaylist(playlist: string, playlistUrl: string) {
+  const variantUri = findVariantPlaylistUri(playlist, playlistUrl);
+
+  if (!variantUri) {
+    return {
+      text: playlist,
+      url: playlistUrl,
+    };
+  }
+
+  return {
+    text: await fetchTextWithTimeout(variantUri, 8_000),
+    url: variantUri,
+  };
+}
+
+function findVariantPlaylistUri(playlist: string, playlistUrl: string) {
+  const lines = playlist.split(/\r?\n/u);
+
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!lines[index].trim().startsWith("#EXT-X-STREAM-INF")) {
+      continue;
+    }
+
+    const uri = lines[index + 1]?.trim();
+
+    if (uri && !uri.startsWith("#")) {
+      return resolvePlaylistUri(uri, playlistUrl);
+    }
+  }
+
+  return null;
+}
+
+function findFirstPlaylistUri(playlist: string, playlistUrl: string) {
+  const uri = playlist
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .find((line) => line && !line.startsWith("#"));
+
+  return uri ? resolvePlaylistUri(uri, playlistUrl) : null;
+}
+
+function resolvePlaylistUri(uri: string, playlistUrl: string) {
+  return new URL(
+    uri,
+    playlistUrl.startsWith("/")
+      ? window.location.origin
+      : playlistUrl,
+  ).toString();
 }
 
 function applySubtitleSelection(

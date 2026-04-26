@@ -13,7 +13,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { getAppSettings } from "@/lib/app-settings";
-import { ensureSeriesHydrated } from "@/lib/catalog";
+import { ensureSeriesHydrated, ensureSeriesPlayableFresh } from "@/lib/catalog";
 import { prisma } from "@/lib/prisma";
 import {
   DEFAULT_OG_IMAGE,
@@ -96,7 +96,9 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
 
   const [series, watchHistory, favorite, vipSettings, settings, hasAdminBypass] =
     await Promise.all([
-      getSeriesById(id),
+      ensureSeriesPlayableFresh(id, {
+        hideOnFailure: true,
+      }),
       user
         ? prisma.watchHistory.findUnique({
             where: {

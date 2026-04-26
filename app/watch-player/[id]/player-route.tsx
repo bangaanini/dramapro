@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getAppSettings } from "@/lib/app-settings";
-import { ensureSeriesHydrated } from "@/lib/catalog";
+import { ensureSeriesHydrated, ensureSeriesPlayableFresh } from "@/lib/catalog";
 import { prisma } from "@/lib/prisma";
 import { toSeoDescription } from "@/lib/site";
 import { getCurrentUser, userHasAdminVideoBypass } from "@/lib/user-auth";
@@ -79,7 +79,9 @@ export async function WatchPlayerRoute(props: WatchPlayerPageProps) {
 
   const [series, savedEpisodes, watchHistory, vipSettings, hasAdminBypass] =
     await Promise.all([
-      getSeriesById(id),
+      ensureSeriesPlayableFresh(id, {
+        hideOnFailure: true,
+      }),
       user
         ? prisma.savedEpisode.findMany({
             where: {

@@ -20,6 +20,8 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
     "@prisma/adapter-pg": "^7.7.0",
     "@prisma/client": "^7.7.0",
     "class-variance-authority": "^0.7.1",

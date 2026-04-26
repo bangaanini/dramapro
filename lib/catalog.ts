@@ -19,6 +19,13 @@ const SYNC_ALL_DETAIL_BATCH_SIZE = 10;
 const SYNC_ALL_DETAIL_CONCURRENCY = 4;
 const SYNC_ALL_JOB_LEASE_MS = 60_000;
 const HOMEPAGE_HIDDEN_REASON_PENDING_AUDIT = "pending_audit";
+const HOMEPAGE_HIDDEN_REASON_ON_DEMAND_FAILED = "detail_on_demand_failed";
+const CATALOG_DETAIL_TTL_MINUTES = Number.parseInt(
+  process.env.CATALOG_DETAIL_TTL_MINUTES?.trim() || "360",
+  10,
+);
+const SHOULD_AUDIT_AFTER_INDEX =
+  process.env.CATALOG_SYNC_AUDIT_AFTER_INDEX?.trim().toLowerCase() === "true";
 
 const SYNC_ALL_RUNNING_STATUSES = ["queued", "running"] as const;
 
@@ -90,6 +97,41 @@ function checksumEpisode(input: {
   videoUrl: string;
 }) {
   return `${input.episodeIndex}:${input.episodeLabel}:${input.videoUrl}`;
+}
+
+function isSeriesDetailStale(lastDetailSyncedAt: Date | null) {
+  if (!lastDetailSyncedAt) {
+    return true;
+  }
+
+  const ttlMinutes = Number.isFinite(CATALOG_DETAIL_TTL_MINUTES)
+    ? Math.max(1, CATALOG_DETAIL_TTL_MINUTES)
+    : 360;
+
+  return Date.now() - lastDetailSyncedAt.getTime() > ttlMinutes * 60 * 1000;
+}
+
+function parseEpisodeIndexFromLabel(label: string) {
+  const match = label.match(/\d+/u);
+  const parsed = Number.parseInt(match?.[0] ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function normalizeChapterEpisodeIndex(
+  chapter: {
+    eps: string;
+    index: number | string;
+  },
+  usesZeroBasedIndex: boolean,
+) {
+  const rawIndex = Number(chapter.index);
+
+  if (Number.isFinite(rawIndex)) {
+    const normalizedIndex = usesZeroBasedIndex ? rawIndex + 1 : rawIndex;
+    return normalizedIndex > 0 ? normalizedIndex : null;
+  }
+
+  return parseEpisodeIndexFromLabel(String(chapter.eps ?? ""));
 }
 
 async function setSeriesHomepageVisibility(
@@ -349,11 +391,13 @@ async function upsertCatalogSeriesSummaries(
       select: {
         id: true,
         lastDetailSyncedAt: true,
-        isHomepageVisible: true,
+        homepageHiddenReason: true,
       },
     });
-    const shouldRequireAudit =
-      !existing || !existing.lastDetailSyncedAt || !existing.isHomepageVisible;
+    const shouldRestoreIndexedVisibility =
+      !existing ||
+      existing.homepageHiddenReason === HOMEPAGE_HIDDEN_REASON_PENDING_AUDIT;
+    const shouldQueueDetailRefresh = !existing || !existing.lastDetailSyncedAt;
 
     const saved = await prisma.catalogSeries.upsert({
       where: {
@@ -371,8 +415,8 @@ async function upsertCatalogSeriesSummaries(
         description: entry.introduction,
         tags: entry.tags,
         playCount: entry.playCount,
-        isHomepageVisible: false,
-        homepageHiddenReason: HOMEPAGE_HIDDEN_REASON_PENDING_AUDIT,
+        isHomepageVisible: true,
+        homepageHiddenReason: null,
       },
       update: {
         title: entry.name,
@@ -381,10 +425,10 @@ async function upsertCatalogSeriesSummaries(
         description: entry.introduction,
         tags: entry.tags,
         playCount: entry.playCount,
-        ...(shouldRequireAudit
+        ...(shouldRestoreIndexedVisibility
           ? {
-              isHomepageVisible: false,
-              homepageHiddenReason: HOMEPAGE_HIDDEN_REASON_PENDING_AUDIT,
+              isHomepageVisible: true,
+              homepageHiddenReason: null,
             }
           : {}),
       },
@@ -393,7 +437,7 @@ async function upsertCatalogSeriesSummaries(
       },
     });
 
-    if (shouldRequireAudit) {
+    if (shouldQueueDetailRefresh) {
       await prisma.catalogSyncState.upsert({
         where: {
           seriesId: saved.id,
@@ -729,11 +773,22 @@ export async function hydrateSeriesDetail(seriesId: string) {
   });
 
   const chapters = payload.chapters ?? [];
+  const numericChapterIndexes = chapters
+    .map((chapter) => Number(chapter.index))
+    .filter((index) => Number.isFinite(index));
+  const usesZeroBasedIndex =
+    numericChapterIndexes.length > 0 && Math.min(...numericChapterIndexes) === 0;
   const validChapters = chapters
     .map((chapter) => {
-      const episodeIndex = Number(chapter.index);
+      const episodeIndex = normalizeChapterEpisodeIndex(
+        {
+          eps: String(chapter.eps ?? ""),
+          index: chapter.index,
+        },
+        usesZeroBasedIndex,
+      );
 
-      if (!Number.isFinite(episodeIndex)) {
+      if (!episodeIndex) {
         return null;
       }
 
@@ -781,6 +836,19 @@ export async function hydrateSeriesDetail(seriesId: string) {
       isHomepageVisible: validChapters.length > 0,
       homepageHiddenReason:
         validChapters.length > 0 ? null : "no_episodes_after_sync",
+    },
+  });
+
+  await prisma.catalogEpisode.deleteMany({
+    where: {
+      seriesId: series.id,
+      ...(validChapters.length > 0
+        ? {
+            episodeIndex: {
+              notIn: validChapters.map((chapter) => chapter.episodeIndex),
+            },
+          }
+        : {}),
     },
   });
 
@@ -1640,6 +1708,33 @@ async function processSyncAllTabPage(
 
   if (!tab) {
     if (job.platformIndex + 1 >= CATALOG_PLATFORM_IDS.length) {
+      if (!SHOULD_AUDIT_AFTER_INDEX) {
+        const entry = syncAllEntry(
+          "info",
+          "Index katalog selesai untuk semua provider. Audit massal dilewati; detail episode akan di-refresh saat dibuka.",
+        );
+        const updated = await prisma.catalogSyncJob.update({
+          where: {
+            id: job.id,
+          },
+          data: {
+            status: "completed" satisfies SyncAllJobStatus,
+            phase: "completed" satisfies SyncAllJobPhase,
+            completedPlatforms: CATALOG_PLATFORM_IDS.length,
+            currentPlatformId: "",
+            currentTabId: null,
+            currentTabName: "",
+            finishedAt: new Date(),
+            lastMessage:
+              "Index katalog selesai. Detail episode memakai on-demand refresh.",
+            recentLogs: pushSyncAllEntry(job.recentLogs, entry),
+            ...clearSyncAllLeaseData(),
+          },
+        });
+
+        return refreshSyncAllJobCounters(updated);
+      }
+
       return startSyncAllAuditPhase(
         {
           ...job,
@@ -1833,8 +1928,8 @@ export async function runCatalogSyncAllStep(jobId?: string, runnerId?: string) {
   }
 }
 
-export async function ensureSeriesHydrated(seriesId: string) {
-  const series = await prisma.catalogSeries.findUnique({
+async function getCatalogSeriesWithEpisodes(seriesId: string) {
+  return prisma.catalogSeries.findUnique({
     where: { id: seriesId },
     include: {
       episodes: {
@@ -1844,18 +1939,80 @@ export async function ensureSeriesHydrated(seriesId: string) {
       },
     },
   });
+}
+
+export async function ensureSeriesPlayableFresh(
+  seriesId: string,
+  options?: {
+    allowStaleOnFailure?: boolean;
+    force?: boolean;
+    hideOnFailure?: boolean;
+  },
+) {
+  const series = await getCatalogSeriesWithEpisodes(seriesId);
 
   if (!series) {
     return null;
   }
 
-  if (series.episodes.length > 0) {
+  const shouldRefresh =
+    options?.force ||
+    series.episodes.length === 0 ||
+    series.chapterCount === 0 ||
+    isSeriesDetailStale(series.lastDetailSyncedAt);
+
+  if (!shouldRefresh) {
     return series;
   }
 
   try {
     return await hydrateSeriesDetail(seriesId);
+  } catch (error) {
+    if (options?.hideOnFailure) {
+      await setSeriesHomepageVisibility(
+        seriesId,
+        false,
+        HOMEPAGE_HIDDEN_REASON_ON_DEMAND_FAILED,
+      );
+
+      await prisma.catalogSyncState.upsert({
+        where: { seriesId },
+        create: {
+          seriesId,
+          scope: "series",
+          status: "failed",
+          hasMore: false,
+          lastError:
+            error instanceof Error
+              ? error.message
+              : "On-demand detail refresh failed.",
+        },
+        update: {
+          status: "failed",
+          hasMore: false,
+          lastError:
+            error instanceof Error
+              ? error.message
+              : "On-demand detail refresh failed.",
+        },
+      });
+    }
+
+    if (options?.allowStaleOnFailure && series.episodes.length > 0) {
+      return series;
+    }
+
+    return null;
+  }
+}
+
+export async function ensureSeriesHydrated(seriesId: string) {
+  try {
+    return await ensureSeriesPlayableFresh(seriesId, {
+      allowStaleOnFailure: true,
+    });
   } catch {
+    const series = await getCatalogSeriesWithEpisodes(seriesId);
     return series;
   }
 }
