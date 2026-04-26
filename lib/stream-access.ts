@@ -79,11 +79,24 @@ function encodeBase64Url(value: string) {
 function readSignedUrlExpiry(sourceUrl: string): number | null {
   try {
     const parsedUrl = new URL(sourceUrl);
-    const directExpires = parsedUrl.searchParams.get("Expires");
+    const readExpiryFromUrl = (url: URL) => {
+      const directExpires = url.searchParams.get("Expires");
 
-    if (directExpires) {
-      const parsedExpires = Number.parseInt(directExpires, 10);
-      return Number.isFinite(parsedExpires) ? parsedExpires : null;
+      if (directExpires) {
+        const parsedExpires = Number.parseInt(directExpires, 10);
+        return Number.isFinite(parsedExpires) ? parsedExpires : null;
+      }
+
+      const verify = url.searchParams.get("verify");
+      const verifyExpires = Number.parseInt(verify?.split("-")[0] ?? "", 10);
+
+      return Number.isFinite(verifyExpires) ? verifyExpires : null;
+    };
+
+    const directExpiry = readExpiryFromUrl(parsedUrl);
+
+    if (directExpiry) {
+      return directExpiry;
     }
 
     const encodedUrl = parsedUrl.pathname.split("/").at(-1);
@@ -97,14 +110,7 @@ function readSignedUrlExpiry(sourceUrl: string): number | null {
     }
 
     const decodedUrl = decodeBase64Url(encodedUrl);
-    const decodedExpires = new URL(decodedUrl).searchParams.get("Expires");
-
-    if (!decodedExpires) {
-      return null;
-    }
-
-    const parsedExpires = Number.parseInt(decodedExpires, 10);
-    return Number.isFinite(parsedExpires) ? parsedExpires : null;
+    return readExpiryFromUrl(new URL(decodedUrl));
   } catch {
     return null;
   }

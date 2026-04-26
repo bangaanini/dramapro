@@ -33,6 +33,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "api.dracinku.site" },
       { protocol: "https", hostname: "dl.lite.tv" },
       { protocol: "https", hostname: "rtp.topinnovations.co" },
+      { protocol: "https", hostname: "image.fishnovel.com" },
     ],
   },
 };

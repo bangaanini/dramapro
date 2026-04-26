@@ -7,6 +7,7 @@ const UNOPTIMIZED_IMAGE_HOSTS = new Set([
   "awscover.netshort.com",
   "hwztchapter.dramaboxdb.com",
   "hwztvideo.dramaboxdb.com",
+  "image.fishnovel.com",
 ]);
 
 export function cn(...inputs: ClassValue[]) {
