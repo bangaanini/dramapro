@@ -127,6 +127,7 @@ export function VideoPlayer({
   const h265FallbackAttemptedUrlsRef = useRef<Set<string>>(new Set());
   const isMutedRef = useRef(false);
   const selectedSubtitleRef = useRef("off");
+  const isIndonesianSubtitleEnabledRef = useRef(false);
   const initialResumeRef = useRef({
     episodeIndex: initialEpisode,
     positionSeconds: initialPositionSeconds,
@@ -364,9 +365,15 @@ export function VideoPlayer({
         }
 
         const nextStream = payload as StreamState;
+        const nextIndonesianSubtitle = findIndonesianSubtitle(nextStream.subtitles);
+
         setStream(nextStream);
         setSelectedQuality(nextStream.defaultQuality);
-        setSelectedSubtitle("off");
+        setSelectedSubtitle(
+          isIndonesianSubtitleEnabledRef.current && nextIndonesianSubtitle
+            ? nextIndonesianSubtitle.label
+            : "off",
+        );
         setIsChromeVisible(true);
         setCurrentTimeSeconds(0);
         setDurationSeconds(0);
@@ -638,10 +645,20 @@ export function VideoPlayer({
   }, [selectedSubtitle, stream]);
 
   useEffect(() => {
-    if (
-      selectedSubtitle !== "off" &&
-      (!indonesianSubtitle || selectedSubtitle !== indonesianSubtitle.label)
-    ) {
+    if (!isIndonesianSubtitleEnabledRef.current) {
+      if (selectedSubtitle !== "off") {
+        setSelectedSubtitle("off");
+      }
+
+      return;
+    }
+
+    if (indonesianSubtitle && selectedSubtitle !== indonesianSubtitle.label) {
+      setSelectedSubtitle(indonesianSubtitle.label);
+      return;
+    }
+
+    if (!indonesianSubtitle && selectedSubtitle !== "off") {
       setSelectedSubtitle("off");
     }
   }, [indonesianSubtitle, selectedSubtitle]);
@@ -669,6 +686,20 @@ export function VideoPlayer({
     selectedEpisode + 1,
     vipLockFromEpisode,
   );
+
+  function toggleIndonesianSubtitle() {
+    if (!indonesianSubtitle) {
+      return;
+    }
+
+    setSelectedSubtitle((currentSubtitle) => {
+      const shouldEnable = currentSubtitle === "off";
+
+      isIndonesianSubtitleEnabledRef.current = shouldEnable;
+
+      return shouldEnable ? indonesianSubtitle.label : "off";
+    });
+  }
 
   function togglePlayback() {
     const video = videoElementRef.current;
@@ -1565,9 +1596,7 @@ export function VideoPlayer({
                     return;
                   }
 
-                  setSelectedSubtitle((currentSubtitle) =>
-                    currentSubtitle === "off" ? indonesianSubtitle.label : "off",
-                  );
+                  toggleIndonesianSubtitle();
                 }}
                 hapticStyle="selection"
                 active={selectedSubtitle !== "off"}
@@ -1874,13 +1903,7 @@ export function VideoPlayer({
                     ) : indonesianSubtitle ? (
                       <button
                         type="button"
-                        onClick={() =>
-                          setSelectedSubtitle((currentSubtitle) =>
-                            currentSubtitle === "off"
-                              ? indonesianSubtitle.label
-                              : "off",
-                          )
-                        }
+                        onClick={toggleIndonesianSubtitle}
                         className={cn(
                           "rounded-full border px-3 py-2 text-sm font-medium transition",
                           selectedSubtitle !== "off"
