@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import Image from "next/image";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { DramaCard } from "@/components/drama-card";
 import { Button } from "@/components/ui/button";
@@ -50,19 +51,102 @@ function createInitialFeedState(
 }
 
 export function HomeCatalogGrid({ data }: HomeCatalogGridProps) {
-  const providerTabs = data.providerTabs ?? [];
-  const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
-  const [feed, setFeed] = useState<FeedState>(
-    createInitialFeedState(
-      data.initialFeed.entries,
-      data.initialFeed.total,
-      data.initialFeed.nextOffset,
-      data.initialFeed.hasMore,
-    ),
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const providerTabs = useMemo(() => data.providerTabs ?? [], [data.providerTabs]);
+  const requestedProviderId = searchParams.get("provider");
+  const initialProviderId = providerTabs.some(
+    (provider) => provider.id === requestedProviderId,
+  )
+    ? requestedProviderId
+    : null;
+  const [activeProviderId, setActiveProviderId] = useState<string | null>(
+    initialProviderId,
   );
+  const [feed, setFeed] = useState<FeedState>(
+    initialProviderId
+      ? {
+          entries: [],
+          total: 0,
+          nextOffset: 0,
+          hasMore: false,
+          isLoading: true,
+          error: null,
+        }
+      : createInitialFeedState(
+          data.initialFeed.entries,
+          data.initialFeed.total,
+          data.initialFeed.nextOffset,
+          data.initialFeed.hasMore,
+        ),
+  );
+  const initialProviderLoadDoneRef = useRef(!initialProviderId);
+  const feedRequestIdRef = useRef(0);
   const activeProvider = providerTabs.find(
     (provider) => provider.id === activeProviderId,
   );
+  const validProviderIds = useMemo(
+    () => new Set(providerTabs.map((provider) => provider.id)),
+    [providerTabs],
+  );
+
+  useEffect(() => {
+    if (!initialProviderId || initialProviderLoadDoneRef.current) {
+      return;
+    }
+
+    initialProviderLoadDoneRef.current = true;
+    const requestId = feedRequestIdRef.current + 1;
+    feedRequestIdRef.current = requestId;
+
+    async function loadInitialProviderFeed() {
+      try {
+        const response = await fetch(buildFeedUrl(0, initialProviderId));
+        const payload = (await response.json()) as Omit<
+          FeedState,
+          "isLoading" | "error"
+        > & {
+          error?: string;
+        };
+
+        if (!response.ok) {
+          throw new Error(payload.error || "Gagal memuat katalog provider.");
+        }
+
+        if (feedRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        setFeed({
+          entries: payload.entries,
+          total: payload.total,
+          nextOffset: payload.nextOffset,
+          hasMore: payload.hasMore,
+          isLoading: false,
+          error: null,
+        });
+      } catch (error) {
+        if (feedRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        setFeed({
+          entries: [],
+          total: 0,
+          nextOffset: 0,
+          hasMore: false,
+          isLoading: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Gagal memuat katalog provider.",
+        });
+      }
+    }
+
+    void loadInitialProviderFeed();
+  }, [initialProviderId]);
 
   function buildFeedUrl(offset: number, providerId: string | null) {
     const params = new URLSearchParams({
@@ -77,12 +161,30 @@ export function HomeCatalogGrid({ data }: HomeCatalogGridProps) {
     return `/api/catalog/feed?${params.toString()}`;
   }
 
-  async function loadFeedForProvider(providerId: string | null) {
-    if (feed.isLoading) {
-      return;
+  function replaceProviderUrl(providerId: string | null) {
+    const nextParams = new URLSearchParams(searchParams.toString());
+
+    if (providerId) {
+      nextParams.set("provider", providerId);
+    } else {
+      nextParams.delete("provider");
     }
 
-    setActiveProviderId(providerId);
+    const query = nextParams.toString();
+
+    router.replace(query ? `${pathname}?${query}` : pathname, {
+      scroll: false,
+    });
+  }
+
+  async function loadFeedForProvider(providerId: string | null) {
+    const safeProviderId =
+      providerId && validProviderIds.has(providerId) ? providerId : null;
+    const requestId = feedRequestIdRef.current + 1;
+    feedRequestIdRef.current = requestId;
+
+    setActiveProviderId(safeProviderId);
+    replaceProviderUrl(safeProviderId);
     setFeed({
       entries: [],
       total: 0,
@@ -93,13 +195,17 @@ export function HomeCatalogGrid({ data }: HomeCatalogGridProps) {
     });
 
     try {
-      const response = await fetch(buildFeedUrl(0, providerId));
+      const response = await fetch(buildFeedUrl(0, safeProviderId));
       const payload = (await response.json()) as Omit<FeedState, "isLoading" | "error"> & {
         error?: string;
       };
 
       if (!response.ok) {
         throw new Error(payload.error || "Gagal memuat katalog provider.");
+      }
+
+      if (feedRequestIdRef.current !== requestId) {
+        return;
       }
 
       setFeed({
@@ -111,6 +217,10 @@ export function HomeCatalogGrid({ data }: HomeCatalogGridProps) {
         error: null,
       });
     } catch (error) {
+      if (feedRequestIdRef.current !== requestId) {
+        return;
+      }
+
       setFeed({
         entries: [],
         total: 0,

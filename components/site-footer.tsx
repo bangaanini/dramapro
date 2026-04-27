@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { BookOpen, Home, Megaphone, Search, UserRound } from "lucide-react";
@@ -10,12 +10,24 @@ import { triggerSelectionHaptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
-  { href: "/search", label: "Cari", icon: Search, key: "search", prominent: false },
+  { href: "/", label: "Home", icon: Home, key: "home" },
   { href: "/library", label: "Perpustakaan", icon: BookOpen, key: "library", prominent: false },
-  { href: "/", label: "HOME", icon: Home, key: "home", prominent: true },
+  { href: "/search", label: "Cari", icon: Search, key: "search", prominent: false },
   { href: "/affiliate", label: "Affiliate", icon: Megaphone, key: "affiliate", prominent: false },
   { href: "/profile", label: "Profil", icon: UserRound, key: "profile", prominent: false },
 ] as const;
+
+function subscribeToDocumentBody() {
+  return () => {};
+}
+
+function getDocumentBodySnapshot() {
+  return document.body;
+}
+
+function getServerDocumentBodySnapshot() {
+  return null;
+}
 
 function resolveCurrentKey(pathname: string) {
   if (pathname === "/") {
@@ -50,7 +62,11 @@ export function SiteFooter() {
   const router = useRouter();
   const currentKey = resolveCurrentKey(pathname);
   const touchHapticLockRef = useRef(false);
-  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  const portalTarget = useSyncExternalStore(
+    subscribeToDocumentBody,
+    getDocumentBodySnapshot,
+    getServerDocumentBodySnapshot,
+  );
 
   useEffect(() => {
     for (const item of NAV_ITEMS) {
@@ -59,10 +75,6 @@ export function SiteFooter() {
       }
     }
   }, [pathname, router]);
-
-  useEffect(() => {
-    setPortalTarget(document.body);
-  }, []);
 
   function prefetchRoute(href: string) {
     router.prefetch(href);
@@ -102,35 +114,23 @@ export function SiteFooter() {
                 triggerSelectionHaptic();
               }}
               className={cn(
-                "relative flex min-w-0 flex-1 flex-col items-center justify-center gap-2 text-center transition",
-                item.prominent ? "pb-0" : "pt-1",
+                "relative flex min-w-0 flex-1 flex-col items-center justify-center gap-1.5 pt-1 text-center transition",
               )}
             >
               <span
                 className={cn(
-                  "relative inline-flex items-center justify-center rounded-full border transition",
-                  item.prominent
-                    ? cn(
-                        "size-16 -translate-y-7 shadow-[0_0_26px_rgba(168,85,247,0.38)] before:absolute before:inset-0 before:rounded-full before:bg-[radial-gradient(circle,rgba(199,132,255,0.22),transparent_66%)]",
-                        isActive
-                          ? "border-fuchsia-300/40 bg-[linear-gradient(180deg,#b55cff,#8b3dff)] text-white"
-                          : "border-white/12 bg-black text-white/85",
-                      )
-                    : cn(
-                        "size-11 border-transparent",
-                        isActive
-                          ? "bg-white/12 text-white shadow-[0_10px_24px_rgba(0,0,0,0.2)]"
-                          : "bg-transparent text-white/60",
-                      ),
+                  "relative inline-flex size-11 items-center justify-center rounded-full border transition",
+                  isActive
+                    ? "border-white/12 bg-white/12 text-white shadow-[0_10px_24px_rgba(0,0,0,0.2)]"
+                    : "border-transparent bg-transparent text-white/60",
                 )}
               >
-                <Icon className={item.prominent ? "size-7" : "size-6"} />
+                <Icon className="size-6" />
               </span>
               <span
                 className={cn(
                   "text-[11px] font-medium tracking-tight",
                   isActive ? "text-white" : "text-white/58",
-                  item.prominent && "mt-[-0.8rem] font-semibold",
                 )}
               >
                 {item.label}

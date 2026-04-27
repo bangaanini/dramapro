@@ -151,12 +151,12 @@ export function VideoPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isChromeVisible, setIsChromeVisible] = useState(true);
   const [isEpisodeSheetOpen, setIsEpisodeSheetOpen] = useState(false);
-  const [isSubtitleSheetOpen, setIsSubtitleSheetOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [savedEpisodeIndices, setSavedEpisodeIndices] = useState(initialSavedEpisodes);
   const [isSavePending, setIsSavePending] = useState(false);
   const [seekNotice, setSeekNotice] = useState<string | null>(null);
   const [toast, setToast] = useState<PlayerToast | null>(null);
+  const [activeSubtitleText, setActiveSubtitleText] = useState("");
   const [currentTimeSeconds, setCurrentTimeSeconds] = useState(0);
   const [durationSeconds, setDurationSeconds] = useState(0);
   const [scrubTimeSeconds, setScrubTimeSeconds] = useState<number | null>(null);
@@ -176,6 +176,7 @@ export function VideoPlayer({
       ? `Episode VIP terkunci mulai EP.${vipLockFromEpisode}.`
       : `Semua episode sedang terkunci mulai EP.${vipLockFromEpisode}.`
     : null;
+  const indonesianSubtitle = findIndonesianSubtitle(stream?.subtitles ?? []);
 
   useEffect(() => {
     setHasMounted(true);
@@ -261,7 +262,7 @@ export function VideoPlayer({
   }, [isMuted]);
 
   useEffect(() => {
-    if (!isEpisodeSheetOpen && !isSubtitleSheetOpen && !isFullscreen) {
+    if (!isEpisodeSheetOpen && !isFullscreen) {
       return;
     }
 
@@ -271,7 +272,7 @@ export function VideoPlayer({
     return () => {
       document.body.style.overflow = overflow;
     };
-  }, [isEpisodeSheetOpen, isSubtitleSheetOpen, isFullscreen]);
+  }, [isEpisodeSheetOpen, isFullscreen]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -601,11 +602,49 @@ export function VideoPlayer({
     const video = videoElementRef.current;
 
     if (!video || !stream) {
+      setActiveSubtitleText("");
       return;
     }
 
-    applySubtitleSelection(video, selectedSubtitle);
+    const selectedTrack = applySubtitleSelection(video, selectedSubtitle);
+
+    if (!selectedTrack) {
+      setActiveSubtitleText("");
+      return;
+    }
+
+    const updateActiveSubtitleText = () => {
+      const cueList = selectedTrack.activeCues;
+      const cueArrayLike = cueList as unknown as ArrayLike<TextTrackCue>;
+      const cues = Array.from(
+        { length: cueList?.length ?? 0 },
+        (_, index) => cueArrayLike[index],
+      ).filter((cue): cue is TextTrackCue => Boolean(cue));
+      const text = cues
+        .map((cue) => ("text" in cue ? String(cue.text) : ""))
+        .filter(Boolean)
+        .join("\n")
+        .trim();
+
+      setActiveSubtitleText(text);
+    };
+
+    updateActiveSubtitleText();
+    selectedTrack.addEventListener("cuechange", updateActiveSubtitleText);
+
+    return () => {
+      selectedTrack.removeEventListener("cuechange", updateActiveSubtitleText);
+    };
   }, [selectedSubtitle, stream]);
+
+  useEffect(() => {
+    if (
+      selectedSubtitle !== "off" &&
+      (!indonesianSubtitle || selectedSubtitle !== indonesianSubtitle.label)
+    ) {
+      setSelectedSubtitle("off");
+    }
+  }, [indonesianSubtitle, selectedSubtitle]);
 
   useEffect(() => {
     return () => {
@@ -622,7 +661,6 @@ export function VideoPlayer({
   }, [episodeCount, vipLockFromEpisode]);
 
   const qualityOptions = stream?.qualities ?? [];
-  const subtitleOptions = stream?.subtitles ?? [];
   const episodeNumbers = Array.from(
     { length: Math.max(episodeCount, 0) },
     (_, index) => index + 1,
@@ -1450,6 +1488,12 @@ export function VideoPlayer({
               )}
             />
 
+            {activeSubtitleText ? (
+              <div className="pointer-events-none absolute inset-x-5 top-[58%] z-[25] -translate-y-1/2 whitespace-pre-line text-center text-[clamp(1.35rem,5.7vw,2.35rem)] font-extrabold leading-[1.15] text-white drop-shadow-[0_3px_3px_rgba(0,0,0,0.95)] [text-shadow:0_3px_14px_rgba(0,0,0,0.98),0_1px_2px_rgba(0,0,0,0.95)] sm:inset-x-8 sm:text-3xl">
+                {activeSubtitleText}
+              </div>
+            ) : null}
+
             <div
               className={cn(
                 "absolute left-4 top-4 z-30 flex max-w-[70%] flex-wrap gap-2 transition duration-300",
@@ -1500,11 +1544,7 @@ export function VideoPlayer({
                 icon={<ListVideo className="size-4" />}
               />
               <PlayerAction
-                label={
-                  selectedSubtitle === "off"
-                    ? "Subtitle"
-                    : `Sub: ${selectedSubtitle}`
-                }
+                label={selectedSubtitle === "off" ? "Subtitle Off" : "Subtitle On"}
                 onClick={() => {
                   setIsChromeVisible(true);
 
@@ -1517,15 +1557,17 @@ export function VideoPlayer({
                     return;
                   }
 
-                  if (subtitleOptions.length === 0) {
+                  if (!indonesianSubtitle) {
                     setToast({
-                      message: "Episode ini tidak menyediakan subtitle terpisah.",
+                      message: "Episode ini tidak menyediakan subtitle Indonesia.",
                       tone: "info",
                     });
                     return;
                   }
 
-                  setIsSubtitleSheetOpen(true);
+                  setSelectedSubtitle((currentSubtitle) =>
+                    currentSubtitle === "off" ? indonesianSubtitle.label : "off",
+                  );
                 }}
                 hapticStyle="selection"
                 active={selectedSubtitle !== "off"}
@@ -1732,66 +1774,6 @@ export function VideoPlayer({
           </div>
         ) : null}
 
-        {isSubtitleSheetOpen ? (
-          <div className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm">
-            <button
-              type="button"
-              onClick={() => setIsSubtitleSheetOpen(false)}
-              className="absolute inset-0"
-              aria-label="Close subtitle picker"
-            />
-            <div className="absolute inset-x-0 bottom-0 rounded-t-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(46,33,43,0.96),rgba(22,16,20,0.98))] p-5 shadow-[0_-24px_60px_rgba(0,0,0,0.4)]">
-              <div className="mx-auto mb-4 h-1.5 w-20 rounded-full bg-white/25" />
-              <div className="mx-auto w-full max-w-[460px] space-y-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-                <div className="text-center">
-                  <h3 className="text-2xl font-semibold text-white">Pilih Subtitle</h3>
-                  <p className="mt-2 text-sm text-[var(--muted)]">
-                    Pilih subtitle terpisah yang ingin ditampilkan.
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap justify-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      triggerSelectionHaptic();
-                      setSelectedSubtitle("off");
-                      setIsSubtitleSheetOpen(false);
-                    }}
-                    className={cn(
-                      "rounded-full border px-4 py-2 text-sm font-medium transition",
-                      selectedSubtitle === "off"
-                        ? "border-accent/35 bg-accent text-white"
-                        : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:text-white",
-                    )}
-                  >
-                    Off
-                  </button>
-
-                  {subtitleOptions.map((subtitle) => (
-                    <button
-                      key={`${subtitle.label}-${subtitle.language}-${subtitle.url}-sheet`}
-                      type="button"
-                      onClick={() => {
-                        triggerSelectionHaptic();
-                        setSelectedSubtitle(subtitle.label);
-                        setIsSubtitleSheetOpen(false);
-                      }}
-                      className={cn(
-                        "rounded-full border px-4 py-2 text-sm font-medium transition",
-                        selectedSubtitle === subtitle.label
-                          ? "border-accent/35 bg-accent text-white"
-                          : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:text-white",
-                      )}
-                    >
-                      {subtitle.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : null}
       </div>
 
       {!immersive && !isFullscreen ? (
@@ -1880,9 +1862,7 @@ export function VideoPlayer({
                       Subtitle
                     </h3>
                     <span className="text-xs text-[var(--muted)]">
-                      {selectedSubtitle === "off"
-                        ? "Mati"
-                        : `Aktif: ${selectedSubtitle}`}
+                      {selectedSubtitle === "off" ? "Mati" : "Indonesia aktif"}
                     </span>
                   </div>
 
@@ -1891,39 +1871,30 @@ export function VideoPlayer({
                       <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-[var(--muted)]">
                         Subtitle akan tersedia setelah episode bisa diputar.
                       </div>
-                    ) : subtitleOptions.length > 0 ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedSubtitle("off")}
-                          className={cn(
-                            "rounded-full border px-3 py-2 text-sm font-medium transition",
-                            selectedSubtitle === "off"
-                              ? "border-accent/35 bg-accent text-white"
-                              : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:text-white",
-                          )}
-                        >
-                          Off
-                        </button>
-                        {subtitleOptions.map((subtitle) => (
-                          <button
-                            key={`${subtitle.label}-${subtitle.language}-${subtitle.url}`}
-                            type="button"
-                            onClick={() => setSelectedSubtitle(subtitle.label)}
-                            className={cn(
-                              "rounded-full border px-3 py-2 text-sm font-medium transition",
-                              selectedSubtitle === subtitle.label
-                                ? "border-accent/35 bg-accent text-white"
-                                : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:text-white",
-                            )}
-                          >
-                            {subtitle.label}
-                          </button>
-                        ))}
-                      </>
+                    ) : indonesianSubtitle ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelectedSubtitle((currentSubtitle) =>
+                            currentSubtitle === "off"
+                              ? indonesianSubtitle.label
+                              : "off",
+                          )
+                        }
+                        className={cn(
+                          "rounded-full border px-3 py-2 text-sm font-medium transition",
+                          selectedSubtitle !== "off"
+                            ? "border-accent/35 bg-accent text-white"
+                            : "border-white/10 bg-white/5 text-[var(--muted)] hover:border-white/20 hover:text-white",
+                        )}
+                      >
+                        {selectedSubtitle === "off"
+                          ? "Nyalakan subtitle Indonesia"
+                          : "Matikan subtitle"}
+                      </button>
                     ) : (
                       <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-[var(--muted)]">
-                        Episode ini tidak menyediakan subtitle terpisah.
+                        Episode ini tidak menyediakan subtitle Indonesia.
                       </div>
                     )}
                   </div>
@@ -2098,6 +2069,23 @@ function resolvePlaylistUri(uri: string, playlistUrl: string) {
   ).toString();
 }
 
+function findIndonesianSubtitle(subtitles: StreamSubtitle[]) {
+  return (
+    subtitles.find((subtitle) => {
+      const language = subtitle.language.trim().toLowerCase();
+      const label = subtitle.label.trim().toLowerCase();
+
+      return (
+        ["id", "in", "ind", "indo", "id-id"].includes(language) ||
+        label.includes("indonesia") ||
+        label.includes("indonesian") ||
+        label === "id" ||
+        label === "in"
+      );
+    }) ?? null
+  );
+}
+
 function applySubtitleSelection(
   video: HTMLVideoElement,
   selectedSubtitle: string,
@@ -2109,12 +2097,20 @@ function applySubtitleSelection(
     (_, index) => trackArrayLike[index],
   ).filter((track): track is TextTrack => Boolean(track));
 
+  let selectedTrack: TextTrack | null = null;
+
   for (const track of tracks) {
-    track.mode =
-      selectedSubtitle !== "off" && track.label === selectedSubtitle
-        ? "showing"
-        : "disabled";
+    const isSelected =
+      selectedSubtitle !== "off" && track.label === selectedSubtitle;
+
+    track.mode = isSelected ? "hidden" : "disabled";
+
+    if (isSelected) {
+      selectedTrack = track;
+    }
   }
+
+  return selectedTrack;
 }
 
 function formatPlaybackTime(value: number) {
