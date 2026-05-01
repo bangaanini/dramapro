@@ -10,6 +10,8 @@
     "start:all": "node scripts/run-services.mjs start",
     "lint": "eslint",
     "db:seed": "npx tsx prisma/seed.ts",
+    "db:backup:supabase": "node scripts/backup-supabase-db.mjs",
+    "db:restore:local": "node scripts/restore-postgres-db.mjs",
     "backfill:catalog-relations": "npx tsx scripts/backfill-catalog-relations.ts",
     "catalog:sync:all": "npx tsx scripts/run-catalog-sync-all.ts",
     "worker:scheduler": "node scripts/ops-worker.mjs scheduler",
