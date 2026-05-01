@@ -9,9 +9,22 @@ export function shouldProxyMediaUrl(url: string) {
     const parsedUrl = new URL(url);
     const hostname = parsedUrl.hostname.toLowerCase();
     const pathname = parsedUrl.pathname.toLowerCase();
+    const search = parsedUrl.search.toLowerCase();
+    const isHlsUrl =
+      pathname.includes(".m3u8") ||
+      pathname.includes("m3u8") ||
+      search.includes("m3u8");
+    const isSubtitleUrl =
+      pathname.endsWith(".srt") ||
+      pathname.endsWith(".vtt") ||
+      pathname.includes("/subtitle") ||
+      search.includes("subtitle");
 
     return (
+      isHlsUrl ||
+      isSubtitleUrl ||
       (hostname === "api.dracinku.site" && pathname.includes("/aliplay/")) ||
+      hostname.endsWith("jowo.tv") ||
       hostname.includes("mydramawave.com") ||
       hostname.includes("static-v1.mydramawave.com") ||
       hostname.includes("video-v5.mydramawave.com") ||

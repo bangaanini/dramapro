@@ -41,13 +41,33 @@ function createInitialFeedState(
   hasMore: boolean,
 ): FeedState {
   return {
-    entries,
+    entries: uniqueFeedEntries(entries),
     total,
     nextOffset,
     hasMore,
     isLoading: false,
     error: null,
   };
+}
+
+function uniqueFeedEntries(entries: HomeFeedEntry[]) {
+  const seenIds = new Set<string>();
+  return entries.filter((entry) => {
+    if (seenIds.has(entry.id)) return false;
+    seenIds.add(entry.id);
+    return true;
+  });
+}
+
+function appendUniqueFeedEntries(currentEntries: HomeFeedEntry[], nextEntries: HomeFeedEntry[]) {
+  const seenIds = new Set(currentEntries.map((entry) => entry.id));
+  const uniqueNextEntries = nextEntries.filter((entry) => {
+    if (seenIds.has(entry.id)) return false;
+    seenIds.add(entry.id);
+    return true;
+  });
+
+  return [...currentEntries, ...uniqueNextEntries];
 }
 
 export function HomeCatalogGrid({ data }: HomeCatalogGridProps) {
@@ -119,7 +139,7 @@ export function HomeCatalogGrid({ data }: HomeCatalogGridProps) {
         }
 
         setFeed({
-          entries: payload.entries,
+          entries: uniqueFeedEntries(payload.entries),
           total: payload.total,
           nextOffset: payload.nextOffset,
           hasMore: payload.hasMore,
@@ -209,7 +229,7 @@ export function HomeCatalogGrid({ data }: HomeCatalogGridProps) {
       }
 
       setFeed({
-        entries: payload.entries,
+        entries: uniqueFeedEntries(payload.entries),
         total: payload.total,
         nextOffset: payload.nextOffset,
         hasMore: payload.hasMore,
@@ -257,7 +277,7 @@ export function HomeCatalogGrid({ data }: HomeCatalogGridProps) {
       }
 
       setFeed((current) => ({
-        entries: [...current.entries, ...payload.entries],
+        entries: appendUniqueFeedEntries(current.entries, payload.entries),
         total: payload.total,
         nextOffset: payload.nextOffset,
         hasMore: payload.hasMore,

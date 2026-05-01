@@ -1,6 +1,7 @@
 import { buildMediaProxyUrl, shouldProxyMediaUrl } from "@/lib/media-proxy";
 import { prisma } from "@/lib/prisma";
 import { ensureSeriesPlayableFresh } from "@/lib/catalog";
+import { resolveProviderPlayback } from "@/lib/provider-sync";
 import { isEpisodeVipLocked } from "@/lib/vip";
 
 export type StreamResponse = {
@@ -38,6 +39,7 @@ type ResolveDramaStreamInput = {
 };
 
 type StreamQuality = StreamResponse["qualities"][number];
+type StreamSubtitle = StreamResponse["subtitles"][number];
 
 function isLikelyHlsUrl(url: string) {
   const normalizedUrl = url.toLowerCase();
@@ -66,6 +68,70 @@ function buildAutoQuality(quality: StreamQuality): StreamQuality {
     ...quality,
     label: "Auto",
   };
+}
+
+function toProviderStreamQualities(sources: unknown[]): StreamQuality[] {
+  return sources
+    .map((source) => {
+      if (!source || typeof source !== "object" || Array.isArray(source)) {
+        return null;
+      }
+
+      const record = source as Record<string, unknown>;
+      const url = typeof record.url === "string" ? record.url.trim() : "";
+      if (!url) return null;
+
+      const label =
+        typeof record.quality === "string" && record.quality.trim()
+          ? record.quality.trim()
+          : "Auto";
+      const normalizedMimeType =
+        typeof record.mimeType === "string" ? record.mimeType.toLowerCase() : "";
+      const mimeType =
+        normalizedMimeType.includes("mpegurl")
+          ? "application/x-mpegURL"
+          : normalizedMimeType.includes("mp4")
+            ? "video/mp4"
+            : isLikelyHlsUrl(url)
+              ? "application/x-mpegURL"
+              : "video/mp4";
+
+      return {
+        label,
+        url: shouldProxyMediaUrl(url) ? buildMediaProxyUrl(url) : url,
+        mimeType,
+      } satisfies StreamQuality;
+    })
+    .filter((item): item is StreamQuality => Boolean(item?.url));
+}
+
+function toProviderStreamSubtitles(subtitles: unknown[]): StreamSubtitle[] {
+  return subtitles
+    .map((subtitle) => {
+      if (!subtitle || typeof subtitle !== "object" || Array.isArray(subtitle)) {
+        return null;
+      }
+
+      const record = subtitle as Record<string, unknown>;
+      const url = typeof record.url === "string" ? record.url.trim() : "";
+      if (!url) return null;
+
+      const language =
+        typeof record.lang === "string" && record.lang.trim()
+          ? record.lang.trim()
+          : "unknown";
+      const label =
+        typeof record.label === "string" && record.label.trim()
+          ? record.label.trim()
+          : language;
+
+      return {
+        label,
+        language,
+        url: shouldProxyMediaUrl(url) ? buildMediaProxyUrl(url) : url,
+      } satisfies StreamSubtitle;
+    })
+    .filter((item): item is StreamSubtitle => Boolean(item?.url));
 }
 
 function decodeBase64Url(value: string) {
@@ -230,6 +296,51 @@ export async function resolveDramaStreamSources({
       "Requested episode is out of range.",
       400,
     );
+  }
+
+  const providerPlayback = await resolveProviderPlayback({
+    seriesId: internalDramaId,
+    episodeIndex,
+  });
+
+  if (providerPlayback) {
+    const manualQualities = toProviderStreamQualities(providerPlayback.sources);
+
+    if (!manualQualities.length) {
+      throw new DramaStreamResolutionError(
+        providerPlayback.status === "locked"
+          ? "Episode terkunci dari provider."
+          : "Stream episode belum tersedia.",
+        providerPlayback.status === "locked" ? 403 : 502,
+      );
+    }
+
+    const qualities = [buildAutoQuality(manualQualities[0]), ...manualQualities];
+
+    return {
+      drama: await prisma.catalogSeries.findUniqueOrThrow({
+        where: { id: series.id },
+        select: {
+          id: true,
+          title: true,
+          platformId: true,
+          upstreamSeriesId: true,
+          chapterCount: true,
+        },
+      }),
+      stream: {
+        dramaId: series.id,
+        provider: providerPlayback.provider,
+        episodeIndex,
+        defaultQuality: "Auto",
+        qualities,
+        subtitles: toProviderStreamSubtitles(providerPlayback.subtitles),
+      },
+    };
+  }
+
+  if (!episode.videoUrl) {
+    throw new DramaStreamResolutionError("Stream episode belum tersedia.", 502);
   }
 
   const primaryQuality = buildStreamQuality(

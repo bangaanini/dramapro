@@ -117,6 +117,8 @@ model CatalogSeries {
   lastDetailSyncedAt DateTime?
   isHomepageVisible  Boolean                @default(true)
   homepageHiddenReason String?
+  catalogSource      String                 @default("dracinku")
+  providerRawPayload Json?                  @db.JsonB
   platform           CatalogPlatform        @relation(fields: [platformId], references: [id], onDelete: Cascade)
   language           CatalogLanguage        @relation(fields: [languageId], references: [id], onDelete: Cascade)
   tabMemberships     CatalogTabSeries[]
@@ -133,6 +135,7 @@ model CatalogSeries {
   @@index([platformId, languageId, updatedAt])
   @@index([isHomepageVisible, updatedAt])
   @@index([title, updatedAt])
+  @@index([catalogSource, isHomepageVisible, updatedAt])
 }
 
 model CatalogTabSeries {
@@ -156,9 +159,16 @@ model CatalogEpisode {
   seriesId     String        @db.Uuid
   episodeIndex Int
   episodeLabel String        @default("")
-  videoUrl     String
+  videoUrl     String        @default("")
   quality      Int?
   subtitles    Json?         @db.JsonB
+  upstreamEpisodeId String?
+  isLocked     Boolean       @default(false)
+  sourceType   String?
+  playbackSources Json?      @db.JsonB
+  playbackSubtitles Json?    @db.JsonB
+  playbackExpiresAt DateTime?
+  providerRawPayload Json?   @db.JsonB
   checksum     String        @default("")
   series       CatalogSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
   createdAt    DateTime      @default(now())
@@ -166,6 +176,7 @@ model CatalogEpisode {
 
   @@unique([seriesId, episodeIndex])
   @@index([seriesId, updatedAt])
+  @@index([seriesId, upstreamEpisodeId])
 }
 
 model CatalogSyncState {
@@ -218,6 +229,40 @@ model CatalogSyncJob {
   @@index([status, updatedAt])
   @@index([status, leaseExpiresAt])
   @@index([languageCode, createdAt])
+}
+
+model ProviderSyncJob {
+  id          String    @id @default(uuid()) @db.Uuid
+  type        String    @default("catalog")
+  providerCode String
+  status      String    @default("queued")
+  payload     Json?     @db.JsonB
+  priority    Int       @default(50)
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  workerId    String?
+  lastError   String    @default("")
+  scheduledAt DateTime  @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, scheduledAt, priority])
+  @@index([providerCode, status, createdAt])
+}
+
+model ProviderWorkerLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  workerId  String?
+  jobId     String?  @db.Uuid
+  level     String   @default("info")
+  message   String
+  meta      Json?    @db.JsonB
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([jobId])
 }
 
 model AdminUser {

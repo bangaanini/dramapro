@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const contentType = upstreamResponse.headers.get("content-type") ?? "";
+  const contentType = (upstreamResponse.headers.get("content-type") ?? "").toLowerCase();
   const responseUrl = upstreamResponse.url ? new URL(upstreamResponse.url) : upstreamUrl;
   const normalizedPathname = responseUrl.pathname.toLowerCase();
   const isPlaylist =

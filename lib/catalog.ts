@@ -13,6 +13,13 @@ import {
   fetchPlatformTabfeed,
   fetchPlatformTablist,
 } from "@/lib/catalog-upstream";
+import {
+  enqueueProviderSyncJob,
+  isStreamApiProviderCode,
+  STREAMAPI_SOURCE,
+  syncProviderDetail,
+} from "@/lib/provider-sync";
+import { PROVIDERS as STREAMAPI_PROVIDER_CODES } from "@/lib/streamapi/types";
 
 const DEFAULT_HOME_PAGE_SIZE = 18;
 const SYNC_ALL_DETAIL_BATCH_SIZE = 10;
@@ -139,6 +146,25 @@ function isSeriesDetailStale(lastDetailSyncedAt: Date | null) {
     : 360;
 
   return Date.now() - lastDetailSyncedAt.getTime() > ttlMinutes * 60 * 1000;
+}
+
+function queueStreamApiDetailRefresh(series: NonNullable<Awaited<ReturnType<typeof getCatalogSeriesWithEpisodes>>>) {
+  if (
+    series.catalogSource !== STREAMAPI_SOURCE ||
+    !isStreamApiProviderCode(series.platformId)
+  ) {
+    return;
+  }
+
+  void enqueueProviderSyncJob(
+    "detail",
+    series.platformId,
+    {
+      externalId: series.upstreamSeriesId,
+      lang: series.language.code || DEFAULT_CATALOG_LANGUAGE,
+    },
+    35,
+  ).catch(() => undefined);
 }
 
 function parseEpisodeIndexFromLabel(label: string) {
@@ -1968,7 +1994,18 @@ async function getCatalogSeriesWithEpisodes(seriesId: string) {
   return prisma.catalogSeries.findUnique({
     where: { id: seriesId },
     include: {
+      language: true,
       episodes: {
+        select: {
+          id: true,
+          episodeIndex: true,
+          episodeLabel: true,
+          videoUrl: true,
+          quality: true,
+          subtitles: true,
+          upstreamEpisodeId: true,
+          isLocked: true,
+        },
         orderBy: {
           episodeIndex: "asc",
         },
@@ -1999,6 +2036,61 @@ export async function ensureSeriesPlayableFresh(
 
   if (!shouldRefresh) {
     return series;
+  }
+
+  if (
+    series.catalogSource === STREAMAPI_SOURCE &&
+    isStreamApiProviderCode(series.platformId)
+  ) {
+    if (!options?.force) {
+      queueStreamApiDetailRefresh(series);
+      return series;
+    }
+
+    try {
+      await syncProviderDetail(
+        series.platformId,
+        series.upstreamSeriesId,
+        series.language.code || DEFAULT_CATALOG_LANGUAGE,
+      );
+      return await getCatalogSeriesWithEpisodes(seriesId);
+    } catch (error) {
+      if (options?.hideOnFailure) {
+        await setSeriesHomepageVisibility(
+          seriesId,
+          false,
+          HOMEPAGE_HIDDEN_REASON_ON_DEMAND_FAILED,
+        );
+
+        await prisma.catalogSyncState.upsert({
+          where: { seriesId },
+          create: {
+            seriesId,
+            scope: "series",
+            status: "failed",
+            hasMore: false,
+            lastError:
+              error instanceof Error
+                ? error.message
+                : "StreamAPI detail refresh failed.",
+          },
+          update: {
+            status: "failed",
+            hasMore: false,
+            lastError:
+              error instanceof Error
+                ? error.message
+                : "StreamAPI detail refresh failed.",
+          },
+        });
+      }
+
+      if (options?.allowStaleOnFailure && series.episodes.length > 0) {
+        return series;
+      }
+
+      return null;
+    }
   }
 
   try {
@@ -2120,6 +2212,9 @@ export async function getHomeCatalogData() {
     prisma.catalogEpisode.count({
       where: {
         series: {
+          catalogSource: STREAMAPI_SOURCE,
+          platformId: { in: [...STREAMAPI_PROVIDER_CODES] },
+          coverUrl: { not: "" },
           isHomepageVisible: true,
           platform: {
             isHomepageVisible: true,
@@ -2129,6 +2224,9 @@ export async function getHomeCatalogData() {
     }),
     prisma.catalogSeries.count({
       where: {
+        catalogSource: STREAMAPI_SOURCE,
+        platformId: { in: [...STREAMAPI_PROVIDER_CODES] },
+        coverUrl: { not: "" },
         isHomepageVisible: true,
         platform: {
           isHomepageVisible: true,
@@ -2159,8 +2257,12 @@ export async function getCatalogFeedPage(
   const safeLimit = Math.min(Math.max(1, limit), 30);
   const platformId = options?.platformId?.trim() ?? "";
   const where: Prisma.CatalogSeriesWhereInput = {
+    catalogSource: STREAMAPI_SOURCE,
+    platformId: platformId
+      ? platformId
+      : { in: [...STREAMAPI_PROVIDER_CODES] },
+    coverUrl: { not: "" },
     isHomepageVisible: true,
-    ...(platformId ? { platformId } : {}),
     platform: {
       isHomepageVisible: true,
     },
@@ -2172,7 +2274,7 @@ export async function getCatalogFeedPage(
       include: {
         platform: true,
       },
-      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }, { title: "asc" }],
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip: safeOffset,
       take: safeLimit,
     }),
@@ -2193,6 +2295,9 @@ async function getHomepageProviderTabs(): Promise<CatalogProviderTab[]> {
   const providerGroups = await prisma.catalogSeries.groupBy({
     by: ["platformId"],
     where: {
+      catalogSource: STREAMAPI_SOURCE,
+      platformId: { in: [...STREAMAPI_PROVIDER_CODES] },
+      coverUrl: { not: "" },
       isHomepageVisible: true,
       platform: {
         isHomepageVisible: true,

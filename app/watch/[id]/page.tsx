@@ -318,9 +318,7 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
                   </div>
                   <div>
                     <h2 className="text-xl font-semibold text-white">Drama serupa</h2>
-                    <p className="text-sm text-[var(--muted)]">
-                      Dipilih dari tag dan katalog platform yang sama.
-                    </p>
+                    
                   </div>
                 </div>
                 <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3">

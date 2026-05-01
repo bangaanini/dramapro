@@ -4,10 +4,12 @@ import { twMerge } from "tailwind-merge";
 import { CATALOG_PLATFORM_LABELS } from "@/lib/catalog-upstream";
 
 const UNOPTIMIZED_IMAGE_HOSTS = new Set([
+  "akamai-static.shorttv.live",
   "awscover.netshort.com",
   "hwztchapter.dramaboxdb.com",
   "hwztvideo.dramaboxdb.com",
   "image.fishnovel.com",
+  "volcengine-forward.shorttv.live",
 ]);
 
 export function cn(...inputs: ClassValue[]) {
@@ -41,11 +43,14 @@ export function normalizeDisplayImageUrl(imageUrl: string) {
 
 export function shouldBypassImageOptimization(imageUrl: string) {
   try {
-    const hostname = new URL(normalizeDisplayImageUrl(imageUrl)).hostname;
+    const url = new URL(normalizeDisplayImageUrl(imageUrl));
+    const hostname = url.hostname;
 
     return (
       UNOPTIMIZED_IMAGE_HOSTS.has(hostname) ||
-      hostname.endsWith(".dramaboxdb.com")
+      hostname.endsWith(".dramaboxdb.com") ||
+      hostname.endsWith(".shorttv.live") ||
+      url.searchParams.has("auth_key")
     );
   } catch {
     return false;

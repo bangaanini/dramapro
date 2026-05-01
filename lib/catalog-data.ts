@@ -12,7 +12,7 @@ export type HomeProviderTab = CatalogProviderTab;
 
 export const getHomepageCatalogData = unstable_cache(
   async () => getHomeCatalogData(),
-  ["catalog-homepage-dynamic-v2-provider-tabs"],
+  ["catalog-homepage-streamapi-v3-provider-tabs"],
   {
     revalidate: 300,
     tags: ["catalog-home"],

@@ -18,10 +18,10 @@ function createServices(currentMode) {
         args: ["run", "dev", "--", "--port", appPort],
       },
       {
-        name: "worker",
+        name: "provider-worker",
         color: "\x1b[33m",
         command: "npm",
-        args: ["run", "worker:catalog-sync"],
+        args: ["run", "worker:provider-sync"],
       },
     ];
   }
@@ -35,10 +35,10 @@ function createServices(currentMode) {
         args: ["run", "start", "--", "--port", appPort],
       },
       {
-        name: "worker",
+        name: "provider-worker",
         color: "\x1b[33m",
         command: "npm",
-        args: ["run", "worker:catalog-sync"],
+        args: ["run", "worker:provider-sync"],
       },
     ];
   }
@@ -73,7 +73,7 @@ function prefixOutput(name, color, chunk) {
 function buildServiceEnv(service) {
   const env = { ...process.env };
 
-  if (service.name === "worker" && !env.WORKER_BASE_URL) {
+  if (service.name.includes("worker") && !env.WORKER_BASE_URL) {
     env.WORKER_BASE_URL = appBaseUrl;
   }
 
@@ -177,9 +177,9 @@ async function waitForAppReady() {
 }
 
 const appService = services.find((service) => service.name === "app");
-const workerService = services.find((service) => service.name === "worker");
+const workerServices = services.filter((service) => service.name.includes("worker"));
 
-if (!appService || !workerService) {
+if (!appService || workerServices.length === 0) {
   console.error("App service atau worker service tidak ditemukan.");
   process.exit(1);
 }
@@ -203,7 +203,9 @@ if (!appReady) {
   process.exit(1);
 }
 
-startService(workerService);
+for (const workerService of workerServices) {
+  startService(workerService);
+}
 
 process.on("SIGINT", () => {
   shutdown("SIGINT");

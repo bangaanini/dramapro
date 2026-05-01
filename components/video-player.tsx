@@ -4,6 +4,7 @@ import {
   type PointerEvent,
   type ReactNode,
   type TouchEvent,
+  useCallback,
   useEffect,
   useEffectEvent,
   useId,
@@ -91,6 +92,18 @@ type PlayerToast = {
   tone: "success" | "error" | "info";
 };
 
+type WarmedMedia = {
+  video: HTMLVideoElement;
+  hls: Hls | null;
+  timeoutId: number;
+};
+
+const STREAM_WARMUP_PREVIOUS_COUNT = 1;
+const STREAM_WARMUP_NEXT_COUNT = 5;
+const STREAM_CACHE_LIMIT = 14;
+const WARMED_MEDIA_LIMIT = 5;
+const WARMED_MEDIA_TTL_MS = 120_000;
+
 export function VideoPlayer({
   internalDramaId,
   title,
@@ -107,6 +120,8 @@ export function VideoPlayer({
   const playerStageRef = useRef<HTMLDivElement | null>(null);
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const streamCacheRef = useRef<Map<number, StreamState>>(new Map());
+  const warmedMediaRef = useRef<Map<number, WarmedMedia>>(new Map());
   const surfaceGestureRef = useRef<{
     startX: number;
     startY: number;
@@ -161,6 +176,7 @@ export function VideoPlayer({
   const [currentTimeSeconds, setCurrentTimeSeconds] = useState(0);
   const [durationSeconds, setDurationSeconds] = useState(0);
   const [scrubTimeSeconds, setScrubTimeSeconds] = useState<number | null>(null);
+  const [streamReloadNonce, setStreamReloadNonce] = useState(0);
   const progressSliderId = useId();
   const lastUnlockedEpisode = getLastUnlockedEpisode(
     episodeCount,
@@ -178,6 +194,145 @@ export function VideoPlayer({
       : `Semua episode sedang terkunci mulai EP.${vipLockFromEpisode}.`
     : null;
   const indonesianSubtitle = findIndonesianSubtitle(stream?.subtitles ?? []);
+
+  const cacheStream = useCallback((episodeIndex: number, nextStream: StreamState) => {
+    const cache = streamCacheRef.current;
+    cache.delete(episodeIndex);
+    cache.set(episodeIndex, nextStream);
+
+    while (cache.size > STREAM_CACHE_LIMIT) {
+      const oldestEpisode = cache.keys().next().value as number | undefined;
+      if (oldestEpisode === undefined) break;
+      cache.delete(oldestEpisode);
+    }
+  }, []);
+
+  const fetchStreamForEpisode = useCallback(
+    async (episodeIndex: number, signal?: AbortSignal, force = false) => {
+      if (!force) {
+        const cachedStream = streamCacheRef.current.get(episodeIndex);
+        if (cachedStream) return cachedStream;
+      }
+
+      const response = await fetch(
+        `/api/stream?internalDramaId=${encodeURIComponent(internalDramaId)}&episodeIndex=${episodeIndex}`,
+        {
+          cache: "no-store",
+          signal,
+        },
+      );
+
+      const payload = (await response.json()) as StreamState | { error?: string };
+
+      if (!response.ok) {
+        throw new Error(
+          "error" in payload && payload.error
+            ? payload.error
+            : "Failed to load stream.",
+        );
+      }
+
+      const nextStream = payload as StreamState;
+      cacheStream(episodeIndex, nextStream);
+      return nextStream;
+    },
+    [cacheStream, internalDramaId],
+  );
+
+  const cleanupWarmedMedia = useCallback((episodeIndex: number) => {
+    const warmedMedia = warmedMediaRef.current.get(episodeIndex);
+    if (!warmedMedia) return;
+
+    window.clearTimeout(warmedMedia.timeoutId);
+    warmedMedia.hls?.destroy();
+    warmedMedia.video.removeAttribute("src");
+    warmedMedia.video.load();
+    warmedMedia.video.remove();
+    warmedMediaRef.current.delete(episodeIndex);
+  }, []);
+
+  const trimWarmedMedia = useCallback(() => {
+    while (warmedMediaRef.current.size > WARMED_MEDIA_LIMIT) {
+      const oldestEpisode = warmedMediaRef.current.keys().next().value as number | undefined;
+      if (oldestEpisode === undefined) return;
+      cleanupWarmedMedia(oldestEpisode);
+    }
+  }, [cleanupWarmedMedia]);
+
+  const warmStreamMedia = useCallback(
+    (episodeIndex: number, nextStream: StreamState) => {
+      if (!hasMounted || warmedMediaRef.current.has(episodeIndex)) return;
+
+      const source = nextStream.qualities[0];
+      if (!source?.url) return;
+
+      const video = document.createElement("video");
+      video.muted = true;
+      video.playsInline = true;
+      video.preload = "metadata";
+      video.setAttribute("aria-hidden", "true");
+      video.tabIndex = -1;
+      Object.assign(video.style, {
+        height: "1px",
+        left: "-9999px",
+        opacity: "0",
+        pointerEvents: "none",
+        position: "fixed",
+        top: "0",
+        width: "1px",
+      });
+
+      const warmedMedia: WarmedMedia = {
+        video,
+        hls: null,
+        timeoutId: window.setTimeout(
+          () => cleanupWarmedMedia(episodeIndex),
+          WARMED_MEDIA_TTL_MS,
+        ),
+      };
+
+      warmedMediaRef.current.set(episodeIndex, warmedMedia);
+      document.body.appendChild(video);
+      trimWarmedMedia();
+
+      if (source.mimeType === "application/x-mpegURL") {
+        if (video.canPlayType("application/vnd.apple.mpegurl")) {
+          video.src = source.url;
+          video.load();
+          return;
+        }
+
+        if (Hls.isSupported()) {
+          const hls = new Hls({
+            enableWorker: false,
+            lowLatencyMode: false,
+            maxBufferLength: 6,
+            startFragPrefetch: false,
+          });
+          warmedMedia.hls = hls;
+          hls.on(Hls.Events.MANIFEST_PARSED, () => hls.stopLoad());
+          hls.on(Hls.Events.ERROR, (_event, data) => {
+            if (data.fatal) cleanupWarmedMedia(episodeIndex);
+          });
+          hls.loadSource(source.url);
+          hls.attachMedia(video);
+          return;
+        }
+      }
+
+      video.src = source.url;
+      video.load();
+    },
+    [cleanupWarmedMedia, hasMounted, trimWarmedMedia],
+  );
+
+  const playNextEpisodeAfterEnd = useCallback(() => {
+    setSelectedEpisode((currentEpisode) =>
+      currentEpisode < lastUnlockedEpisode
+        ? Math.min(lastUnlockedEpisode, currentEpisode + 1)
+        : currentEpisode,
+    );
+  }, [lastUnlockedEpisode]);
 
   useEffect(() => {
     setHasMounted(true);
@@ -209,11 +364,7 @@ export function VideoPlayer({
     const handleEnded = () => {
       setIsPlaying(false);
       setCurrentTimeSeconds(video.duration || 0);
-      setSelectedEpisode((currentEpisode) =>
-        currentEpisode < lastUnlockedEpisode
-          ? Math.min(lastUnlockedEpisode, currentEpisode + 1)
-          : currentEpisode,
-      );
+      playNextEpisodeAfterEnd();
     };
     const handleError = () => {
       void handlePlayerSourceError();
@@ -240,7 +391,7 @@ export function VideoPlayer({
       hlsRef.current?.destroy();
       hlsRef.current = null;
     };
-  }, [episodeCount, lastUnlockedEpisode]);
+  }, [episodeCount, lastUnlockedEpisode, playNextEpisodeAfterEnd]);
 
   useEffect(() => {
     attemptedSourceUrlsRef.current.clear();
@@ -342,42 +493,28 @@ export function VideoPlayer({
         return;
       }
 
-      setIsLoading(true);
       setError(null);
 
+      const cachedStream = streamReloadNonce
+        ? null
+        : streamCacheRef.current.get(selectedEpisode);
+
+      if (cachedStream) {
+        applyLoadedStream(cachedStream);
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+
       try {
-        const response = await fetch(
-          `/api/stream?internalDramaId=${encodeURIComponent(internalDramaId)}&episodeIndex=${selectedEpisode}`,
-          {
-            cache: "no-store",
-            signal: controller.signal,
-          },
+        const nextStream = await fetchStreamForEpisode(
+          selectedEpisode,
+          controller.signal,
+          Boolean(streamReloadNonce),
         );
 
-        const payload = (await response.json()) as StreamState | { error?: string };
-
-        if (!response.ok) {
-          throw new Error(
-            "error" in payload && payload.error
-              ? payload.error
-              : "Failed to load stream.",
-          );
-        }
-
-        const nextStream = payload as StreamState;
-        const nextIndonesianSubtitle = findIndonesianSubtitle(nextStream.subtitles);
-
-        setStream(nextStream);
-        setSelectedQuality(nextStream.defaultQuality);
-        setSelectedSubtitle(
-          isIndonesianSubtitleEnabledRef.current && nextIndonesianSubtitle
-            ? nextIndonesianSubtitle.label
-            : "off",
-        );
-        setIsChromeVisible(true);
-        setCurrentTimeSeconds(0);
-        setDurationSeconds(0);
-        setScrubTimeSeconds(null);
+        applyLoadedStream(nextStream);
       } catch (loadError) {
         if (controller.signal.aborted) {
           return;
@@ -406,7 +543,86 @@ export function VideoPlayer({
     internalDramaId,
     selectedEpisode,
     selectedEpisodeIsLocked,
+    fetchStreamForEpisode,
+    streamReloadNonce,
   ]);
+
+  useEffect(() => {
+    if (
+      !hasMounted ||
+      !hasUnlockedEpisodes ||
+      selectedEpisodeIsLocked ||
+      stream?.episodeIndex !== selectedEpisode
+    ) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const warmupTimer = window.setTimeout(() => {
+      const targetEpisodes: number[] = [];
+
+      for (let offset = 1; offset <= STREAM_WARMUP_NEXT_COUNT; offset += 1) {
+        const episodeIndex = selectedEpisode + offset;
+        if (
+          episodeIndex <= lastUnlockedEpisode &&
+          !isEpisodeVipLocked(episodeIndex, vipLockFromEpisode)
+        ) {
+          targetEpisodes.push(episodeIndex);
+        }
+      }
+
+      for (let offset = 1; offset <= STREAM_WARMUP_PREVIOUS_COUNT; offset += 1) {
+        const episodeIndex = selectedEpisode - offset;
+        if (
+          episodeIndex >= 1 &&
+          !isEpisodeVipLocked(episodeIndex, vipLockFromEpisode)
+        ) {
+          targetEpisodes.push(episodeIndex);
+        }
+      }
+
+      for (const episodeIndex of targetEpisodes) {
+        void fetchStreamForEpisode(episodeIndex, controller.signal)
+          .then((warmedStream) => {
+            if (!controller.signal.aborted) {
+              warmStreamMedia(episodeIndex, warmedStream);
+            }
+          })
+          .catch(() => undefined);
+      }
+    }, 450);
+
+    return () => {
+      window.clearTimeout(warmupTimer);
+      controller.abort();
+    };
+  }, [
+    fetchStreamForEpisode,
+    hasMounted,
+    hasUnlockedEpisodes,
+    lastUnlockedEpisode,
+    selectedEpisode,
+    selectedEpisodeIsLocked,
+    stream?.episodeIndex,
+    vipLockFromEpisode,
+    warmStreamMedia,
+  ]);
+
+  useEffect(() => {
+    const warmedMediaMap = warmedMediaRef.current;
+
+    return () => {
+      for (const warmedMedia of warmedMediaMap.values()) {
+        window.clearTimeout(warmedMedia.timeoutId);
+        warmedMedia.hls?.destroy();
+        warmedMedia.video.removeAttribute("src");
+        warmedMedia.video.load();
+        warmedMedia.video.remove();
+      }
+
+      warmedMediaMap.clear();
+    };
+  }, []);
 
   useEffect(() => {
     const video = videoElementRef.current;
@@ -686,6 +902,22 @@ export function VideoPlayer({
     selectedEpisode + 1,
     vipLockFromEpisode,
   );
+
+  function applyLoadedStream(nextStream: StreamState) {
+    const nextIndonesianSubtitle = findIndonesianSubtitle(nextStream.subtitles);
+
+    setStream(nextStream);
+    setSelectedQuality(nextStream.defaultQuality);
+    setSelectedSubtitle(
+      isIndonesianSubtitleEnabledRef.current && nextIndonesianSubtitle
+        ? nextIndonesianSubtitle.label
+        : "off",
+    );
+    setIsChromeVisible(true);
+    setCurrentTimeSeconds(0);
+    setDurationSeconds(0);
+    setScrubTimeSeconds(null);
+  }
 
   function toggleIndonesianSubtitle() {
     if (!indonesianSubtitle) {
@@ -1039,6 +1271,10 @@ export function VideoPlayer({
     if (zone === "center") {
       clearPendingTapTimeout();
       lastTapRef.current = null;
+      if (!isChromeVisible) {
+        setIsChromeVisible(true);
+        return;
+      }
       handleSurfaceTap();
       return;
     }
@@ -1436,7 +1672,9 @@ export function VideoPlayer({
         ref={playerStageRef}
         className={cn(
           "relative mx-auto w-full",
-          immersive ? "max-w-none" : "max-w-[440px]",
+          immersive
+            ? "h-[100dvh] max-h-[100dvh] max-w-[480px] overflow-hidden bg-black"
+            : "max-w-[440px]",
           isFullscreen && "drama-stage-fullscreen",
         )}
       >
@@ -1444,14 +1682,14 @@ export function VideoPlayer({
           className={cn(
             "drama-player-shell overflow-hidden bg-black",
             immersive
-              ? "min-h-screen rounded-none border-0 shadow-none"
+              ? "h-[100dvh] rounded-none border-0 shadow-none"
               : "rounded-[2rem] border border-white/10 shadow-[0_32px_80px_rgba(0,0,0,0.45)]",
           )}
         >
           <div
             className={cn(
               "relative bg-black",
-              immersive ? "h-screen min-h-screen" : "aspect-[9/16]",
+              immersive ? "h-[100dvh]" : "aspect-[9/16]",
             )}
           >
             {h265SourceUrl ? (
@@ -1471,6 +1709,7 @@ export function VideoPlayer({
                 onEnded={() => {
                   setIsPlaying(false);
                   setCurrentTimeSeconds(resolvedDurationSeconds);
+                  playNextEpisodeAfterEnd();
                 }}
                 onPause={() => setIsPlaying(false)}
                 onPlay={() => setIsPlaying(true)}
@@ -1485,7 +1724,7 @@ export function VideoPlayer({
             ) : (
               <video
                 ref={videoElementRef}
-                className="drama-player-native absolute inset-0 size-full bg-black"
+                className="drama-player-native absolute inset-0 size-full bg-black object-contain"
                 aria-label={title}
                 playsInline
                 preload="auto"
@@ -1520,20 +1759,20 @@ export function VideoPlayer({
             />
 
             {activeSubtitleText ? (
-              <div className="pointer-events-none absolute inset-x-5 top-[58%] z-[25] -translate-y-1/2 whitespace-pre-line text-center text-[clamp(1.35rem,5.7vw,2.35rem)] font-extrabold leading-[1.15] text-white drop-shadow-[0_3px_3px_rgba(0,0,0,0.95)] [text-shadow:0_3px_14px_rgba(0,0,0,0.98),0_1px_2px_rgba(0,0,0,0.95)] sm:inset-x-8 sm:text-3xl">
+              <div className="pointer-events-none absolute inset-x-5 top-[68%] z-[25] -translate-y-1/2 whitespace-pre-line text-center text-[clamp(1.35rem,5.7vw,2.35rem)] font-extrabold leading-[1.15] text-white drop-shadow-[0_3px_3px_rgba(0,0,0,0.95)] [text-shadow:0_3px_14px_rgba(0,0,0,0.98),0_1px_2px_rgba(0,0,0,0.95)] sm:inset-x-8 sm:text-3xl">
                 {activeSubtitleText}
               </div>
             ) : null}
 
             <div
               className={cn(
-                "absolute left-4 top-4 z-30 flex max-w-[70%] flex-wrap gap-2 transition duration-300",
+                "absolute left-4 top-[calc(0.9rem+env(safe-area-inset-top))] z-30 flex max-w-[calc(100%-7.5rem)] flex-wrap gap-2 transition duration-300",
                 isChromeVisible
-                  ? "translate-y-0 opacity-100"
-                  : "-translate-y-2 opacity-0",
+                  ? "pointer-events-auto translate-y-0 opacity-100"
+                  : "pointer-events-none -translate-y-2 opacity-0",
               )}
             >
-              <Badge className="border-white/12 bg-black/45 text-white backdrop-blur">
+              <Badge className="min-h-10 max-w-full justify-start rounded-full border-white/12 bg-black/45 px-4 py-2 text-left text-[13px] leading-5 text-white backdrop-blur">
                 {title}
               </Badge>
               <Badge className="border-accent/20 bg-accent-soft text-white backdrop-blur">
@@ -1543,10 +1782,10 @@ export function VideoPlayer({
 
             <div
               className={cn(
-                "absolute right-3 top-1/2 z-30 flex -translate-y-1/2 flex-col gap-3 transition duration-300",
+                "absolute right-2 top-1/2 z-30 flex max-h-[calc(100dvh-13rem)] -translate-y-1/2 flex-col gap-2 overflow-y-auto py-1 transition duration-300 [scrollbar-width:none] sm:right-3 [&::-webkit-scrollbar]:hidden",
                 isChromeVisible
-                  ? "translate-x-0 opacity-100"
-                  : "translate-x-4 opacity-0",
+                  ? "pointer-events-auto translate-x-0 opacity-100"
+                  : "pointer-events-none translate-x-4 opacity-0",
               )}
             >
               <PlayerAction
@@ -1631,10 +1870,10 @@ export function VideoPlayer({
 
             <div
               className={cn(
-                "absolute inset-x-0 bottom-0 z-30 space-y-3 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] transition duration-300",
+                "absolute inset-x-0 bottom-0 z-30 space-y-2 px-4 pb-[calc(0.85rem+env(safe-area-inset-bottom))] transition duration-300",
                 isChromeVisible
-                  ? "translate-y-0 opacity-100"
-                  : "translate-y-4 opacity-0",
+                  ? "pointer-events-auto translate-y-0 opacity-100"
+                  : "pointer-events-none translate-y-4 opacity-0",
               )}
             >
               <div className="flex items-center justify-between gap-3">
@@ -1653,7 +1892,7 @@ export function VideoPlayer({
                 </button>
               </div>
 
-              <div className="rounded-[1.4rem] border border-white/10 bg-black/40 px-3 py-3 backdrop-blur">
+              <div className="rounded-[1.35rem] border border-white/10 bg-black/52 px-3 py-3 backdrop-blur">
                 <div className="flex items-center gap-3">
                   <Play className="size-3.5 shrink-0 text-white/70" />
                   <div className="min-w-0 flex-1 space-y-2">
@@ -1708,19 +1947,39 @@ export function VideoPlayer({
             ) : null}
 
             {isLoading ? (
-              <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/55 backdrop-blur-sm">
-                <div className="flex items-center gap-3 rounded-full border border-white/10 bg-black/55 px-4 py-3 text-sm text-white">
-                  <LoaderCircle className="size-4 animate-spin text-accent" />
-                  Menyiapkan stream episode...
-                </div>
+              <div
+                className={cn(
+                  "pointer-events-none absolute inset-0 z-40 flex items-center justify-center transition duration-200",
+                  stream
+                    ? "bg-black/10 backdrop-blur-[2px]"
+                    : "bg-black/38 backdrop-blur-sm",
+                )}
+              >
+                <span className="size-9 rounded-full border border-white/15 border-t-accent/90 opacity-90 shadow-[0_0_28px_rgba(0,0,0,0.35)] animate-spin" />
               </div>
             ) : null}
 
             {error ? (
-              <div className="absolute inset-x-6 bottom-24 z-40 rounded-3xl border border-red-400/20 bg-red-500/12 px-4 py-4 text-sm text-red-100 backdrop-blur">
+              <div className="absolute inset-x-5 bottom-[calc(8.6rem+env(safe-area-inset-bottom))] z-40 rounded-[1.35rem] border border-red-400/20 bg-red-500/14 px-4 py-3 text-sm text-red-100 backdrop-blur">
                 <div className="flex items-start gap-3">
                   <AlertCircle className="mt-0.5 size-4 shrink-0" />
-                  <span>{error}</span>
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <p className="leading-6">{error}</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        attemptedSourceUrlsRef.current.clear();
+                        h265FallbackAttemptedUrlsRef.current.clear();
+                        streamCacheRef.current.delete(selectedEpisode);
+                        cleanupWarmedMedia(selectedEpisode);
+                        setError(null);
+                        setStreamReloadNonce((current) => current + 1);
+                      }}
+                      className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs text-white transition hover:bg-white/15"
+                    >
+                      Coba lagi
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -2178,11 +2437,11 @@ function PlayerAction({
       }}
       onClick={onClick}
       disabled={disabled}
-      className="flex w-16 flex-col items-center gap-2 text-center text-xs text-white disabled:opacity-70"
+      className="flex w-14 flex-col items-center gap-1.5 text-center text-xs text-white disabled:opacity-70 sm:w-16 sm:gap-2"
     >
       <span
         className={cn(
-          "inline-flex h-12 w-12 items-center justify-center rounded-full border backdrop-blur transition",
+          "inline-flex h-11 w-11 items-center justify-center rounded-full border backdrop-blur transition sm:h-12 sm:w-12",
           active
             ? "border-accent/35 bg-accent text-white"
             : "border-white/12 bg-black/45 hover:bg-black/60",
@@ -2190,7 +2449,7 @@ function PlayerAction({
       >
         {icon}
       </span>
-      <span className="text-[11px] leading-tight text-white/88">{label}</span>
+      <span className="text-[10px] leading-tight text-white/88 sm:text-[11px]">{label}</span>
     </button>
   );
 }

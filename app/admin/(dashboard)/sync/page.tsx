@@ -1,9 +1,9 @@
 import { RefreshCcw } from "lucide-react";
 
-import { AdminSyncPanel } from "@/components/admin-sync-panel";
+import { AdminProviderSyncPanel } from "@/components/admin-provider-sync-panel";
 import { Badge } from "@/components/ui/badge";
 import { getCurrentAdmin } from "@/lib/admin-auth";
-import { getCatalogSyncDashboardForPlatform } from "@/lib/catalog";
+import { getProviderSyncDashboard } from "@/lib/provider-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,7 @@ export default async function AdminSyncPage() {
     return null;
   }
 
-  const dashboard = await getCatalogSyncDashboardForPlatform().catch(() => null);
+  const dashboard = await getProviderSyncDashboard().catch(() => null);
 
   return (
     <div className="space-y-4">
@@ -31,29 +31,31 @@ export default async function AdminSyncPage() {
           Catalog Sync
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-          Semua provider dari dokumentasi sudah diregistrasikan. Halaman ini
-          dipakai untuk pilih platform, refresh tablist, sync tab, dan hydrate
-          episode. Bahasa default katalog tetap ID.
+          Pilih provider StreamAPI, endpoint katalog, page, dan parameter sesuai
+          dokumentasi. Worker akan menulis hasilnya ke tabel Catalog lama agar
+          integrasi user, VIP, Telegram, favorite, dan history tetap aman.
         </p>
       </div>
 
       {dashboard ? (
         <section className="glass-panel rounded-[1.75rem] border border-white/10 p-5">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-            <MiniStat label="Platform" value={dashboard.platform.name} />
-            <MiniStat label="Bahasa" value={dashboard.language.code.toUpperCase()} />
-            <MiniStat label="Tab" value={formatNumber(dashboard.stats.tabCount)} />
-            <MiniStat label="Series" value={formatNumber(dashboard.stats.seriesCount)} />
-            <MiniStat label="Episode" value={formatNumber(dashboard.stats.episodeCount)} />
+            <MiniStat label="Provider" value={formatNumber(dashboard.providers.length)} />
+            <MiniStat
+              label="Drama"
+              value={formatNumber(dashboard.providers.reduce((sum, item) => sum + item.dramaCount, 0))}
+            />
+            <MiniStat
+              label="Episode"
+              value={formatNumber(dashboard.providers.reduce((sum, item) => sum + item.episodeCount, 0))}
+            />
+            <MiniStat label="Job" value={formatNumber(dashboard.jobs.length)} />
+            <MiniStat label="Log" value={formatNumber(dashboard.logs.length)} />
           </div>
         </section>
       ) : null}
 
-      <AdminSyncPanel
-        adminName={admin.name}
-        adminEmail={admin.email}
-        initialDashboard={dashboard}
-      />
+      {dashboard ? <AdminProviderSyncPanel initialDashboard={dashboard} /> : null}
     </div>
   );
 }
