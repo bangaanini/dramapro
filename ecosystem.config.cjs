@@ -1,8 +1,6 @@
 const projectRoot = __dirname;
 const appPort = "3001";
 const workerBaseUrl = `http://127.0.0.1:${appPort}`;
-const workerProviders =
-  "dramabox,shortmax,shorten,dramadash,flickreels,goodshort,melolo,netshort,reelbuzz,freereels,dramamax,flickshort,radreels,hishort,dramawave,litetv,chill,dramarush,movietv,drakor,cachebjav,meloshort,dramanova,microdrama";
 
 const loadEnvScript = [
   "set -a",
@@ -38,20 +36,16 @@ module.exports = {
       },
     },
     {
-      name: "layardrama-ops",
+      name: "layardrama-provider-sync",
       cwd: projectRoot,
       script: "bash",
       args: [
         "-lc",
         [
           loadEnvScript,
-          `export PORT="${appPort}"`,
           `export WORKER_BASE_URL="${workerBaseUrl}"`,
-          `export WORKER_PROVIDERS="${workerProviders}"`,
           'export DATABASE_URL="${DIRECT_URL:-$DATABASE_URL}"',
-          "export WORKER_NOTIFY_ON_SUCCESS=\"${WORKER_NOTIFY_ON_SUCCESS:-true}\"",
-          "export WORKER_NOTIFY_ON_FAILURE=\"${WORKER_NOTIFY_ON_FAILURE:-true}\"",
-          "exec node scripts/ops-worker.mjs catalog-sync",
+          "exec npm run worker:provider-sync",
         ].join("; "),
       ],
       interpreter: "none",
@@ -60,6 +54,31 @@ module.exports = {
       autorestart: true,
       watch: false,
       max_memory_restart: "300M",
+      time: true,
+      merge_logs: true,
+      env: {
+        NODE_ENV: "production",
+      },
+    },
+    {
+      name: "layardrama-promo-download",
+      cwd: projectRoot,
+      script: "bash",
+      args: [
+        "-lc",
+        [
+          loadEnvScript,
+          `export WORKER_BASE_URL="${workerBaseUrl}"`,
+          'export DATABASE_URL="${DIRECT_URL:-$DATABASE_URL}"',
+          "exec npm run worker:promo-download",
+        ].join("; "),
+      ],
+      interpreter: "none",
+      exec_mode: "fork",
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: "400M",
       time: true,
       merge_logs: true,
       env: {

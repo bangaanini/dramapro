@@ -1,12 +1,13 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
   Copy,
   Download,
   ExternalLink,
   Film,
   LoaderCircle,
+  RefreshCw,
   Search,
   Sparkles,
 } from "lucide-react";
@@ -54,8 +55,34 @@ type PromoDownloadResponse = {
     label: string;
     mimeType: string;
     sourceUrl: string;
+    downloadUrl: string;
     ffmpegCommand: string;
   }>;
+};
+
+type PromoDownloadBatchJob = {
+  id: string;
+  episodeIndex: number;
+  status: "queued" | "processing" | "done" | "failed";
+  sourceType: string;
+  qualityLabel: string;
+  fileSizeBytes: number | null;
+  error: string;
+  downloadUrl: string | null;
+};
+
+type PromoDownloadBatchResponse = {
+  dramaId: string;
+  title: string;
+  provider: string;
+  episodeCount: number;
+  counts: {
+    queued: number;
+    processing: number;
+    done: number;
+    failed: number;
+  };
+  jobs: PromoDownloadBatchJob[];
 };
 
 const DEFAULT_EMPTY_RESPONSE: SearchResponse = {
@@ -74,10 +101,84 @@ export function AdminPromoDownloader() {
   const [resolvedPromo, setResolvedPromo] = useState<PromoDownloadResponse | null>(null);
   const [isResolving, setIsResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
+  const [batchStatus, setBatchStatus] = useState<PromoDownloadBatchResponse | null>(null);
+  const [isBatchLoading, setIsBatchLoading] = useState(false);
+  const [batchError, setBatchError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const deferredQuery = useDeferredValue(query.trim());
   const canSearch = deferredQuery.length >= DEFAULT_EMPTY_RESPONSE.minimumQueryLength;
+  const batchIsActive = Boolean(
+    batchStatus &&
+      (batchStatus.counts.queued > 0 || batchStatus.counts.processing > 0),
+  );
+
+  const loadBatchStatus = useCallback(async (dramaId: string, showLoading = false) => {
+    if (showLoading) {
+      setIsBatchLoading(true);
+    }
+    setBatchError(null);
+
+    try {
+      const params = new URLSearchParams({ internalDramaId: dramaId });
+      const response = await fetch(
+        `/api/admin/promo-download/batch?${params.toString()}`,
+        { cache: "no-store" },
+      );
+      const payload = (await response.json()) as PromoDownloadBatchResponse & {
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Gagal membaca status download.");
+      }
+
+      setBatchStatus(payload);
+    } catch (error) {
+      setBatchError(
+        error instanceof Error ? error.message : "Gagal membaca status download.",
+      );
+    } finally {
+      if (showLoading) {
+        setIsBatchLoading(false);
+      }
+    }
+  }, []);
+
+  async function enqueueAllDownloads() {
+    if (!selectedDrama) {
+      return;
+    }
+
+    setIsBatchLoading(true);
+    setBatchError(null);
+
+    try {
+      const response = await fetch("/api/admin/promo-download/batch", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ internalDramaId: selectedDrama.id }),
+      });
+      const payload = (await response.json()) as PromoDownloadBatchResponse & {
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Gagal membuat antrean download.");
+      }
+
+      setBatchStatus(payload);
+      setToast("Antrean download semua episode dibuat.");
+    } catch (error) {
+      setBatchError(
+        error instanceof Error ? error.message : "Gagal membuat antrean download.",
+      );
+    } finally {
+      setIsBatchLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!toast) {
@@ -87,6 +188,29 @@ export function AdminPromoDownloader() {
     const timeoutId = window.setTimeout(() => setToast(null), 2200);
     return () => window.clearTimeout(timeoutId);
   }, [toast]);
+
+  useEffect(() => {
+    if (!selectedDrama) {
+      setBatchStatus(null);
+      setBatchError(null);
+      setIsBatchLoading(false);
+      return;
+    }
+
+    void loadBatchStatus(selectedDrama.id, true);
+  }, [loadBatchStatus, selectedDrama]);
+
+  useEffect(() => {
+    if (!selectedDrama || !batchIsActive) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void loadBatchStatus(selectedDrama.id);
+    }, 3000);
+
+    return () => window.clearInterval(intervalId);
+  }, [batchIsActive, loadBatchStatus, selectedDrama]);
 
   useEffect(() => {
     if (!canSearch) {
@@ -356,6 +480,14 @@ export function AdminPromoDownloader() {
                     );
                   })}
                 </div>
+
+                <BatchDownloadPanel
+                  status={batchStatus}
+                  isLoading={isBatchLoading}
+                  error={batchError}
+                  onStart={enqueueAllDownloads}
+                  onRefresh={() => void loadBatchStatus(selectedDrama.id, true)}
+                />
               </div>
             ) : (
               <EmptyState
@@ -485,6 +617,13 @@ export function AdminPromoDownloader() {
                             </p>
                           </div>
                           <div className="flex flex-wrap gap-2">
+                            <a
+                              href={quality.downloadUrl}
+                              className="inline-flex h-9 items-center justify-center rounded-full bg-accent px-4 text-sm font-medium text-white"
+                            >
+                              <Download className="mr-2 size-4" />
+                              Download MP4
+                            </a>
                             <Button
                               size="sm"
                               variant="secondary"
@@ -547,6 +686,184 @@ export function AdminPromoDownloader() {
       ) : null}
     </div>
   );
+}
+
+function BatchDownloadPanel({
+  status,
+  isLoading,
+  error,
+  onStart,
+  onRefresh,
+}: {
+  status: PromoDownloadBatchResponse | null;
+  isLoading: boolean;
+  error: string | null;
+  onStart: () => void;
+  onRefresh: () => void;
+}) {
+  const queued = status?.counts.queued ?? 0;
+  const processing = status?.counts.processing ?? 0;
+  const done = status?.counts.done ?? 0;
+  const failed = status?.counts.failed ?? 0;
+  const total = status?.episodeCount ?? 0;
+  const active = queued + processing > 0;
+  const progress = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  return (
+    <div className="rounded-[1.5rem] border border-white/10 bg-white/4 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-white">Download semua episode</p>
+          <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+            Diproses oleh worker di background. Aman ditinggal dari halaman admin.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            size="sm"
+            onClick={onStart}
+            disabled={isLoading || active}
+          >
+            {isLoading ? (
+              <LoaderCircle className="mr-2 size-4 animate-spin" />
+            ) : (
+              <Download className="mr-2 size-4" />
+            )}
+            {active ? "Sedang jalan" : "Download semua"}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={onRefresh}
+            disabled={isLoading}
+          >
+            <RefreshCw className={`mr-2 size-4 ${isLoading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </div>
+      </div>
+
+      {error ? <div className="mt-3"><ErrorState message={error} /></div> : null}
+
+      {status ? (
+        <div className="mt-4 space-y-3">
+          <div>
+            <div className="mb-2 flex items-center justify-between text-xs text-white/65">
+              <span>{done}/{total} episode selesai</span>
+              <span>{progress}%</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-white/8">
+              <div
+                className="h-full rounded-full bg-accent transition-all"
+                style={{ width: `${Math.min(progress, 100)}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-4 gap-2 text-center text-xs text-white/70">
+            <StatusCounter label="Queue" value={queued} />
+            <StatusCounter label="Proses" value={processing} />
+            <StatusCounter label="Selesai" value={done} />
+            <StatusCounter label="Gagal" value={failed} />
+          </div>
+
+          {status.jobs.length > 0 ? (
+            <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+              {status.jobs.map((job) => (
+                <div
+                  key={job.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/18 px-3 py-2"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-white">
+                      EP.{job.episodeIndex}
+                    </p>
+                    <p className="text-xs text-[var(--muted-foreground)]">
+                      {job.qualityLabel || job.sourceType || "menunggu source"}
+                      {job.fileSizeBytes ? ` • ${formatBytes(job.fileSizeBytes)}` : ""}
+                    </p>
+                    {job.status === "failed" && job.error ? (
+                      <p className="mt-1 max-w-md text-xs text-red-200/80">
+                        {job.error}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`rounded-full border px-3 py-1 text-xs ${downloadStatusClass(job.status)}`}
+                    >
+                      {downloadStatusLabel(job.status)}
+                    </span>
+                    {job.downloadUrl ? (
+                      <a
+                        href={job.downloadUrl}
+                        className="inline-flex h-8 items-center rounded-full border border-white/10 bg-white/6 px-3 text-xs font-medium text-white"
+                      >
+                        Download
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-2xl border border-white/10 bg-black/18 px-4 py-3 text-sm text-[var(--muted)]">
+              Belum ada antrean untuk drama ini.
+            </p>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function StatusCounter({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/18 px-2 py-2">
+      <p className="text-base font-semibold text-white">{value}</p>
+      <p className="text-[0.68rem] uppercase tracking-[0.14em] text-white/45">
+        {label}
+      </p>
+    </div>
+  );
+}
+
+function downloadStatusLabel(status: PromoDownloadBatchJob["status"]) {
+  switch (status) {
+    case "done":
+      return "Selesai";
+    case "processing":
+      return "Proses";
+    case "failed":
+      return "Gagal";
+    default:
+      return "Queue";
+  }
+}
+
+function downloadStatusClass(status: PromoDownloadBatchJob["status"]) {
+  switch (status) {
+    case "done":
+      return "border-emerald-300/20 bg-emerald-400/10 text-emerald-100";
+    case "processing":
+      return "border-sky-300/20 bg-sky-400/10 text-sky-100";
+    case "failed":
+      return "border-red-300/20 bg-red-400/10 text-red-100";
+    default:
+      return "border-white/10 bg-white/6 text-white/70";
+  }
+}
+
+function formatBytes(value: number) {
+  if (value < 1024 * 1024) {
+    return `${Math.max(1, Math.round(value / 1024))} KB`;
+  }
+
+  return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function BestDownloadCard({

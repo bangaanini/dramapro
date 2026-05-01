@@ -16,7 +16,7 @@ import type {
 } from "@/lib/streamapi/types";
 
 export const STREAMAPI_SOURCE = "streamapi";
-const LEGACY_HIDDEN_REASON = "legacy_dracinku_hidden";
+const LEGACY_HIDDEN_REASON = "legacy_catalog_hidden";
 const MISSING_COVER_HIDDEN_REASON = "missing_provider_cover";
 const PLAYBACK_REFRESH_GRACE_MS = 120_000;
 

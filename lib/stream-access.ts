@@ -51,6 +51,55 @@ function isLikelyHlsUrl(url: string) {
   );
 }
 
+function unwrapMediaProxyUrl(url: string) {
+  try {
+    const parsedUrl = new URL(url, "http://localhost");
+    return parsedUrl.pathname === "/api/media"
+      ? parsedUrl.searchParams.get("url") || url
+      : url;
+  } catch {
+    return url;
+  }
+}
+
+function decodeMaybeBase64Url(value: string) {
+  try {
+    return Buffer.from(value, "base64url").toString("utf8");
+  } catch {
+    try {
+      return Buffer.from(value, "base64").toString("utf8");
+    } catch {
+      return "";
+    }
+  }
+}
+
+function isUnavailableStreamUrl(url: string) {
+  const sourceUrl = unwrapMediaProxyUrl(url);
+  const normalizedUrl = sourceUrl.toLowerCase();
+
+  if (
+    normalizedUrl.includes("/image/not_found.mp4") ||
+    normalizedUrl.includes("not_found.mp4") ||
+    normalizedUrl.includes("404.mp4")
+  ) {
+    return true;
+  }
+
+  try {
+    const parsedUrl = new URL(sourceUrl);
+    const encodedPathPart = parsedUrl.pathname.split("/").at(-1) ?? "";
+    const decoded = decodeMaybeBase64Url(encodedPathPart).trim().toLowerCase();
+
+    return (
+      parsedUrl.pathname.includes("/aliplay/") &&
+      (decoded === "null" || decoded === "undefined" || decoded === "")
+    );
+  } catch {
+    return false;
+  }
+}
+
 function getStreamQualityLabel(quality: number | null) {
   return quality ? `${quality}p` : "Auto";
 }
@@ -79,7 +128,7 @@ function toProviderStreamQualities(sources: unknown[]): StreamQuality[] {
 
       const record = source as Record<string, unknown>;
       const url = typeof record.url === "string" ? record.url.trim() : "";
-      if (!url) return null;
+      if (!url || isUnavailableStreamUrl(url)) return null;
 
       const label =
         typeof record.quality === "string" && record.quality.trim()
@@ -167,11 +216,7 @@ function readSignedUrlExpiry(sourceUrl: string): number | null {
 
     const encodedUrl = parsedUrl.pathname.split("/").at(-1);
 
-    if (
-      parsedUrl.hostname !== "api.dracinku.site" ||
-      !parsedUrl.pathname.includes("/aliplay/") ||
-      !encodedUrl
-    ) {
+    if (!parsedUrl.pathname.includes("/aliplay/") || !encodedUrl) {
       return null;
     }
 
@@ -208,11 +253,7 @@ function inferAdditionalHlsQualities(sourceUrl: string) {
     const parts = parsedUrl.pathname.split("/");
     const encodedUrl = parts.at(-1);
 
-    if (
-      parsedUrl.hostname !== "api.dracinku.site" ||
-      !parsedUrl.pathname.includes("/aliplay/dw-m3u8/") ||
-      !encodedUrl
-    ) {
+    if (!parsedUrl.pathname.includes("/aliplay/dw-m3u8/") || !encodedUrl) {
       return inferred;
     }
 
@@ -276,7 +317,7 @@ export async function resolveDramaStreamSources({
     episode = series?.episodes.find((item) => item.episodeIndex === episodeIndex);
   }
 
-  if (episode && isSignedStreamUrlExpired(episode.videoUrl)) {
+  if (episode && (isUnavailableStreamUrl(episode.videoUrl) || isSignedStreamUrlExpired(episode.videoUrl))) {
     const refreshedSeries = await ensureSeriesPlayableFresh(internalDramaId, {
       force: true,
       hideOnFailure: true,
@@ -339,7 +380,7 @@ export async function resolveDramaStreamSources({
     };
   }
 
-  if (!episode.videoUrl) {
+  if (!episode.videoUrl || isUnavailableStreamUrl(episode.videoUrl)) {
     throw new DramaStreamResolutionError("Stream episode belum tersedia.", 502);
   }
 

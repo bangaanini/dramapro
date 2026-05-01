@@ -28,7 +28,6 @@ export function shouldProxyMediaUrl(url: string) {
     return (
       isHlsUrl ||
       isSubtitleUrl ||
-      (hostname === "api.dracinku.site" && pathname.includes("/aliplay/")) ||
       hostname.endsWith("jowo.tv") ||
       hostname.includes("mydramawave.com") ||
       hostname.includes("static-v1.mydramawave.com") ||

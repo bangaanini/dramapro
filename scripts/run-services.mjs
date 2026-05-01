@@ -23,6 +23,12 @@ function createServices(currentMode) {
         command: "npm",
         args: ["run", "worker:provider-sync"],
       },
+      {
+        name: "promo-worker",
+        color: "\x1b[35m",
+        command: "npm",
+        args: ["run", "worker:promo-download"],
+      },
     ];
   }
 
@@ -39,6 +45,12 @@ function createServices(currentMode) {
         color: "\x1b[33m",
         command: "npm",
         args: ["run", "worker:provider-sync"],
+      },
+      {
+        name: "promo-worker",
+        color: "\x1b[35m",
+        command: "npm",
+        args: ["run", "worker:promo-download"],
       },
     ];
   }

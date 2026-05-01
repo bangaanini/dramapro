@@ -2093,45 +2093,11 @@ export async function ensureSeriesPlayableFresh(
     }
   }
 
-  try {
-    return await hydrateSeriesDetail(seriesId);
-  } catch (error) {
-    if (options?.hideOnFailure) {
-      await setSeriesHomepageVisibility(
-        seriesId,
-        false,
-        HOMEPAGE_HIDDEN_REASON_ON_DEMAND_FAILED,
-      );
-
-      await prisma.catalogSyncState.upsert({
-        where: { seriesId },
-        create: {
-          seriesId,
-          scope: "series",
-          status: "failed",
-          hasMore: false,
-          lastError:
-            error instanceof Error
-              ? error.message
-              : "On-demand detail refresh failed.",
-        },
-        update: {
-          status: "failed",
-          hasMore: false,
-          lastError:
-            error instanceof Error
-              ? error.message
-              : "On-demand detail refresh failed.",
-        },
-      });
-    }
-
-    if (options?.allowStaleOnFailure && series.episodes.length > 0) {
-      return series;
-    }
-
-    return null;
+  if (options?.allowStaleOnFailure && series.episodes.length > 0) {
+    return series;
   }
+
+  return null;
 }
 
 export async function ensureSeriesHydrated(seriesId: string) {
@@ -2163,6 +2129,8 @@ export async function searchCatalog(keyword: string) {
 
   return prisma.catalogSeries.findMany({
     where: {
+      catalogSource: STREAMAPI_SOURCE,
+      platformId: { in: [...STREAMAPI_PROVIDER_CODES] },
       isHomepageVisible: true,
       AND: terms.map((term) => ({
         OR: [

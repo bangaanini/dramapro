@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@/app/generated/prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { STREAMAPI_SOURCE } from "@/lib/provider-sync";
+import { PROVIDERS as STREAMAPI_PROVIDER_CODES } from "@/lib/streamapi/types";
 
 export const runtime = "nodejs";
 
@@ -42,6 +44,9 @@ export async function GET(request: NextRequest) {
 
   const finalResults = await prisma.catalogSeries.findMany({
     where: {
+      catalogSource: STREAMAPI_SOURCE,
+      platformId: { in: [...STREAMAPI_PROVIDER_CODES] },
+      isHomepageVisible: true,
       AND: [
         tabId
           ? {

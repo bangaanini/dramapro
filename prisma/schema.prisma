@@ -117,7 +117,7 @@ model CatalogSeries {
   lastDetailSyncedAt DateTime?
   isHomepageVisible  Boolean                @default(true)
   homepageHiddenReason String?
-  catalogSource      String                 @default("dracinku")
+  catalogSource      String                 @default("streamapi")
   providerRawPayload Json?                  @db.JsonB
   platform           CatalogPlatform        @relation(fields: [platformId], references: [id], onDelete: Cascade)
   language           CatalogLanguage        @relation(fields: [languageId], references: [id], onDelete: Cascade)
@@ -128,6 +128,7 @@ model CatalogSeries {
   savedEpisodes      SavedEpisode[]
   watchHistory       WatchHistory[]
   channelBroadcasts  DramaChannelBroadcast[]
+  promoDownloadJobs  PromoDownloadJob[]
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @updatedAt
 
@@ -263,6 +264,31 @@ model ProviderWorkerLog {
 
   @@index([createdAt])
   @@index([jobId])
+}
+
+model PromoDownloadJob {
+  id            String        @id @default(uuid()) @db.Uuid
+  seriesId      String        @db.Uuid
+  episodeIndex  Int
+  status        String        @default("queued")
+  sourceType    String        @default("")
+  qualityLabel  String        @default("")
+  outputPath    String        @default("")
+  fileSizeBytes BigInt?
+  error         String        @default("")
+  attempts      Int           @default(0)
+  maxAttempts   Int           @default(3)
+  workerId      String?
+  scheduledAt   DateTime      @default(now())
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  series        CatalogSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+
+  @@unique([seriesId, episodeIndex])
+  @@index([status, scheduledAt])
+  @@index([seriesId, status])
 }
 
 model AdminUser {

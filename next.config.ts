@@ -21,7 +21,6 @@ const streamProviderImageHosts = [
   "volcengine-forward.shorttv.live",
   "akamai-static.shorttv.live",
   "pbcdnw.aoneroom.com",
-  "api.dracinku.site",
   "dl.lite.tv",
   "rtp.topinnovations.co",
   "image.fishnovel.com",
