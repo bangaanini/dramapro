@@ -14,11 +14,16 @@ export function shouldProxyMediaUrl(url: string) {
       pathname.includes(".m3u8") ||
       pathname.includes("m3u8") ||
       search.includes("m3u8");
+    const hasTextMimeQuery =
+      search.includes("mime_type=text") ||
+      search.includes("mime_type=application_x-subrip") ||
+      search.includes("mime_type=application%2fx-subrip");
     const isSubtitleUrl =
       pathname.endsWith(".srt") ||
       pathname.endsWith(".vtt") ||
       pathname.includes("/subtitle") ||
-      search.includes("subtitle");
+      search.includes("subtitle") ||
+      hasTextMimeQuery;
 
     return (
       isHlsUrl ||

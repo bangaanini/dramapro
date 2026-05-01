@@ -1,4 +1,7 @@
 import { NextRequest } from "next/server";
+import type { IncomingMessage } from "node:http";
+import { request as httpsRequest } from "node:https";
+import { Readable } from "node:stream";
 
 const MEDIA_HEADERS = {
   Accept: "*/*",
@@ -31,14 +34,11 @@ export async function GET(request: NextRequest) {
   }
 
   const rangeHeader = request.headers.get("range");
-  const upstreamResponse = await fetch(upstreamUrl, {
-    headers: {
-      ...MEDIA_HEADERS,
-      ...(rangeHeader ? { Range: rangeHeader } : {}),
-    },
-    redirect: "follow",
-    signal: AbortSignal.timeout(30_000),
-  });
+  const upstreamHeaders = {
+    ...MEDIA_HEADERS,
+    ...(rangeHeader ? { Range: rangeHeader } : {}),
+  };
+  const upstreamResponse = await fetchUpstreamMedia(upstreamUrl, upstreamHeaders);
 
   if (!upstreamResponse.ok) {
     return Response.json(
@@ -53,6 +53,11 @@ export async function GET(request: NextRequest) {
   const contentType = (upstreamResponse.headers.get("content-type") ?? "").toLowerCase();
   const responseUrl = upstreamResponse.url ? new URL(upstreamResponse.url) : upstreamUrl;
   const normalizedPathname = responseUrl.pathname.toLowerCase();
+  const normalizedSearch = responseUrl.search.toLowerCase();
+  const hasTextMimeQuery =
+    normalizedSearch.includes("mime_type=text") ||
+    normalizedSearch.includes("mime_type=application_x-subrip") ||
+    normalizedSearch.includes("mime_type=application%2fx-subrip");
   const isPlaylist =
     normalizedPathname.endsWith(".m3u8") ||
     normalizedPathname.includes("m3u8") ||
@@ -63,8 +68,10 @@ export async function GET(request: NextRequest) {
     normalizedPathname.endsWith(".vtt") ||
     normalizedPathname.endsWith(".srt") ||
     normalizedPathname.includes("/subtitle") ||
+    hasTextMimeQuery ||
     contentType.includes("text/vtt") ||
-    contentType.includes("application/x-subrip");
+    contentType.includes("application/x-subrip") ||
+    (hasTextMimeQuery && contentType.includes("text/plain"));
 
   if (isPlaylist) {
     const playlist = await upstreamResponse.text();
@@ -132,6 +139,137 @@ export async function GET(request: NextRequest) {
     status: upstreamResponse.status,
     headers,
   });
+}
+
+type UpstreamMediaResponse = {
+  ok: boolean;
+  status: number;
+  headers: Headers;
+  url: string;
+  body: ReadableStream<Uint8Array> | null;
+  text: () => Promise<string>;
+};
+
+async function fetchUpstreamMedia(
+  upstreamUrl: URL,
+  headers: Record<string, string>,
+): Promise<UpstreamMediaResponse> {
+  try {
+    return await fetch(upstreamUrl, {
+      headers,
+      redirect: "follow",
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch (error) {
+    if (!shouldAllowInsecureMediaFallback(upstreamUrl) || !isTlsCertificateError(error)) {
+      throw error;
+    }
+
+    return fetchWithInsecureTls(upstreamUrl, headers);
+  }
+}
+
+function shouldAllowInsecureMediaFallback(url: URL) {
+  const hostname = url.hostname.toLowerCase();
+  return hostname === "awscdn.netshort.com" || hostname.endsWith(".netshort.com");
+}
+
+function isTlsCertificateError(error: unknown) {
+  const cause = error instanceof Error ? error.cause : null;
+  const code =
+    cause && typeof cause === "object" && "code" in cause
+      ? String((cause as { code?: unknown }).code)
+      : "";
+  const message = error instanceof Error ? error.message : "";
+
+  return (
+    code === "UNABLE_TO_VERIFY_LEAF_SIGNATURE" ||
+    code === "SELF_SIGNED_CERT_IN_CHAIN" ||
+    message.includes("certificate")
+  );
+}
+
+async function fetchWithInsecureTls(
+  upstreamUrl: URL,
+  headers: Record<string, string>,
+  redirectCount = 0,
+): Promise<UpstreamMediaResponse> {
+  if (redirectCount > 5) {
+    throw new Error("Too many upstream media redirects.");
+  }
+
+  return new Promise((resolve, reject) => {
+    const request = httpsRequest(
+      upstreamUrl,
+      {
+        headers,
+        rejectUnauthorized: false,
+      },
+      (response) => {
+        const location = response.headers.location;
+
+        if (
+          response.statusCode &&
+          response.statusCode >= 300 &&
+          response.statusCode < 400 &&
+          location
+        ) {
+          response.resume();
+          resolve(
+            fetchWithInsecureTls(
+              new URL(Array.isArray(location) ? location[0] : location, upstreamUrl),
+              headers,
+              redirectCount + 1,
+            ),
+          );
+          return;
+        }
+
+        resolve(toUpstreamMediaResponse(response, upstreamUrl.toString()));
+      },
+    );
+
+    request.setTimeout(30_000, () => {
+      request.destroy(new Error("Upstream media request timed out."));
+    });
+    request.on("error", reject);
+    request.end();
+  });
+}
+
+function toUpstreamMediaResponse(response: IncomingMessage, url: string): UpstreamMediaResponse {
+  return {
+    ok: Boolean(response.statusCode && response.statusCode >= 200 && response.statusCode < 300),
+    status: response.statusCode ?? 502,
+    headers: incomingHeadersToHeaders(response.headers),
+    url,
+    body: Readable.toWeb(response) as ReadableStream<Uint8Array>,
+    text: () => readIncomingMessageText(response),
+  };
+}
+
+function incomingHeadersToHeaders(headers: IncomingMessage["headers"]) {
+  const nextHeaders = new Headers();
+
+  for (const [key, value] of Object.entries(headers)) {
+    if (Array.isArray(value)) {
+      nextHeaders.set(key, value.join(", "));
+    } else if (value) {
+      nextHeaders.set(key, value);
+    }
+  }
+
+  return nextHeaders;
+}
+
+async function readIncomingMessageText(response: IncomingMessage) {
+  const chunks: Buffer[] = [];
+
+  for await (const chunk of response) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+
+  return Buffer.concat(chunks).toString("utf8");
 }
 
 function rewritePlaylist(playlist: string, baseUrl: URL) {
