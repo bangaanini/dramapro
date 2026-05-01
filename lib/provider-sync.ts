@@ -336,6 +336,24 @@ async function upsertSeries(provider: ProviderCode, languageId: string, drama: C
   const coverUrl = drama.posterUrl?.trim() ?? "";
   const description = drama.description?.trim() ?? "";
   const episodeCount = drama.episodeCount ?? 0;
+  const existing = await prisma.catalogSeries.findUnique({
+    where: {
+      platformId_languageId_upstreamSeriesId: {
+        platformId: provider,
+        languageId,
+        upstreamSeriesId: drama.externalId
+      }
+    },
+    select: {
+      title: true,
+      chapterCount: true,
+      tags: true
+    }
+  });
+  const isFallbackTitle = drama.title === `Untitled ${drama.externalId}`;
+  const shouldUpdateTitle = !isFallbackTitle || !existing || existing.title.startsWith("Untitled ");
+  const shouldUpdateEpisodeCount = episodeCount > Math.max(existing?.chapterCount ?? 0, 0);
+  const shouldUpdateTags = drama.tags.length > 0 || !existing?.tags.length;
 
   const series = await prisma.catalogSeries.upsert({
     where: {
@@ -361,11 +379,11 @@ async function upsertSeries(provider: ProviderCode, languageId: string, drama: C
       homepageHiddenReason: coverUrl ? null : MISSING_COVER_HIDDEN_REASON
     },
     update: {
-      title: drama.title,
+      ...(shouldUpdateTitle ? { title: drama.title } : {}),
       ...(description ? { description } : {}),
       ...(coverUrl ? { coverUrl, isHomepageVisible: true, homepageHiddenReason: null } : {}),
-      ...(episodeCount > 0 ? { chapterCount: episodeCount } : {}),
-      tags: drama.tags,
+      ...(shouldUpdateEpisodeCount ? { chapterCount: episodeCount } : {}),
+      ...(shouldUpdateTags ? { tags: drama.tags } : {}),
       catalogSource: STREAMAPI_SOURCE,
       providerRawPayload: json(drama.rawPayload),
     }
