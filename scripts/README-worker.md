@@ -1,6 +1,70 @@
 # VPS Worker
 
-Worker ini dipakai untuk menjalankan sync metadata, audit stream, dan refresh cache dari VPS tanpa login admin. Auth memakai `CRON_SECRET` lewat header `Authorization: Bearer ...`.
+Worker StreamAPI yang dipakai sekarang adalah:
+
+```bash
+npm run worker:provider-sync
+```
+
+Worker ini memproses queue `ProviderSyncJob` dari panel admin atau cron. Jalankan sebagai proses PM2 yang hidup terus.
+
+`scripts/ops-worker.mjs` dan command `worker:sync`, `worker:audit`, `worker:scheduler`, `worker:catalog-sync`, `catalog:sync:all` adalah pipeline katalog lama berbasis `/api/admin/catalog-sync` dan `/api/cron/sync`. Untuk metode StreamAPI saat ini, command lama itu tidak wajib dijalankan.
+
+## StreamAPI Worker Aktif
+
+```bash
+pm2 start npm --name layardrama-provider-sync -- run worker:provider-sync
+pm2 save
+```
+
+## StreamAPI Cron Enqueue
+
+Cron tidak perlu hit upstream langsung. Cron cukup enqueue job, lalu `worker:provider-sync` yang memprosesnya.
+
+```bash
+npm run provider:cron
+```
+
+Default:
+
+- provider: semua StreamAPI provider
+- endpoint: endpoint default pertama yang aman untuk setiap provider
+- page: default page endpoint
+- page count: `1`
+
+Opsi environment:
+
+```bash
+PROVIDER_CRON_PROVIDERS=netshort,freereels,dramabite
+PROVIDER_CRON_SECTIONS=default
+PROVIDER_CRON_PAGE_COUNT=1
+PROVIDER_CRON_PAGE_START=1
+PROVIDER_CRON_DRY_RUN=1
+```
+
+`PROVIDER_CRON_SECTIONS` bisa:
+
+- `default`: satu endpoint default per provider.
+- `all`: semua endpoint provider yang punya parameter default aman.
+- daftar spesifik, contoh `netshort:new,freereels:popular,dramabite:foryou`.
+
+Contoh cron VPS:
+
+```cron
+# Enqueue halaman depan tiap 30 menit.
+*/30 * * * * cd /root/dramapro && /usr/bin/npm run provider:cron >> /var/log/layardrama-provider-cron.log 2>&1
+
+# Malam hari ambil semua endpoint aman 2 page.
+15 3 * * * cd /root/dramapro && PROVIDER_CRON_SECTIONS=all PROVIDER_CRON_PAGE_COUNT=2 /usr/bin/npm run provider:cron >> /var/log/layardrama-provider-cron-nightly.log 2>&1
+```
+
+Tes tanpa membuat job:
+
+```bash
+PROVIDER_CRON_DRY_RUN=1 npm run provider:cron
+```
+
+## Legacy Worker
 
 ## Command
 

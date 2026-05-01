@@ -14,6 +14,7 @@
     "db:restore:local": "node scripts/restore-postgres-db.mjs",
     "backfill:catalog-relations": "npx tsx scripts/backfill-catalog-relations.ts",
     "catalog:sync:all": "npx tsx scripts/run-catalog-sync-all.ts",
+    "provider:cron": "npx tsx scripts/enqueue-provider-cron.ts",
     "worker:scheduler": "node scripts/ops-worker.mjs scheduler",
     "worker:catalog-sync": "node scripts/ops-worker.mjs catalog-sync",
     "worker:provider-sync": "npx tsx scripts/provider-sync-worker.ts",
