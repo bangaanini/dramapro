@@ -1154,10 +1154,8 @@ export function VideoPlayer({
     );
 
     if (isEpisodeVipLocked(resolvedEpisode, vipLockFromEpisode)) {
-      setToast({
-        message: `EP.${resolvedEpisode} terkunci. VIP aktif mulai EP.${vipLockFromEpisode}.`,
-        tone: "info",
-      });
+      triggerImpactHaptic("light");
+      goToVipUpgrade(resolvedEpisode);
       return;
     }
 
@@ -1178,11 +1176,15 @@ export function VideoPlayer({
     }
 
     if (deltaY < 0) {
-      if (
-        selectedEpisode === episodeCount ||
-        !hasUnlockedEpisodes ||
-        nextEpisodeLocked
-      ) {
+      const nextEpisode = selectedEpisode + 1;
+
+      if (!hasUnlockedEpisodes) {
+        triggerImpactHaptic("light");
+        goToVipUpgrade(vipLockFromEpisode ?? selectedEpisode);
+        return true;
+      }
+
+      if (nextEpisode > episodeCount) {
         setToast({
           message: "Tidak ada episode berikutnya yang bisa dibuka.",
           tone: "info",
@@ -1190,9 +1192,15 @@ export function VideoPlayer({
         return true;
       }
 
-      changeEpisode(selectedEpisode + 1);
+      if (nextEpisodeLocked) {
+        triggerImpactHaptic("light");
+        goToVipUpgrade(nextEpisode);
+        return true;
+      }
+
+      changeEpisode(nextEpisode);
       setToast({
-        message: `Pindah ke EP.${selectedEpisode + 1}`,
+        message: `Pindah ke EP.${nextEpisode}`,
         tone: "info",
       });
       return true;
@@ -1475,10 +1483,10 @@ export function VideoPlayer({
     }
   }
 
-  function goToVipUpgrade() {
+  function goToVipUpgrade(targetEpisode = selectedEpisode) {
     router.push(
       `/vip?next=${encodeURIComponent(
-        `/watch/${internalDramaId}/play?episode=${selectedEpisode}`,
+        `/watch/${internalDramaId}/play?episode=${targetEpisode}`,
       )}`,
     );
   }
@@ -1572,11 +1580,7 @@ export function VideoPlayer({
           onClick={() => {
             if (isLocked) {
               triggerImpactHaptic("light");
-              router.push(
-                `/vip?next=${encodeURIComponent(
-                  `/watch/${internalDramaId}/play?episode=${episode}`,
-                )}`,
-              );
+              goToVipUpgrade(episode);
               return;
             }
 
@@ -1999,7 +2003,7 @@ export function VideoPlayer({
                     </p>
                     <button
                       type="button"
-                      onClick={goToVipUpgrade}
+                      onClick={() => goToVipUpgrade()}
                       className="mt-2 inline-flex items-center rounded-full bg-[linear-gradient(180deg,#ffd05a,#f4ae16)] px-4 py-2 text-xs font-semibold text-[#392100] shadow-[0_14px_30px_rgba(255,177,21,0.24)] transition hover:brightness-105"
                     >
                       <Crown className="mr-2 size-3.5" />
@@ -2194,7 +2198,7 @@ export function VideoPlayer({
                           EP.{vipLockFromEpisode}.
                         </p>
                       </div>
-                      <Button onClick={goToVipUpgrade} className="rounded-full">
+                      <Button onClick={() => goToVipUpgrade()} className="rounded-full">
                         <Crown className="mr-2 size-4" />
                         Buka VIP
                       </Button>

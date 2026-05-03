@@ -295,12 +295,18 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
                   length: Math.max(series.chapterCount, series.episodes.length, 1),
                 }).map((_, index) => {
                   const episode = index + 1;
+                  const isLocked = isEpisodeVipLocked(episode, vipLockFromEpisode);
+                  const episodePlayHref = `/watch/${series.id}/play?episode=${episode}`;
+                  const episodeHref = isLocked
+                    ? `/vip?next=${encodeURIComponent(episodePlayHref)}`
+                    : episodePlayHref;
+
                   return (
                     <EpisodeGridLink
                       key={episode}
-                      href={`/watch/${series.id}/play?episode=${episode}`}
+                      href={episodeHref}
                       episode={episode}
-                      locked={isEpisodeVipLocked(episode, vipLockFromEpisode)}
+                      locked={isLocked}
                       isResume={episode === preferredInitialEpisode}
                     />
                   );

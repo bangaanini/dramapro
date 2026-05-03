@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { cache } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { VideoPlayer } from "@/components/video-player";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ import { getCurrentUser, userHasAdminVideoBypass } from "@/lib/user-auth";
 import {
   clampEpisodeForVipAccess,
   getVipLockStartEpisode,
+  isEpisodeVipLocked,
   isVipActive,
 } from "@/lib/vip";
 
@@ -126,6 +127,22 @@ export async function WatchPlayerRoute(props: WatchPlayerPageProps) {
     : getVipLockStartEpisode(vipSettings);
   const requestedEpisode = parseEpisodeSearchParam(searchParams.episode);
   const episodeCount = Math.max(series.chapterCount, series.episodes.length);
+  const boundedRequestedEpisode = requestedEpisode
+    ? Math.min(Math.max(1, requestedEpisode), Math.max(episodeCount, 1))
+    : null;
+
+  if (
+    series.episodes.length > 0 &&
+    boundedRequestedEpisode &&
+    isEpisodeVipLocked(boundedRequestedEpisode, vipLockFromEpisode)
+  ) {
+    redirect(
+      `/vip?next=${encodeURIComponent(
+        `/watch/${series.id}/play?episode=${boundedRequestedEpisode}`,
+      )}`,
+    );
+  }
+
   const preferredInitialEpisode = clampEpisodeForVipAccess(
     requestedEpisode ?? watchHistory?.episodeIndex ?? 1,
     Math.max(episodeCount, 1),
