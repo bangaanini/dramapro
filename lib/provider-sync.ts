@@ -18,7 +18,9 @@ import type {
 export const STREAMAPI_SOURCE = "streamapi";
 const LEGACY_HIDDEN_REASON = "legacy_catalog_hidden";
 const MISSING_COVER_HIDDEN_REASON = "missing_provider_cover";
+const PENDING_DETAIL_HIDDEN_REASON = "pending_provider_detail";
 const PLAYBACK_REFRESH_GRACE_MS = 120_000;
+const ON_DEMAND_PLAYBACK_PROVIDERS = new Set<ProviderCode>(["dramabox", "hishort", "melolo", "reelife"]);
 
 export type ProviderSyncDashboard = {
   providers: Array<{
@@ -83,6 +85,46 @@ function numberPayload(payload: JsonRecord, key: string, fallback: number) {
   const value = payload[key];
   const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
   return Number.isFinite(parsed) ? Math.floor(parsed) : fallback;
+}
+
+function positiveIntegerValue(value: unknown) {
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.floor(parsed);
+}
+
+export function providerDetailParamsFromRawPayload(provider: ProviderCode, rawPayload: unknown): JsonRecord {
+  const raw = jsonRecord(rawPayload);
+
+  if (provider === "minutedrama") {
+    const source = positiveIntegerValue(raw.mediaSource);
+    return source ? { source } : {};
+  }
+
+  return {};
+}
+
+function detailJobPayload(provider: ProviderCode, externalId: string, lang: string, rawPayload: JsonRecord): JsonRecord {
+  const params = providerDetailParamsFromRawPayload(provider, rawPayload);
+  const payload: JsonRecord = {
+    externalId,
+    lang
+  };
+
+  if (Object.keys(params).length > 0) {
+    payload.params = params;
+  }
+
+  return payload;
+}
+
+function detailParamsFromPayload(payload: JsonRecord): JsonRecord {
+  const params = { ...jsonRecord(payload.params) };
+  const source = positiveIntegerValue(payload.source);
+  if (source && params.source === undefined) {
+    params.source = source;
+  }
+  return params;
 }
 
 function sanitizeNumberParam(param: CatalogParamDefinition, value: unknown) {
@@ -244,6 +286,51 @@ function episodeVideoUrl(playback: CanonicalPlayback) {
   return playback.sources[0]?.url ?? "";
 }
 
+function hasPlayablePlaybackSource(playback: CanonicalPlayback) {
+  return playback.sources.some((source) => {
+    if (!source || typeof source !== "object" || Array.isArray(source)) {
+      return false;
+    }
+
+    const url = (source as { url?: unknown }).url;
+    return typeof url === "string" && url.trim().length > 0;
+  });
+}
+
+function hasResolvableEpisodes(provider: ProviderCode, episodeSync: { playableEpisodeCount: number }, episodes: CanonicalEpisode[]) {
+  return episodeSync.playableEpisodeCount > 0 || (ON_DEMAND_PLAYBACK_PROVIDERS.has(provider) && episodes.length > 0);
+}
+
+async function repairOnDemandProviderHomepageVisibility(provider: ProviderCode) {
+  if (!ON_DEMAND_PLAYBACK_PROVIDERS.has(provider)) {
+    return 0;
+  }
+
+  const result = await prisma.catalogSeries.updateMany({
+    where: {
+      platformId: provider,
+      catalogSource: STREAMAPI_SOURCE,
+      coverUrl: {
+        not: ""
+      },
+      isHomepageVisible: false,
+      homepageHiddenReason: PENDING_DETAIL_HIDDEN_REASON,
+      lastDetailSyncedAt: {
+        not: null
+      },
+      episodes: {
+        some: {}
+      }
+    },
+    data: {
+      isHomepageVisible: true,
+      homepageHiddenReason: null
+    }
+  });
+
+  return result.count;
+}
+
 function episodeChecksum(episode: CanonicalEpisode, playback: CanonicalPlayback) {
   return `${episode.episodeNumber}:${episode.externalId}:${episodeVideoUrl(playback)}`;
 }
@@ -347,13 +434,20 @@ async function upsertSeries(provider: ProviderCode, languageId: string, drama: C
     select: {
       title: true,
       chapterCount: true,
-      tags: true
+      tags: true,
+      lastDetailSyncedAt: true,
+      _count: {
+        select: {
+          episodes: true
+        }
+      }
     }
   });
   const isFallbackTitle = drama.title === `Untitled ${drama.externalId}`;
   const shouldUpdateTitle = !isFallbackTitle || !existing || existing.title.startsWith("Untitled ");
   const shouldUpdateEpisodeCount = episodeCount > Math.max(existing?.chapterCount ?? 0, 0);
   const shouldUpdateTags = drama.tags.length > 0 || !existing?.tags.length;
+  const shouldMarkPendingDetail = Boolean(existing && !existing.lastDetailSyncedAt && existing._count.episodes === 0);
 
   const series = await prisma.catalogSeries.upsert({
     where: {
@@ -375,15 +469,23 @@ async function upsertSeries(provider: ProviderCode, languageId: string, drama: C
       tags: drama.tags,
       catalogSource: STREAMAPI_SOURCE,
       providerRawPayload: json(drama.rawPayload),
-      isHomepageVisible: Boolean(coverUrl),
-      homepageHiddenReason: coverUrl ? null : MISSING_COVER_HIDDEN_REASON
+      isHomepageVisible: false,
+      homepageHiddenReason: coverUrl
+        ? PENDING_DETAIL_HIDDEN_REASON
+        : MISSING_COVER_HIDDEN_REASON
     },
     update: {
       ...(shouldUpdateTitle ? { title: drama.title } : {}),
       ...(description ? { description } : {}),
-      ...(coverUrl ? { coverUrl, isHomepageVisible: true, homepageHiddenReason: null } : {}),
+      ...(coverUrl ? { coverUrl } : {}),
       ...(shouldUpdateEpisodeCount ? { chapterCount: episodeCount } : {}),
       ...(shouldUpdateTags ? { tags: drama.tags } : {}),
+      ...(shouldMarkPendingDetail
+        ? {
+            isHomepageVisible: false,
+            homepageHiddenReason: PENDING_DETAIL_HIDDEN_REASON
+          }
+        : {}),
       catalogSource: STREAMAPI_SOURCE,
       providerRawPayload: json(drama.rawPayload),
     }
@@ -408,6 +510,8 @@ async function upsertSeries(provider: ProviderCode, languageId: string, drama: C
 async function upsertEpisodes(seriesId: string, provider: ProviderCode, episodes: CanonicalEpisode[]) {
   for (const episode of episodes) {
     const playback = playbackFromEpisodeRaw(provider, episode);
+    const shouldUpdatePlayback = hasPlayablePlaybackSource(playback);
+
     await prisma.catalogEpisode.upsert({
       where: {
         seriesId_episodeIndex: {
@@ -433,19 +537,37 @@ async function upsertEpisodes(seriesId: string, provider: ProviderCode, episodes
       },
       update: {
         episodeLabel: episode.title ?? `EP-${episode.episodeNumber}`,
-        videoUrl: episodeVideoUrl(playback),
-        subtitles: json(playback.subtitles),
         upstreamEpisodeId: episode.externalId,
-        isLocked: episode.isLocked || playback.status === "locked",
-        sourceType: playback.sourceType,
-        playbackSources: json(playback.sources),
-        playbackSubtitles: json(playback.subtitles),
-        playbackExpiresAt: playbackExpiresAt(playback),
         providerRawPayload: json(episode.rawPayload),
-        checksum: episodeChecksum(episode, playback)
+        ...(shouldUpdatePlayback
+          ? {
+              videoUrl: episodeVideoUrl(playback),
+              subtitles: json(playback.subtitles),
+              isLocked: episode.isLocked || playback.status === "locked",
+              sourceType: playback.sourceType,
+              playbackSources: json(playback.sources),
+              playbackSubtitles: json(playback.subtitles),
+              playbackExpiresAt: playbackExpiresAt(playback),
+              checksum: episodeChecksum(episode, playback)
+            }
+          : {})
       }
     });
   }
+
+  const playableEpisodeCount = await prisma.catalogEpisode.count({
+    where: {
+      seriesId,
+      videoUrl: {
+        not: ""
+      }
+    }
+  });
+
+  return {
+    episodeCount: episodes.length,
+    playableEpisodeCount
+  };
 }
 
 export async function syncProviderCatalog(provider: ProviderCode, section: string, page: number, params: JsonRecord = {}, lang = "id") {
@@ -455,10 +577,7 @@ export async function syncProviderCatalog(provider: ProviderCode, section: strin
 
   for (const drama of result.items) {
     await upsertSeries(provider, language.id, drama);
-    await enqueueProviderSyncJob("detail", provider, {
-      externalId: drama.externalId,
-      lang
-    }, 45);
+    await enqueueProviderSyncJob("detail", provider, detailJobPayload(provider, drama.externalId, lang, drama.rawPayload), 45);
   }
 
   await logProviderWorker({
@@ -467,10 +586,12 @@ export async function syncProviderCatalog(provider: ProviderCode, section: strin
     meta: { provider, section, page, params }
   });
 
+  await repairOnDemandProviderHomepageVisibility(provider);
+
   return result.items.length;
 }
 
-export async function syncProviderDetail(provider: ProviderCode, externalId: string, lang = "id") {
+export async function syncProviderDetail(provider: ProviderCode, externalId: string, lang = "id", params: JsonRecord = {}) {
   const { language } = await ensureStreamApiPlatform(provider);
   const existing = await prisma.catalogSeries.findUnique({
     where: {
@@ -493,10 +614,14 @@ export async function syncProviderDetail(provider: ProviderCode, externalId: str
     }
   });
   const adapter = getProvider(provider);
+  const effectiveParams: JsonRecord = {
+    ...providerDetailParamsFromRawPayload(provider, existing?.providerRawPayload),
+    ...params
+  };
 
   let drama: CanonicalDrama;
   try {
-    drama = await adapter.getDrama({ provider, externalId, lang });
+    drama = await adapter.getDrama({ provider, externalId, lang, params: effectiveParams });
   } catch (error) {
     if (existing && (error instanceof ProviderEmptyDramaPayloadError || error instanceof Error)) {
       drama = fallbackDramaFromSeries(existing, lang);
@@ -506,13 +631,34 @@ export async function syncProviderDetail(provider: ProviderCode, externalId: str
   }
 
   const series = await upsertSeries(provider, language.id, drama);
-  const episodes = await adapter.getEpisodes({ provider, externalId, lang });
-  await upsertEpisodes(series.id, provider, episodes);
+  const episodes = await adapter.getEpisodes({ provider, externalId, lang, params: effectiveParams });
+  const expectedEpisodeCount = Math.max(drama.episodeCount ?? 0, series.chapterCount ?? 0);
+
+  if (episodes.length === 0 && expectedEpisodeCount > 0) {
+    await prisma.catalogSeries.update({
+      where: { id: series.id },
+      data: {
+        isHomepageVisible: false,
+        homepageHiddenReason: PENDING_DETAIL_HIDDEN_REASON
+      }
+    });
+    throw new Error(`Provider ${provider} returned no episodes for ${externalId}.`);
+  }
+
+  const episodeSync = await upsertEpisodes(series.id, provider, episodes);
+  const hasCover = Boolean((drama.posterUrl ?? series.coverUrl ?? "").trim());
+  const shouldShowOnHomepage = hasCover && hasResolvableEpisodes(provider, episodeSync, episodes);
   await prisma.catalogSeries.update({
     where: { id: series.id },
     data: {
       chapterCount: Math.max(drama.episodeCount ?? 0, episodes.length, series.chapterCount),
-      lastDetailSyncedAt: new Date()
+      lastDetailSyncedAt: new Date(),
+      ...(shouldShowOnHomepage
+        ? {
+            isHomepageVisible: true,
+            homepageHiddenReason: null
+          }
+        : {})
     }
   });
 
@@ -678,7 +824,7 @@ export async function processProviderSyncJob(job: ProviderSyncJobRow, workerId: 
   if (job.type === "detail") {
     const externalId = stringPayload(payload, "externalId", "");
     if (!externalId) throw new Error("externalId is required.");
-    return syncProviderDetail(provider, externalId, stringPayload(payload, "lang", "id"));
+    return syncProviderDetail(provider, externalId, stringPayload(payload, "lang", "id"), detailParamsFromPayload(payload));
   }
 
   throw new Error(`Unsupported provider sync job type ${job.type}.`);

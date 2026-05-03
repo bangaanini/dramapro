@@ -16,6 +16,7 @@ import {
 import {
   enqueueProviderSyncJob,
   isStreamApiProviderCode,
+  providerDetailParamsFromRawPayload,
   STREAMAPI_SOURCE,
   syncProviderDetail,
 } from "@/lib/provider-sync";
@@ -55,6 +56,47 @@ const PROVIDER_LOGO_PATHS: Record<string, string> = {
   shorten: "/provider-logos/shorten.webp",
   shortmax: "/provider-logos/shortmax.png",
 };
+
+function publicReadySeriesWhere(platformId?: string | null): Prisma.CatalogSeriesWhereInput {
+  const normalizedPlatformId = platformId?.trim() ?? "";
+
+  return {
+    catalogSource: STREAMAPI_SOURCE,
+    platformId: normalizedPlatformId
+      ? normalizedPlatformId
+      : { in: [...STREAMAPI_PROVIDER_CODES] },
+    coverUrl: { not: "" },
+    isHomepageVisible: true,
+    platform: {
+      isHomepageVisible: true,
+    },
+    episodes: {
+      some: {},
+    },
+  };
+}
+
+function publicReadySeriesSql(platformId?: string | null) {
+  const normalizedPlatformId = platformId?.trim() ?? "";
+
+  return Prisma.sql`
+    s."catalogSource" = ${STREAMAPI_SOURCE}
+    AND ${
+      normalizedPlatformId
+        ? Prisma.sql`s."platformId" = ${normalizedPlatformId}`
+        : Prisma.sql`s."platformId" IN (${Prisma.join([...STREAMAPI_PROVIDER_CODES])})`
+    }
+    AND s."coverUrl" <> ''
+    AND s."isHomepageVisible" = true
+    AND p."isHomepageVisible" = true
+    AND EXISTS (
+      SELECT 1
+      FROM "CatalogEpisode" e
+      WHERE e."seriesId" = s."id"
+      LIMIT 1
+    )
+  `;
+}
 
 const SYNC_ALL_RUNNING_STATUSES = ["queued", "running"] as const;
 
@@ -156,12 +198,15 @@ function queueStreamApiDetailRefresh(series: NonNullable<Awaited<ReturnType<type
     return;
   }
 
+  const params = providerDetailParamsFromRawPayload(series.platformId, series.providerRawPayload);
+
   void enqueueProviderSyncJob(
     "detail",
     series.platformId,
     {
       externalId: series.upstreamSeriesId,
       lang: series.language.code || DEFAULT_CATALOG_LANGUAGE,
+      ...(Object.keys(params).length > 0 ? { params } : {}),
     },
     35,
   ).catch(() => undefined);
@@ -2005,6 +2050,8 @@ async function getCatalogSeriesWithEpisodes(seriesId: string) {
           subtitles: true,
           upstreamEpisodeId: true,
           isLocked: true,
+          sourceType: true,
+          providerRawPayload: true,
         },
         orderBy: {
           episodeIndex: "asc",
@@ -2052,6 +2099,7 @@ export async function ensureSeriesPlayableFresh(
         series.platformId,
         series.upstreamSeriesId,
         series.language.code || DEFAULT_CATALOG_LANGUAGE,
+        providerDetailParamsFromRawPayload(series.platformId, series.providerRawPayload),
       );
       return await getCatalogSeriesWithEpisodes(seriesId);
     } catch (error) {
@@ -2129,9 +2177,7 @@ export async function searchCatalog(keyword: string) {
 
   return prisma.catalogSeries.findMany({
     where: {
-      catalogSource: STREAMAPI_SOURCE,
-      platformId: { in: [...STREAMAPI_PROVIDER_CODES] },
-      isHomepageVisible: true,
+      ...publicReadySeriesWhere(),
       AND: terms.map((term) => ({
         OR: [
           {
@@ -2180,26 +2226,12 @@ export async function getHomeCatalogData() {
     prisma.catalogEpisode.count({
       where: {
         series: {
-          catalogSource: STREAMAPI_SOURCE,
-          platformId: { in: [...STREAMAPI_PROVIDER_CODES] },
-          coverUrl: { not: "" },
-          isHomepageVisible: true,
-          platform: {
-            isHomepageVisible: true,
-          },
+          ...publicReadySeriesWhere(),
         },
       },
     }),
     prisma.catalogSeries.count({
-      where: {
-        catalogSource: STREAMAPI_SOURCE,
-        platformId: { in: [...STREAMAPI_PROVIDER_CODES] },
-        coverUrl: { not: "" },
-        isHomepageVisible: true,
-        platform: {
-          isHomepageVisible: true,
-        },
-      },
+      where: publicReadySeriesWhere(),
     }),
     getHomepageProviderTabs(),
   ]);
@@ -2224,17 +2256,7 @@ export async function getCatalogFeedPage(
   const safeOffset = Math.max(0, offset);
   const safeLimit = Math.min(Math.max(1, limit), 30);
   const platformId = options?.platformId?.trim() ?? "";
-  const where: Prisma.CatalogSeriesWhereInput = {
-    catalogSource: STREAMAPI_SOURCE,
-    platformId: platformId
-      ? platformId
-      : { in: [...STREAMAPI_PROVIDER_CODES] },
-    coverUrl: { not: "" },
-    isHomepageVisible: true,
-    platform: {
-      isHomepageVisible: true,
-    },
-  };
+  const where = publicReadySeriesWhere(platformId);
 
   const [seriesEntries, total] = await Promise.all([
     prisma.catalogSeries.findMany({
@@ -2262,15 +2284,7 @@ export async function getCatalogFeedPage(
 async function getHomepageProviderTabs(): Promise<CatalogProviderTab[]> {
   const providerGroups = await prisma.catalogSeries.groupBy({
     by: ["platformId"],
-    where: {
-      catalogSource: STREAMAPI_SOURCE,
-      platformId: { in: [...STREAMAPI_PROVIDER_CODES] },
-      coverUrl: { not: "" },
-      isHomepageVisible: true,
-      platform: {
-        isHomepageVisible: true,
-      },
-    },
+    where: publicReadySeriesWhere(),
     _count: {
       _all: true,
     },
@@ -2312,8 +2326,7 @@ export async function getCatalogShortcuts() {
       SELECT UNNEST(tags) AS tag
       FROM "CatalogSeries" s
       JOIN "CatalogPlatform" p ON p."id" = s."platformId"
-      WHERE s."isHomepageVisible" = true
-        AND p."isHomepageVisible" = true
+      WHERE ${publicReadySeriesSql()}
     ) AS tags_expanded
     WHERE tag <> ''
     GROUP BY tag

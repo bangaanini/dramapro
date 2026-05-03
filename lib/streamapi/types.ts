@@ -6,6 +6,7 @@ export const PROVIDERS = [
   "dramanova",
   "dramarush",
   "dramawave",
+  "dramabox",
   "flextv",
   "flickreels",
   "freereels",
@@ -19,7 +20,8 @@ export const PROVIDERS = [
   "netshort",
   "rapidtv",
   "reelala",
-  "reelife"
+  "reelife",
+  "reelshort"
 ] as const;
 
 export type ProviderCode = (typeof PROVIDERS)[number];
@@ -135,6 +137,7 @@ export interface DramaInput {
   provider: ProviderCode;
   externalId: string;
   lang: string;
+  params?: JsonRecord;
 }
 
 export type EpisodesInput = DramaInput;

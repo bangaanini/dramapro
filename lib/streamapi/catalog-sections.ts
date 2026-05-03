@@ -184,6 +184,75 @@ export const providerCatalogSections: Record<ProviderCode, CatalogSectionDefinit
       })
     )
   ],
+  dramabox: [
+    endpoint({
+      value: "home",
+      label: "Home",
+      description: "Mengambil feed home DramaBox.",
+      pathLabel: "GET /?home",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [fixedParam("lang", "in", "Bahasa Indonesia dikirim otomatis."), pageParam(1)]
+    }),
+    endpoint({
+      value: "new",
+      label: "New",
+      description: "Mengambil drama terbaru DramaBox.",
+      pathLabel: "GET /?new",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [fixedParam("lang", "in", "Bahasa Indonesia dikirim otomatis."), pageParam(1)]
+    }),
+    endpoint({
+      value: "populer",
+      label: "Populer",
+      description: "Mengambil drama populer DramaBox.",
+      pathLabel: "GET /?populer",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [fixedParam("lang", "in", "Bahasa Indonesia dikirim otomatis."), pageParam(1)]
+    }),
+    endpoint({
+      value: "category-cina",
+      label: "Category Cina",
+      description: "Mengambil kategori Cina DramaBox.",
+      pathLabel: "GET /?category=cina",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [fixedParam("lang", "in", "Bahasa Indonesia dikirim otomatis."), pageParam(1)]
+    }),
+    endpoint({
+      value: "category-korea",
+      label: "Category Korea",
+      description: "Mengambil kategori Korea DramaBox.",
+      pathLabel: "GET /?category=korea",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [fixedParam("lang", "in", "Bahasa Indonesia dikirim otomatis."), pageParam(1)]
+    }),
+    endpoint({
+      value: "rank",
+      label: "Rank",
+      description: "Mengambil ranking DramaBox.",
+      pathLabel: "GET /?rank",
+      supportsPage: false,
+      defaultPage: 1,
+      params: [fixedParam("lang", "in", "Bahasa Indonesia dikirim otomatis.")]
+    }),
+    endpoint({
+      value: "search",
+      label: "Search",
+      description: "Mengambil hasil pencarian DramaBox.",
+      pathLabel: "GET /?search=:query",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [
+        fixedParam("lang", "in", "Bahasa Indonesia dikirim otomatis."),
+        textParam("query", "Keyword", "cinta", "Kata kunci pencarian DramaBox."),
+        pageParam(1)
+      ]
+    })
+  ],
   flextv: [
     ...[
       ["popular", "Popular/Fokus", 1],
@@ -486,6 +555,53 @@ export const providerCatalogSections: Record<ProviderCode, CatalogSectionDefinit
       supportsPage: false,
       defaultPage: 1,
       params: [textParam("rankId", "Rank ID", "1", "ID ranking Reelife.")]
+    })
+  ],
+  reelshort: [
+    endpoint({
+      value: "foryou",
+      label: "For You",
+      description: "Mengambil feed For You ReelShort.",
+      pathLabel: "GET /api/v1/foryou",
+      supportsPage: false,
+      defaultPage: 1,
+      params: [fixedParam("lang", "in", "Bahasa Indonesia dikirim otomatis.")]
+    }),
+    endpoint({
+      value: "new",
+      label: "New Releases",
+      description: "Mengambil rilis terbaru ReelShort.",
+      pathLabel: "GET /api/v1/new",
+      supportsPage: false,
+      defaultPage: 1,
+      params: [fixedParam("lang", "in", "Bahasa Indonesia dikirim otomatis.")]
+    }),
+    endpoint({
+      value: "completed",
+      label: "Completed",
+      description: "Mengambil serial selesai ReelShort.",
+      pathLabel: "GET /api/v1/completed",
+      supportsPage: false,
+      defaultPage: 1,
+      params: [fixedParam("lang", "in", "Bahasa Indonesia dikirim otomatis.")]
+    }),
+    endpoint({
+      value: "romance",
+      label: "Romance",
+      description: "Mengambil kategori Romance ReelShort.",
+      pathLabel: "GET /api/v1/romance",
+      supportsPage: false,
+      defaultPage: 1,
+      params: [fixedParam("lang", "in", "Bahasa Indonesia dikirim otomatis.")]
+    }),
+    endpoint({
+      value: "drama",
+      label: "Drama",
+      description: "Mengambil kategori Drama ReelShort.",
+      pathLabel: "GET /api/v1/drama",
+      supportsPage: false,
+      defaultPage: 1,
+      params: [fixedParam("lang", "in", "Bahasa Indonesia dikirim otomatis.")]
     })
   ]
 };

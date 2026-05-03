@@ -46,7 +46,14 @@ export async function GET(request: NextRequest) {
     where: {
       catalogSource: STREAMAPI_SOURCE,
       platformId: { in: [...STREAMAPI_PROVIDER_CODES] },
+      coverUrl: { not: "" },
       isHomepageVisible: true,
+      platform: {
+        isHomepageVisible: true,
+      },
+      episodes: {
+        some: {},
+      },
       AND: [
         tabId
           ? {

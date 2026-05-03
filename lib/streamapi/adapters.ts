@@ -66,6 +66,12 @@ function numberParam(input: CatalogInput, name: string, fallback: number) {
   return Number.isFinite(parsed) ? Math.floor(parsed) : fallback;
 }
 
+function numberInputParam(input: { params?: JsonRecord }, name: string, fallback: number) {
+  const value = input.params?.[name];
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  return Number.isFinite(parsed) ? Math.floor(parsed) : fallback;
+}
+
 function stringParam(input: CatalogInput, name: string, fallback: string) {
   const value = input.params?.[name];
   if (typeof value === "number") return String(value);
@@ -78,6 +84,26 @@ function optionalStringParam(input: CatalogInput, name: string) {
   if (typeof value === "number") return String(value);
   if (typeof value === "string" && value.trim()) return value.trim();
   return undefined;
+}
+
+function stringRecordValue(record: JsonRecord, key: string) {
+  const value = record[key];
+  if (typeof value === "number") return String(value);
+  if (typeof value === "string" && value.trim()) return value.trim();
+  return null;
+}
+
+function selectMeloloPlaybackPayload(payload: JsonRecord, input: PlaybackInput) {
+  const episodes = Array.isArray(payload.episodes) ? payload.episodes : [];
+  const selected = episodes
+    .map((item) => asRecord(item))
+    .find((episode) => {
+      const vid = stringRecordValue(episode, "vid");
+      const index = Number(stringRecordValue(episode, "index"));
+      return vid === input.episodeExternalId || index === input.episodeNumber;
+    });
+
+  return selected ? { ...payload, ...selected } : payload;
 }
 
 function flexTab(section: string) {
@@ -122,6 +148,52 @@ function flickreelsSection(section: string) {
     banners: "/api/v1/banners"
   };
   return routes[section] ?? "/api/v1/for-you";
+}
+
+function dramaboxCatalog(input: CatalogInput, lang: string): ProviderEndpoint {
+  const page = numberParam(input, "page", input.page);
+
+  if (input.section === "new") {
+    return { path: "/?new", query: { page, lang } };
+  }
+
+  if (input.section === "populer") {
+    return { path: "/?populer", query: { page, lang } };
+  }
+
+  if (input.section === "rank") {
+    return { path: "/?rank", query: { lang } };
+  }
+
+  if (input.section === "search") {
+    return {
+      path: "/",
+      query: {
+        search: stringParam(input, "query", "cinta"),
+        page,
+        lang
+      }
+    };
+  }
+
+  if (input.section === "category-cina" || input.section === "category-korea" || input.section === "category") {
+    const category =
+      input.section === "category-cina"
+        ? "cina"
+        : input.section === "category-korea"
+          ? "korea"
+          : stringParam(input, "category", "cina");
+    return {
+      path: "/",
+      query: {
+        category,
+        page,
+        lang
+      }
+    };
+  }
+
+  return { path: "/?home", query: { page, lang } };
 }
 
 function netshortCatalog(input: CatalogInput, lang: string): ProviderEndpoint {
@@ -283,6 +355,25 @@ export const providerConfigs: Record<ProviderCode, ProviderConfig> = {
     episodes: (input, lang) => ({ path: `/api/v1/dramas/${encodeURIComponent(input.externalId)}`, query: { lang } }),
     playback: (input, lang) => ({ path: `/api/v1/dramas/${encodeURIComponent(input.externalId)}/play/${input.episodeNumber}`, query: { lang } })
   },
+  dramabox: {
+    code: "dramabox",
+    name: "DramaBox",
+    baseUrl: "https://dramabox.nreel.id",
+    defaultSection: "home",
+    supportedSections: ["home", "new", "populer", "category-cina", "category-korea", "rank", "search"],
+    catalogSections: providerCatalogSections.dramabox,
+    catalog: (input, lang) => dramaboxCatalog(input, lang),
+    drama: (input, lang) => ({ path: "/detail", query: { bookId: input.externalId, lang } }),
+    episodes: (input, lang) => ({ path: "/detail", query: { bookId: input.externalId, lang } }),
+    playback: (input, lang) => ({
+      path: "/stream",
+      query: {
+        bookId: input.externalId,
+        chapterIndex: Math.max(0, input.episodeNumber - 1),
+        lang
+      }
+    })
+  },
   flextv: {
     code: "flextv",
     name: "FlexTV",
@@ -418,7 +509,7 @@ export const providerConfigs: Record<ProviderCode, ProviderConfig> = {
     episodes: (input, lang) => ({ path: "/api/v1/series", query: { id: input.externalId, lang } }),
     playback: (input, lang) => ({
       path: "/api/v1/multi-video",
-      query: { id: input.episodeExternalId || input.externalId, lang }
+      query: { id: input.externalId, lang }
     })
   },
   meloshort: {
@@ -478,8 +569,8 @@ export const providerConfigs: Record<ProviderCode, ProviderConfig> = {
       path: "/api/v1/popular",
       query: { page: numberParam(input, "page", input.page), size: numberParam(input, "size", input.pageSize ?? 20) }
     }),
-    drama: (input) => ({ path: `/api/v1/videos/${encodeURIComponent(input.externalId)}`, query: { source: 1001 } }),
-    episodes: (input) => ({ path: `/api/v1/videos/${encodeURIComponent(input.externalId)}`, query: { source: 1001 } })
+    drama: (input) => ({ path: `/api/v1/videos/${encodeURIComponent(input.externalId)}`, query: { source: numberInputParam(input, "source", 1001) } }),
+    episodes: (input) => ({ path: `/api/v1/videos/${encodeURIComponent(input.externalId)}`, query: { source: numberInputParam(input, "source", 1001) } })
   },
   netshort: {
     code: "netshort",
@@ -551,6 +642,31 @@ export const providerConfigs: Record<ProviderCode, ProviderConfig> = {
     episodes: (input) => ({ path: `/api/v1/dramas/${encodeURIComponent(input.externalId)}/chapters` }),
     playback: (input) => ({
       path: `/api/v1/dramas/${encodeURIComponent(input.externalId)}/episodes/${encodeURIComponent(input.episodeExternalId)}`
+    })
+  },
+  reelshort: {
+    code: "reelshort",
+    name: "ReelShort",
+    baseUrl: "https://streamapi.web.id/p/reelshort",
+    defaultSection: "foryou",
+    supportedSections: ["foryou", "new", "completed", "romance", "drama"],
+    catalogSections: providerCatalogSections.reelshort,
+    catalog: (input, lang) => {
+      const route = ["foryou", "new", "completed", "romance", "drama"].includes(input.section)
+        ? input.section
+        : "foryou";
+      return { path: `/api/v1/${route}`, query: { lang } };
+    },
+    drama: (input, lang) => ({
+      path: `/api/v1/book/${encodeURIComponent(input.externalId)}`,
+      query: { lang }
+    }),
+    episodes: (input, lang) => ({
+      path: `/api/v1/book/${encodeURIComponent(input.externalId)}/chapters`,
+      query: { lang }
+    }),
+    playback: (input) => ({
+      path: `/api/v1/book/${encodeURIComponent(input.externalId)}/chapter/${encodeURIComponent(input.episodeExternalId)}/video`
     })
   }
 };
@@ -631,7 +747,8 @@ export class ConfiguredProviderAdapter implements ProviderAdapter {
     }
 
     const payload = await this.fetch(endpoint);
-    return normalizePlayback(payload, this.code, input.episodeId, input.rawEpisode);
+    const playbackPayload = this.code === "melolo" ? selectMeloloPlaybackPayload(payload, input) : payload;
+    return normalizePlayback(playbackPayload, this.code, input.episodeId, input.rawEpisode);
   }
 
   private fetch(endpoint: ProviderEndpoint) {

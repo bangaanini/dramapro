@@ -61,7 +61,7 @@ const titleKeys = [
   "albumName"
 ];
 
-const descriptionKeys = ["dwill", "dentra", "description", "drama_description", "abstract", "desc", "intro", "introduce", "summary", "brief"];
+const descriptionKeys = ["dwill", "dentra", "description", "drama_description", "abstract", "desc", "intro", "introduce", "introduction", "summary", "brief", "special_desc"];
 const posterKeys = [
   "pday",
   "ptear",
@@ -76,8 +76,10 @@ const posterKeys = [
   "posterUrl",
   "coverUrl",
   "cover_url",
+  "coverWap",
   "process_cover",
   "bookCover",
+  "book_pic",
   "horizontalCoverId"
 ];
 const episodeCountKeys = [
@@ -88,7 +90,9 @@ const episodeCountKeys = [
   "totalEpisodes",
   "total_episodes",
   "chapter_num",
+  "chapter_count",
   "chapterCount",
+  "lastChapterId",
   "episodesCount",
   "episodes",
   "dramaCount",
@@ -107,6 +111,7 @@ const catalogContainerKeys = [
   "rows",
   "dramas",
   "floor",
+  "lists",
   "series_list",
   "shortPlayResponseList",
   "bannerResponseList",
@@ -114,7 +119,9 @@ const catalogContainerKeys = [
   "books",
   "cell_data",
   "cells",
-  "book_tab_infos"
+  "book_tab_infos",
+  "columnVoList",
+  "bookList"
 ];
 
 export function asRecord(value: unknown): JsonRecord {
@@ -235,7 +242,7 @@ export function normalizeLangForProvider(provider: ProviderCode, lang: string): 
     if (lower === "id" || lower === "id-id") return "in";
   }
 
-  if (provider === "rapidtv") {
+  if (provider === "dramabox" || provider === "rapidtv" || provider === "reelshort") {
     if (lower === "id" || lower === "id-id") return "in";
   }
 
@@ -265,9 +272,20 @@ export function extractListPayload(payload: unknown): unknown[] {
     readPath(payload, "data.rows"),
     readPath(payload, "data.dramas"),
     readPath(payload, "data.list"),
+    readPath(payload, "data.lists"),
     readPath(payload, "data.items"),
     readPath(payload, "data.records"),
     readPath(payload, "data.results"),
+    readPath(payload, "dataResult.data"),
+    readPath(payload, "dataResult.popularTvs"),
+    readPath(payload, "data.columnVoList"),
+    readPath(payload, "data.columnPageList"),
+    readPath(payload, "data.bookList"),
+    readPath(payload, "data.bookVos"),
+    readPath(payload, "data.classifyBookList.records"),
+    readPath(payload, "data.newTheaterList.records"),
+    readPath(payload, "data.recommendList.records"),
+    readPath(payload, "data.searchList"),
     readPath(payload, "data.floor"),
     readPath(payload, "data.place_list"),
     readPath(payload, "data.popular"),
@@ -284,10 +302,13 @@ export function extractListPayload(payload: unknown): unknown[] {
     readPath(payload, "book_tab_infos"),
     readPath(payload, "tabPageResponse.bannerResponseList"),
     readPath(payload, "list"),
+    readPath(payload, "lists"),
     readPath(payload, "items"),
     readPath(payload, "records"),
     readPath(payload, "results"),
+    readPath(payload, "trending"),
     readPath(payload, "popular"),
+    readPath(payload, "newest"),
     readPath(payload, "trendingSearches")
   ];
 
@@ -342,6 +363,7 @@ export function extractDramaPayload(payload: unknown): JsonRecord {
     readPath(payload, "data.drama"),
     readPath(payload, "data.series"),
     readPath(payload, "data.book"),
+    readPath(payload, "dataResult.tvInfo"),
     readPath(payload, "data.dgiv.bswitc"),
     readPath(payload, "dgiv.bswitc"),
     readPath(payload, "info"),
@@ -349,6 +371,7 @@ export function extractDramaPayload(payload: unknown): JsonRecord {
     readPath(payload, "drama"),
     readPath(payload, "series"),
     readPath(payload, "book"),
+    readPath(payload, "tvInfo"),
     readPath(payload, "data"),
     payload
   ];
@@ -362,6 +385,7 @@ export function extractDramaPayload(payload: unknown): JsonRecord {
 
 export function extractEpisodesPayload(payload: unknown): unknown[] {
   const candidates = [
+    payload,
     readPath(payload, "data.info.episode_list"),
     readPath(payload, "data.info.episodes"),
     readPath(payload, "data.info.chapters"),
@@ -372,6 +396,8 @@ export function extractEpisodesPayload(payload: unknown): unknown[] {
     readPath(payload, "data.episode_list"),
     readPath(payload, "data.list"),
     readPath(payload, "data.chapters"),
+    readPath(payload, "data.chapterList"),
+    readPath(payload, "dataResult.tvInfo.episodesInfos"),
     readPath(payload, "data"),
     readPath(payload, "data.dgiv.ebeer"),
     readPath(payload, "dgiv.ebeer"),
@@ -383,7 +409,9 @@ export function extractEpisodesPayload(payload: unknown): unknown[] {
     readPath(payload, "detail.chapters"),
     readPath(payload, "episodes"),
     readPath(payload, "episode_list"),
+    readPath(payload, "episodesInfos"),
     readPath(payload, "chapters"),
+    readPath(payload, "chapterList"),
     readPath(payload, "list")
   ];
 
@@ -399,6 +427,7 @@ export function normalizeTags(source: unknown): string[] {
   const tags = [
     ...asArray(asRecord(source).tag),
     ...asArray(asRecord(source).tags),
+    ...asArray(asRecord(source).tagNames),
     ...asArray(asRecord(source).drama_tags),
     ...asArray(asRecord(source).drama_sub_tags),
     ...asArray(asRecord(source).sub_tags),
@@ -417,7 +446,7 @@ export function normalizeTags(source: unknown): string[] {
       if (typeof tag === "string") return tag;
       if (typeof tag === "number") return String(tag);
       if (tag && typeof tag === "object") {
-        return toStringValue(firstValue(tag, ["tag_name", "name", "title", "text", "label"]));
+        return toStringValue(firstValue(tag, ["tag_name", "tagName", "name", "title", "text", "label"]));
       }
       return null;
     })
@@ -463,18 +492,18 @@ export function normalizeEpisode(
 ): CanonicalEpisode {
   const source = asRecord(raw);
   const explicitEpisodeNumber =
-    toNumberValue(firstValue(source, ["episodeNo", "episode_no", "episodeNumber", "chapter_num", "chapterNo", "ep", "sort"])) ??
+    toNumberValue(firstValue(source, ["episode", "episodeNum", "episodeNo", "episode_no", "episodeNumber", "chapter_num", "chapterNo", "ep", "sort"])) ??
     toNumberValue(firstValue(source, ["ewheel"]));
   const indexedEpisodeNumber = episodeNumberFromIndexValue(
-    toNumberValue(firstValue(source, ["index", "chapter_index"])),
+    toNumberValue(firstValue(source, ["index", "chapter_index", "chapterIndex"])),
     index
   );
   const episodeNumber =
     positiveEpisodeNumber(explicitEpisodeNumber ?? indexedEpisodeNumber, index);
   const externalId = toStringValue(firstValue(source, episodeIdKeys)) ?? String(episodeNumber);
   const dramaId = makeDramaId({ provider, externalId: dramaExternalId, lang });
-  const title = toStringValue(firstValue(source, ["title", "name", "chapter_title", "chapter_name", "episodeTitle", "episode_name"]));
-  const isLocked = toBooleanValue(firstValue(source, ["isLocked", "is_lock", "locked", "is_need_pay", "need_pay", "need_unlock", "needUnlock", "is_paid", "isPaid", "isVip", "is_vip_episode"]));
+  const title = toStringValue(firstValue(source, ["title", "name", "chapter_title", "chapter_name", "chapterName", "episodeTitle", "episode_name"]));
+  const isLocked = toBooleanValue(firstValue(source, ["isLocked", "is_lock", "locked", "is_need_pay", "need_pay", "need_unlock", "needUnlock", "is_paid", "isPaid", "isVip", "is_vip_episode", "isCharge", "isPay", "chargeChapter"]));
 
   return {
     id: makeEpisodeId({
@@ -490,7 +519,7 @@ export function normalizeEpisode(
     externalId,
     episodeNumber,
     title,
-    thumbnailUrl: browserSafeImageUrl(toStringValue(firstValue(source, ["pday", "cover", "thumbnail", "thumb", "chapter_cover", "first_frame", "poster"]))),
+    thumbnailUrl: browserSafeImageUrl(toStringValue(firstValue(source, ["pday", "cover", "thumbnail", "thumb", "chapter_cover", "chapterImg", "first_frame", "poster"]))),
     duration: toNumberValue(firstValue(source, durationKeys)),
     isLocked,
     rawPayload: normalizeJson(source)
@@ -506,7 +535,7 @@ function qualityFromPlaybackRecord(record: JsonRecord, url: string, fallback: st
   const directQuality = toStringValue(firstValue(record, ["Dbag", "quality", "qualityName", "definition", "name"]));
   if (directQuality) return directQuality;
 
-  const height = toNumberValue(firstValue(record, ["height", "Hdet", "Wroll"]));
+  const height = toNumberValue(firstValue(record, ["height", "Hdet", "Wroll", "Dpi"]));
   if (height) return `${height}p`;
 
   return qualityFromUrl(url, fallback);
@@ -522,6 +551,7 @@ function inferMimeFromRecord(record: JsonRecord, url: string) {
   const format = toStringValue(firstValue(record, ["Famo", "format", "mimeType", "type"]))?.toLowerCase();
   if (format === "mp4" || format === "video/mp4") return "video/mp4";
   if (format === "hls" || format === "m3u8" || format === "application/vnd.apple.mpegurl") return "application/vnd.apple.mpegurl";
+  if ((toStringValue(record.url) || toStringValue(record.stream_url) || toStringValue(record.streamUrl)) && (toNumberValue(record.size) || toNumberValue(record.duration))) return "video/mp4";
   return inferMime(url);
 }
 
@@ -564,6 +594,15 @@ function collectSources(playback: JsonRecord, expiresAt: string | null): Playbac
     ["video_url", "auto", "h264"],
     ["videoPath", "auto", null],
     ["playUrl", "auto", null],
+    ["signPlayUrlH264", "720p", "h264"],
+    ["signPlayUrl", "720p", null],
+    ["bkSignPlayUrl", "720p", "h264"],
+    ["jxSignH264", "720p", "h264"],
+    ["jxSignH265", "720p", "h265"],
+    ["mp41080p", "1080p", null],
+    ["mp4720p", "720p", null],
+    ["mp4540p", "540p", null],
+    ["mp4360p", "360p", null],
     ["external_audio_h264_m3u8", "auto", "h264"],
     ["external_audio_h265_m3u8", "auto", "h265"],
     ["Mopp", "auto", "h264"],
@@ -573,7 +612,9 @@ function collectSources(playback: JsonRecord, expiresAt: string | null): Playbac
     ["play_url_720p", "720p", null],
     ["main_url", "auto", null],
     ["backup_url", "auto", null],
-    ["videoUrl", "auto", null]
+    ["videoUrl", "auto", null],
+    ["stream_url", "auto", null],
+    ["streamUrl", "auto", null]
   ] as const;
 
   for (const [key, quality, codec] of directCandidates) {
@@ -583,15 +624,37 @@ function collectSources(playback: JsonRecord, expiresAt: string | null): Playbac
     sources.push({
       url,
       quality: qualityFromUrl(url, quality),
-      mimeType: inferMime(url),
+      mimeType: inferMimeFromRecord(playback, url),
       codec,
       expiresAt
     });
   }
 
+  for (const chapter of asArray(playback.chapterList)) {
+    for (const cdn of asArray(asRecord(chapter).cdnList)) {
+      for (const item of asArray(asRecord(cdn).videoPathList)) {
+        const record = asRecord(item);
+        const rawUrl = toStringValue(record.videoPath);
+        if (!rawUrl) continue;
+        const url = applyTencentVodDrmToken(rawUrl, drmToken);
+        const qualityNumber = toNumberValue(record.quality);
+        const quality = qualityNumber ? `${qualityNumber}p` : qualityFromPlaybackRecord(record, url, "auto");
+        sources.push({
+          url,
+          quality,
+          mimeType: inferMimeFromRecord(record, url),
+          codec: toStringValue(record.codec),
+          expiresAt
+        });
+      }
+    }
+  }
+
   for (const item of [
     ...asArray(playback.videos),
     ...asArray(playback.streams),
+    ...asArray(playback.servers),
+    ...asArray(playback.chapterContentList),
     ...asArray(playback.adaptive),
     ...asArray(playback.pphys),
     ...asArray(playback.funi)
@@ -601,12 +664,24 @@ function collectSources(playback: JsonRecord, expiresAt: string | null): Playbac
       toStringValue(record.Mopp) ??
       toStringValue(record.Bcold) ??
       toStringValue(record.url) ??
+      toStringValue(record.PlayURL) ??
       toStringValue(record.play_url) ??
       toStringValue(record.play_url_720p) ??
       toStringValue(record.main_url) ??
       toStringValue(record.backup_url) ??
+      toStringValue(record.stream_url) ??
+      toStringValue(record.streamUrl) ??
       toStringValue(record.videoPath) ??
       toStringValue(record.playUrl) ??
+      toStringValue(record.signPlayUrlH264) ??
+      toStringValue(record.signPlayUrl) ??
+      toStringValue(record.bkSignPlayUrl) ??
+      toStringValue(record.jxSignH264) ??
+      toStringValue(record.jxSignH265) ??
+      toStringValue(record.mp41080p) ??
+      toStringValue(record.mp4720p) ??
+      toStringValue(record.mp4540p) ??
+      toStringValue(record.mp4360p) ??
       toStringValue(record.hls_url) ??
       toStringValue(record.m3u8_url);
     if (!url) continue;
@@ -616,7 +691,7 @@ function collectSources(playback: JsonRecord, expiresAt: string | null): Playbac
       url: sourceUrl,
       quality,
       mimeType: inferMimeFromRecord(record, sourceUrl),
-      codec: toStringValue(record.codec) ?? toStringValue(record.Ctan),
+      codec: toStringValue(record.codec) ?? toStringValue(record.Ctan) ?? toStringValue(record.Encode),
       expiresAt
     });
   }
@@ -638,8 +713,9 @@ function collectSubtitles(playback: JsonRecord): PlaybackSubtitle[] {
     ...asArray(playback.sublist),
     ...asArray(playback.vtt_list)
   ];
+  const directSubtitleUrl = toStringValue(playback.textTrackUrl);
 
-  return rawSubtitles
+  const subtitles = rawSubtitles
     .map((item) => {
       const record = asRecord(item);
       const url = toStringValue(record.vtt) ?? toStringValue(record.subtitle) ?? toStringValue(record.url);
@@ -662,6 +738,18 @@ function collectSubtitles(playback: JsonRecord): PlaybackSubtitle[] {
       } satisfies PlaybackSubtitle;
     })
     .filter((item): item is PlaybackSubtitle => Boolean(item));
+
+  if (directSubtitleUrl) {
+    const cleanUrl = directSubtitleUrl.split("?")[0].toLowerCase();
+    subtitles.unshift({
+      lang: normalizeSubtitleLang(toStringValue(playback.languageCode) ?? toStringValue(playback.lang) ?? "id"),
+      label: "id",
+      url: directSubtitleUrl,
+      format: cleanUrl.endsWith(".vtt") ? "vtt" : cleanUrl.endsWith(".srt") ? "srt" : "unknown"
+    });
+  }
+
+  return subtitles;
 }
 
 function normalizeSubtitleLang(lang: string) {
@@ -675,7 +763,7 @@ function normalizeSubtitleLang(lang: string) {
 function expiresFromProvider(playback: JsonRecord): string | null {
   const timeout = toNumberValue(firstValue(playback, ["hls_timeout", "expires_at", "expire_at", "expireTime"]));
   if (timeout && timeout > 0) {
-    return new Date(timeout * 1000).toISOString();
+    return new Date(timeout > 10_000_000_000 ? timeout : timeout * 1000).toISOString();
   }
 
   const seconds = toNumberValue(firstValue(playback, ["hls_time_left", "ttl", "expiresIn", "validFor"]));
@@ -701,7 +789,7 @@ export function normalizePlayback(
     if (a.codec !== "h264" && b.codec === "h264") return 1;
     return Number.parseInt(b.quality, 10) - Number.parseInt(a.quality, 10);
   });
-  const locked = toBooleanValue(firstValue(merged, ["isLocked", "is_lock", "is_need_pay", "need_pay", "locked"]));
+  const locked = toBooleanValue(firstValue(merged, ["isLocked", "is_lock", "is_need_pay", "need_pay", "locked", "isCharge", "isPay", "chargeChapter"]));
 
   return {
     episodeId,
