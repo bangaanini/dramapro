@@ -1,10 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
-import { createWriteStream } from "node:fs";
 import { access, mkdir, rename, stat, unlink } from "node:fs/promises";
 import { hostname } from "node:os";
 import { basename, dirname, relative, resolve, sep } from "node:path";
-import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
 
 import { ensureSeriesPlayableFresh } from "@/lib/catalog";
 import { prisma } from "@/lib/prisma";
@@ -13,7 +10,6 @@ import {
   buildPromoDownloadFfmpegArgs,
   createNormalizedSubtitleTempFile,
   CURRENT_PROMO_DOWNLOAD_OUTPUT_VERSION,
-  FFMPEG_USER_AGENT,
   PROMO_DOWNLOAD_SUBTITLE_MODE,
   removePromoSubtitleTempFile,
   type PromoDownloadSubtitleStatus,
@@ -450,24 +446,6 @@ function runFfmpeg(
   });
 }
 
-async function downloadMp4(sourceUrl: string, outputPath: string) {
-  const response = await fetch(sourceUrl, {
-    headers: {
-      Accept: "*/*",
-      "User-Agent": FFMPEG_USER_AGENT,
-    },
-    redirect: "follow",
-    signal: AbortSignal.timeout(30 * 60 * 1000),
-  });
-
-  if (!response.ok || !response.body) {
-    throw new Error(`Download MP4 gagal dengan status ${response.status}.`);
-  }
-
-  const body = response.body as unknown as Parameters<typeof Readable.fromWeb>[0];
-  await pipeline(Readable.fromWeb(body), createWriteStream(outputPath));
-}
-
 async function hasUsableOutput(path: string) {
   try {
     const stats = await stat(path);
@@ -601,12 +579,8 @@ export async function processPromoDownloadJob(job: PromoDownloadJobRow) {
       );
     }
 
-    if (sourceType === "hls" || subtitleTempFile) {
-      assertFfmpegAvailable();
-      await runFfmpeg(sourceUrl, tempPath, subtitleTempFile?.path ?? null);
-    } else {
-      await downloadMp4(sourceUrl, tempPath);
-    }
+    assertFfmpegAvailable();
+    await runFfmpeg(sourceUrl, tempPath, subtitleTempFile?.path ?? null);
   } finally {
     await removePromoSubtitleTempFile(subtitleTempFile);
   }

@@ -8,7 +8,7 @@ import {
   type SubtitleCandidate,
 } from "@/lib/subtitles";
 
-export const CURRENT_PROMO_DOWNLOAD_OUTPUT_VERSION = 3;
+export const CURRENT_PROMO_DOWNLOAD_OUTPUT_VERSION = 4;
 export const PROMO_DOWNLOAD_SUBTITLE_MODE = "burn-in";
 export type PromoDownloadSubtitleStatus = "burned" | "missing";
 
@@ -134,6 +134,19 @@ export function buildPromoDownloadFfmpegArgs(
     args.splice(7, 0, "-allowed_extensions", "ALL");
   }
 
+  const audioArgs = [
+    "-c:a",
+    "aac",
+    "-profile:a",
+    "aac_low",
+    "-b:a",
+    process.env.PROMO_DOWNLOAD_AUDIO_BITRATE?.trim() || "128k",
+    "-ac",
+    "2",
+    "-ar",
+    "48000",
+  ];
+
   if (subtitlePath) {
     args.push(
       "-vf",
@@ -146,13 +159,10 @@ export function buildPromoDownloadFfmpegArgs(
       process.env.PROMO_DOWNLOAD_VIDEO_CRF?.trim() || "20",
       "-pix_fmt",
       "yuv420p",
-      "-c:a",
-      "aac",
-      "-b:a",
-      process.env.PROMO_DOWNLOAD_AUDIO_BITRATE?.trim() || "128k",
+      ...audioArgs,
     );
   } else {
-    args.push("-c", "copy", "-bsf:a", "aac_adtstoasc");
+    args.push("-c:v", "copy", ...audioArgs);
   }
 
   args.push(

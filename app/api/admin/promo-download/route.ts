@@ -12,16 +12,6 @@ function parseEpisodeIndex(value: string | null) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-function buildDownloadUrl(url: string, filename: string) {
-  const searchParams = new URLSearchParams({
-    url,
-    download: "1",
-    filename,
-  });
-
-  return `/api/media?${searchParams.toString()}`;
-}
-
 function buildRenderUrl(
   internalDramaId: string,
   episodeIndex: number,
@@ -57,13 +47,19 @@ function buildFfmpegCommand(
     return (
       "ffmpeg -i \"" +
       sourceUrl +
-      "\" -vf \"subtitles=subtitle.vtt\" -c:v libx264 -c:a aac \"" +
+      "\" -vf \"subtitles=subtitle.vtt\" -c:v libx264 -c:a aac -profile:a aac_low -b:a 128k -ac 2 -ar 48000 \"" +
       filename +
       "\""
     );
   }
 
-  return "ffmpeg -i \"" + sourceUrl + "\" -c copy \"" + filename + "\"";
+  return (
+    "ffmpeg -i \"" +
+    sourceUrl +
+    "\" -c:v copy -c:a aac -profile:a aac_low -b:a 128k -ac 2 -ar 48000 \"" +
+    filename +
+    "\""
+  );
 }
 
 function buildMessage({
@@ -86,10 +82,10 @@ function buildMessage({
   if (hasMp4) {
     return hasSubtitle
       ? `MP4 tersedia. Server akan menjalankan FFmpeg untuk burn-in subtitle. ${subtitleMessage}`
-      : `MP4 siap diunduh langsung ke device admin. ${subtitleMessage}`;
+      : `MP4 tersedia. Server akan menjalankan FFmpeg untuk menormalkan audio agar kompatibel. ${subtitleMessage}`;
   }
 
-  return `Episode ini memakai HLS. Server akan menjalankan FFmpeg untuk menyatukan .m3u8 menjadi MP4. ${subtitleMessage}`;
+  return `Episode ini memakai HLS. Server akan menjalankan FFmpeg untuk menyatukan .m3u8 menjadi MP4 dan menormalkan audio. ${subtitleMessage}`;
 }
 
 export async function GET(request: NextRequest) {
@@ -155,9 +151,7 @@ export async function GET(request: NextRequest) {
               : bestMp4.label,
             mimeType: bestMp4.mimeType,
             sourceUrl: bestMp4.url,
-            downloadUrl: shouldBurnSubtitle
-              ? buildRenderUrl(internalDramaId, episodeIndex, "mp4", 0)
-              : buildDownloadUrl(bestMp4.url, `${baseFilename}.mp4`),
+            downloadUrl: buildRenderUrl(internalDramaId, episodeIndex, "mp4", 0),
           }
         : bestHls
           ? {
@@ -175,9 +169,7 @@ export async function GET(request: NextRequest) {
           : quality.label,
         mimeType: quality.mimeType,
         sourceUrl: quality.url,
-        downloadUrl: shouldBurnSubtitle
-          ? buildRenderUrl(internalDramaId, episodeIndex, "mp4", index)
-          : buildDownloadUrl(quality.url, `${baseFilename}-${index + 1}.mp4`),
+        downloadUrl: buildRenderUrl(internalDramaId, episodeIndex, "mp4", index),
       })),
       hlsQualities: hlsQualities.map((quality, index) => ({
         label: shouldBurnSubtitle
