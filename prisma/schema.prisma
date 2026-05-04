@@ -267,24 +267,29 @@ model ProviderWorkerLog {
 }
 
 model PromoDownloadJob {
-  id            String        @id @default(uuid()) @db.Uuid
-  seriesId      String        @db.Uuid
-  episodeIndex  Int
-  status        String        @default("queued")
-  sourceType    String        @default("")
-  qualityLabel  String        @default("")
-  outputPath    String        @default("")
-  fileSizeBytes BigInt?
-  error         String        @default("")
-  attempts      Int           @default(0)
-  maxAttempts   Int           @default(3)
-  workerId      String?
-  scheduledAt   DateTime      @default(now())
-  startedAt     DateTime?
-  finishedAt    DateTime?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  series        CatalogSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  id               String        @id @default(uuid()) @db.Uuid
+  seriesId         String        @db.Uuid
+  episodeIndex     Int
+  status           String        @default("queued")
+  sourceType       String        @default("")
+  qualityLabel     String        @default("")
+  outputPath       String        @default("")
+  fileSizeBytes    BigInt?
+  outputVersion    Int           @default(1)
+  subtitleMode     String        @default("")
+  subtitleStatus   String        @default("")
+  subtitleLabel    String        @default("")
+  subtitleLanguage String        @default("")
+  error            String        @default("")
+  attempts         Int           @default(0)
+  maxAttempts      Int           @default(3)
+  workerId         String?
+  scheduledAt      DateTime      @default(now())
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  series           CatalogSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
 
   @@unique([seriesId, episodeIndex])
   @@index([status, scheduledAt])

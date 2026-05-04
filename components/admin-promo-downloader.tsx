@@ -2,6 +2,7 @@
 
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
+  Captions,
   Copy,
   Download,
   ExternalLink,
@@ -15,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { triggerSelectionHaptic } from "@/lib/haptics";
+import { isTelegramMiniAppRuntime } from "@/lib/telegram-web-app";
 
 type SearchResult = {
   id: string;
@@ -39,6 +41,12 @@ type PromoDownloadResponse = {
   sourceType: "mp4" | "hls";
   downloadable: boolean;
   message: string;
+  subtitle: {
+    mode: "burn-in";
+    status: "available" | "missing";
+    label: string | null;
+    language: string | null;
+  };
   bestDownload: {
     label: string;
     mimeType: string;
@@ -66,6 +74,11 @@ type PromoDownloadBatchJob = {
   status: "queued" | "processing" | "done" | "failed";
   sourceType: string;
   qualityLabel: string;
+  outputVersion: number;
+  subtitleMode: string;
+  subtitleStatus: string;
+  subtitleLabel: string;
+  subtitleLanguage: string;
   fileSizeBytes: number | null;
   error: string;
   downloadUrl: string | null;
@@ -90,6 +103,49 @@ const DEFAULT_EMPTY_RESPONSE: SearchResponse = {
   total: 0,
   minimumQueryLength: 3,
 };
+
+async function readJsonResponse<T>(
+  response: Response,
+  fallbackMessage: string,
+) {
+  const text = await response.text();
+
+  if (!text.trim()) {
+    return {} as T;
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    const compactText = text
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 220);
+
+    throw new Error(
+      compactText ||
+        `${fallbackMessage} Server mengembalikan response non-JSON (${response.status}).`,
+    );
+  }
+}
+
+function toAbsoluteClientUrl(url: string) {
+  return new URL(url, window.location.origin).toString();
+}
+
+function buildPromoDownloadFilename(label: string) {
+  const filename =
+    label
+      .replace(/[^\w\s.-]+/g, "")
+      .trim()
+      .replace(/\s+/g, "-")
+      .slice(0, 96) || "promo-video";
+
+  return filename.toLowerCase().endsWith(".mp4") ? filename : `${filename}.mp4`;
+}
 
 export function AdminPromoDownloader() {
   const [query, setQuery] = useState("");
@@ -125,9 +181,9 @@ export function AdminPromoDownloader() {
         `/api/admin/promo-download/batch?${params.toString()}`,
         { cache: "no-store" },
       );
-      const payload = (await response.json()) as PromoDownloadBatchResponse & {
-        error?: string;
-      };
+      const payload = await readJsonResponse<
+        PromoDownloadBatchResponse & { error?: string }
+      >(response, "Gagal membaca status download.");
 
       if (!response.ok) {
         throw new Error(payload.error || "Gagal membaca status download.");
@@ -161,9 +217,9 @@ export function AdminPromoDownloader() {
         },
         body: JSON.stringify({ internalDramaId: selectedDrama.id }),
       });
-      const payload = (await response.json()) as PromoDownloadBatchResponse & {
-        error?: string;
-      };
+      const payload = await readJsonResponse<
+        PromoDownloadBatchResponse & { error?: string }
+      >(response, "Gagal membuat antrean download.");
 
       if (!response.ok) {
         throw new Error(payload.error || "Gagal membuat antrean download.");
@@ -235,7 +291,10 @@ export function AdminPromoDownloader() {
           signal: controller.signal,
           cache: "no-store",
         });
-        const payload = (await response.json()) as SearchResponse & { error?: string };
+        const payload = await readJsonResponse<SearchResponse & { error?: string }>(
+          response,
+          "Pencarian drama gagal.",
+        );
 
         if (!response.ok) {
           throw new Error(payload.error || "Pencarian drama gagal.");
@@ -294,10 +353,12 @@ export function AdminPromoDownloader() {
             cache: "no-store",
           },
         );
-        const payload = (await response.json()) as PromoDownloadResponse & {
-          error?: string;
-          detail?: string;
-        };
+        const payload = await readJsonResponse<
+          PromoDownloadResponse & {
+            error?: string;
+            detail?: string;
+          }
+        >(response, "Gagal menyiapkan source promo.");
 
         if (!response.ok) {
           throw new Error(payload.detail || payload.error || "Gagal menyiapkan source promo.");
@@ -345,10 +406,49 @@ export function AdminPromoDownloader() {
     }
   }
 
+  function openDownload(downloadUrl: string, label: string) {
+    const absoluteUrl = toAbsoluteClientUrl(downloadUrl);
+    const filename = buildPromoDownloadFilename(label);
+    const webApp = window.Telegram?.WebApp;
+
+    triggerSelectionHaptic();
+
+    try {
+      if (webApp && isTelegramMiniAppRuntime(webApp)) {
+        if (webApp.downloadFile && absoluteUrl.startsWith("https://")) {
+          webApp.downloadFile(
+            {
+              url: absoluteUrl,
+              file_name: filename,
+            },
+            (accepted) => {
+              setToast(
+                accepted
+                  ? "Telegram mulai menyiapkan download."
+                  : "Permintaan download dibatalkan.",
+              );
+            },
+          );
+          return;
+        }
+
+        if (webApp.openLink) {
+          webApp.openLink(absoluteUrl, { try_instant_view: false });
+          setToast("Link download dibuka di browser eksternal.");
+          return;
+        }
+      }
+    } catch {
+      setToast("Membuka download lewat browser.");
+    }
+
+    window.location.assign(absoluteUrl);
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <div className="space-y-4">
+    <div className="min-w-0 max-w-full space-y-5 md:space-y-6">
+      <div className="grid min-w-0 gap-4 md:gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+        <div className="min-w-0 max-w-full space-y-4">
           <div className="rounded-[1.7rem] border border-white/10 bg-black/20 p-4">
             <label className="block space-y-2">
               <span className="text-sm font-medium text-white">
@@ -443,10 +543,10 @@ export function AdminPromoDownloader() {
           </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="min-w-0 max-w-full space-y-4">
           <div className="rounded-[1.7rem] border border-white/10 bg-black/20 p-4">
             {selectedDrama ? (
-              <div className="space-y-4">
+              <div className="min-w-0 max-w-full space-y-4">
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-foreground)]">
                     Drama dipilih
@@ -487,6 +587,7 @@ export function AdminPromoDownloader() {
                   error={batchError}
                   onStart={enqueueAllDownloads}
                   onRefresh={() => void loadBatchStatus(selectedDrama.id, true)}
+                  onDownload={openDownload}
                 />
               </div>
             ) : (
@@ -524,7 +625,7 @@ export function AdminPromoDownloader() {
               ) : resolveError ? (
                 <ErrorState message={resolveError} />
               ) : resolvedPromo ? (
-                <div className="space-y-4">
+                <div className="min-w-0 max-w-full space-y-4">
                   <div className="rounded-[1.4rem] border border-white/10 bg-black/20 p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
@@ -543,6 +644,9 @@ export function AdminPromoDownloader() {
                     <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
                       {resolvedPromo.message}
                     </p>
+                    <div className="mt-3">
+                      <SubtitleStatusBadge subtitle={resolvedPromo.subtitle} />
+                    </div>
                   </div>
 
                   {resolvedPromo.bestDownload ? (
@@ -551,6 +655,7 @@ export function AdminPromoDownloader() {
                       label={resolvedPromo.bestDownload.label}
                       sourceUrl={resolvedPromo.bestDownload.sourceUrl}
                       onCopy={copyToClipboard}
+                      onDownload={openDownload}
                     />
                   ) : null}
 
@@ -573,12 +678,13 @@ export function AdminPromoDownloader() {
                             </p>
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            <a
-                              href={quality.downloadUrl}
+                            <button
+                              type="button"
+                              onClick={() => openDownload(quality.downloadUrl, quality.label)}
                               className="inline-flex h-9 items-center justify-center rounded-full border border-white/10 bg-white/6 px-4 text-sm font-medium text-white"
                             >
                               Download
-                            </a>
+                            </button>
                             <Button
                               size="sm"
                               variant="ghost"
@@ -617,13 +723,14 @@ export function AdminPromoDownloader() {
                             </p>
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            <a
-                              href={quality.downloadUrl}
+                            <button
+                              type="button"
+                              onClick={() => openDownload(quality.downloadUrl, quality.label)}
                               className="inline-flex h-9 items-center justify-center rounded-full bg-accent px-4 text-sm font-medium text-white"
                             >
                               <Download className="mr-2 size-4" />
                               Download MP4
-                            </a>
+                            </button>
                             <Button
                               size="sm"
                               variant="secondary"
@@ -679,7 +786,7 @@ export function AdminPromoDownloader() {
 
       {toast ? (
         <div className="fixed inset-x-0 bottom-8 z-[90] flex justify-center px-4">
-          <div className="rounded-full border border-white/10 bg-[rgba(24,16,15,0.94)] px-4 py-2 text-sm text-white shadow-[0_16px_40px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+          <div className="rounded-full border border-white/10 bg-[rgba(18,15,22,0.94)] px-4 py-2 text-sm text-white shadow-[0_16px_40px_rgba(0,0,0,0.28)] backdrop-blur-xl">
             {toast}
           </div>
         </div>
@@ -694,12 +801,14 @@ function BatchDownloadPanel({
   error,
   onStart,
   onRefresh,
+  onDownload,
 }: {
   status: PromoDownloadBatchResponse | null;
   isLoading: boolean;
   error: string | null;
   onStart: () => void;
   onRefresh: () => void;
+  onDownload: (downloadUrl: string, label: string) => void;
 }) {
   const queued = status?.counts.queued ?? 0;
   const processing = status?.counts.processing ?? 0;
@@ -785,6 +894,9 @@ function BatchDownloadPanel({
                       {job.qualityLabel || job.sourceType || "menunggu source"}
                       {job.fileSizeBytes ? ` • ${formatBytes(job.fileSizeBytes)}` : ""}
                     </p>
+                    <p className="mt-1 text-xs text-white/55">
+                      {downloadSubtitleStatusLabel(job)}
+                    </p>
                     {job.status === "failed" && job.error ? (
                       <p className="mt-1 max-w-md text-xs text-red-200/80">
                         {job.error}
@@ -799,12 +911,17 @@ function BatchDownloadPanel({
                       {downloadStatusLabel(job.status)}
                     </span>
                     {job.downloadUrl ? (
-                      <a
-                        href={job.downloadUrl}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (job.downloadUrl) {
+                            onDownload(job.downloadUrl, `EP-${job.episodeIndex}`);
+                          }
+                        }}
                         className="inline-flex h-8 items-center rounded-full border border-white/10 bg-white/6 px-3 text-xs font-medium text-white"
                       >
                         Download
-                      </a>
+                      </button>
                     ) : null}
                   </div>
                 </div>
@@ -830,6 +947,44 @@ function StatusCounter({ label, value }: { label: string; value: number }) {
       </p>
     </div>
   );
+}
+
+function SubtitleStatusBadge({
+  subtitle,
+}: {
+  subtitle: PromoDownloadResponse["subtitle"];
+}) {
+  const hasSubtitle = subtitle.status === "available";
+  const label = hasSubtitle
+    ? `Subtitle akan dibakar${subtitle.label ? ` • ${subtitle.label}` : ""}`
+    : "Tanpa subtitle Indonesia";
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${
+        hasSubtitle
+          ? "border-emerald-300/20 bg-emerald-400/10 text-emerald-100"
+          : "border-amber-300/20 bg-amber-400/10 text-amber-100"
+      }`}
+    >
+      <Captions className="mr-2 size-3.5" />
+      {label}
+    </span>
+  );
+}
+
+function downloadSubtitleStatusLabel(job: PromoDownloadBatchJob) {
+  if (job.subtitleStatus === "burned") {
+    return job.subtitleLabel
+      ? `Sudah bersubtitle • ${job.subtitleLabel}`
+      : "Sudah bersubtitle";
+  }
+
+  if (job.subtitleStatus === "missing") {
+    return "Tanpa subtitle Indonesia";
+  }
+
+  return "Menunggu proses subtitle";
 }
 
 function downloadStatusLabel(status: PromoDownloadBatchJob["status"]) {
@@ -871,11 +1026,13 @@ function BestDownloadCard({
   label,
   sourceUrl,
   onCopy,
+  onDownload,
 }: {
   downloadUrl: string;
   label: string;
   sourceUrl: string;
   onCopy: (value: string, successMessage: string) => Promise<void>;
+  onDownload: (downloadUrl: string, label: string) => void;
 }) {
   return (
     <div className="rounded-[1.5rem] border border-emerald-400/18 bg-emerald-500/8 p-4">
@@ -884,13 +1041,14 @@ function BestDownloadCard({
       </p>
       <p className="mt-1 text-xs text-emerald-100/75">{label}</p>
       <div className="mt-4 flex flex-wrap gap-3">
-        <a
-          href={downloadUrl}
-          className="inline-flex h-11 items-center justify-center rounded-full bg-accent px-5 text-sm font-medium text-white shadow-[0_14px_30px_rgba(255,122,69,0.28)]"
+        <button
+          type="button"
+          onClick={() => onDownload(downloadUrl, label)}
+          className="inline-flex h-11 items-center justify-center rounded-full bg-accent px-5 text-sm font-medium text-white shadow-[0_14px_30px_rgba(212,0,98,0.28)]"
         >
           <Download className="mr-2 size-4" />
           Download kualitas terbaik
-        </a>
+        </button>
         <Button
           variant="secondary"
           onClick={() => onCopy(sourceUrl, "Link MP4 berhasil disalin.")}

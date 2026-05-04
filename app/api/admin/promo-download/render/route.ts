@@ -4,14 +4,19 @@ import { Readable } from "node:stream";
 import { NextRequest, NextResponse } from "next/server";
 
 import { getAdminFromRequest } from "@/lib/admin-auth";
+import { isPromoDownloadSignedRequest } from "@/lib/promo-download-links";
+import {
+  buildPromoDownloadFfmpegArgs,
+  createNormalizedSubtitleTempFile,
+  removePromoSubtitleTempFile,
+} from "@/lib/promo-download-rendering";
 import { resolveDramaStreamSources, toStreamErrorResponse } from "@/lib/stream-access";
+import { findIndonesianSubtitle } from "@/lib/subtitles";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const FFMPEG_PATH = process.env.FFMPEG_PATH?.trim() || "ffmpeg";
-const FFMPEG_USER_AGENT =
-  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36";
 
 function parsePositiveInt(value: string | null) {
   const parsed = Number.parseInt(value ?? "", 10);
@@ -21,6 +26,10 @@ function parsePositiveInt(value: string | null) {
 function parseQualityIndex(value: string | null) {
   const parsed = Number.parseInt(value ?? "0", 10);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+function parseQualityKind(value: string | null): "mp4" | "hls" {
+  return value === "mp4" ? "mp4" : "hls";
 }
 
 function sanitizeFilename(value: string) {
@@ -37,6 +46,16 @@ function toAbsoluteUrl(url: string, origin: string) {
   return new URL(url, origin).toString();
 }
 
+function getInternalOrigin() {
+  const explicitOrigin = process.env.PROMO_DOWNLOAD_INTERNAL_ORIGIN?.trim();
+
+  if (explicitOrigin) {
+    return explicitOrigin.replace(/\/+$/u, "");
+  }
+
+  return `http://127.0.0.1:${process.env.PORT?.trim() || "3000"}`;
+}
+
 function ensureFfmpegAvailable() {
   const result = spawnSync(FFMPEG_PATH, ["-version"], {
     stdio: "ignore",
@@ -50,48 +69,17 @@ function ensureFfmpegAvailable() {
   return true;
 }
 
-function buildFfmpegArgs(sourceUrl: string, origin: string) {
-  return [
-    "-hide_banner",
-    "-loglevel",
-    process.env.FFMPEG_LOG_LEVEL?.trim() || "error",
-    "-nostdin",
-    "-protocol_whitelist",
-    "file,http,https,tcp,tls,crypto,data",
-    "-allowed_extensions",
-    "ALL",
-    "-user_agent",
-    FFMPEG_USER_AGENT,
-    "-headers",
-    `Referer: ${origin}\r\nOrigin: ${origin}\r\n`,
-    "-i",
-    sourceUrl,
-    "-map",
-    "0:v:0?",
-    "-map",
-    "0:a:0?",
-    "-c",
-    "copy",
-    "-bsf:a",
-    "aac_adtstoasc",
-    "-movflags",
-    "frag_keyframe+empty_moov+default_base_moof",
-    "-f",
-    "mp4",
-    "pipe:1",
-  ];
-}
-
 export async function GET(request: NextRequest) {
   const admin = await getAdminFromRequest(request);
 
-  if (!admin) {
+  if (!admin && !isPromoDownloadSignedRequest(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const internalDramaId = request.nextUrl.searchParams.get("internalDramaId");
   const episodeIndex = parsePositiveInt(request.nextUrl.searchParams.get("episodeIndex"));
   const qualityIndex = parseQualityIndex(request.nextUrl.searchParams.get("qualityIndex"));
+  const qualityKind = parseQualityKind(request.nextUrl.searchParams.get("qualityKind"));
 
   if (!internalDramaId || !episodeIndex) {
     return NextResponse.json(
@@ -119,26 +107,56 @@ export async function GET(request: NextRequest) {
       episodeIndex,
       bypassVipLock: true,
     });
+    const mp4Qualities = resolved.stream.qualities.filter(
+      (quality) => quality.mimeType === "video/mp4",
+    );
     const hlsQualities = resolved.stream.qualities.filter(
       (quality) => quality.mimeType === "application/x-mpegURL",
     );
-    const selectedQuality = hlsQualities[qualityIndex] ?? hlsQualities[0];
+    const selectableQualities = qualityKind === "mp4" ? mp4Qualities : hlsQualities;
+    const selectedQuality = selectableQualities[qualityIndex] ?? selectableQualities[0];
 
     if (!selectedQuality) {
       return NextResponse.json(
-        { error: "Source HLS tidak tersedia untuk episode ini." },
+        { error: `Source ${qualityKind.toUpperCase()} tidak tersedia untuk episode ini.` },
         { status: 404 },
       );
     }
 
-    const sourceUrl = toAbsoluteUrl(selectedQuality.url, request.nextUrl.origin);
+    const internalOrigin = getInternalOrigin();
+    const publicOrigin = request.nextUrl.origin;
+    const sourceUrl = toAbsoluteUrl(selectedQuality.url, internalOrigin);
+    const subtitle = findIndonesianSubtitle(resolved.stream.subtitles);
+    const subtitleTempFile = subtitle
+      ? await createNormalizedSubtitleTempFile(
+          toAbsoluteUrl(subtitle.url, internalOrigin),
+        )
+      : null;
     const filename = `${sanitizeFilename(
       `${resolved.drama.title}-ep-${episodeIndex}-${selectedQuality.label}`,
     )}.mp4`;
-    const ffmpeg = spawn(FFMPEG_PATH, buildFfmpegArgs(sourceUrl, request.nextUrl.origin), {
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const ffmpeg = spawn(
+      FFMPEG_PATH,
+      buildPromoDownloadFfmpegArgs(sourceUrl, "pipe:1", {
+        refererOrigin: publicOrigin,
+        allowAllExtensions: qualityKind === "hls",
+        subtitlePath: subtitleTempFile?.path ?? null,
+        fragmented: true,
+      }),
+      {
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
     let stderr = "";
+    let didCleanSubtitle = false;
+    const cleanupSubtitle = () => {
+      if (didCleanSubtitle) {
+        return;
+      }
+
+      didCleanSubtitle = true;
+      void removePromoSubtitleTempFile(subtitleTempFile);
+    };
 
     ffmpeg.stderr.setEncoding("utf8");
     ffmpeg.stderr.on("data", (chunk: string) => {
@@ -146,12 +164,14 @@ export async function GET(request: NextRequest) {
     });
 
     ffmpeg.on("close", (code) => {
+      cleanupSubtitle();
       if (code && code !== 0) {
         console.error(
           `[promo-download] ffmpeg exited with code ${code}: ${stderr || "no stderr"}`,
         );
       }
     });
+    ffmpeg.on("error", cleanupSubtitle);
 
     request.signal.addEventListener("abort", () => {
       if (!ffmpeg.killed) {
@@ -164,11 +184,22 @@ export async function GET(request: NextRequest) {
         "Content-Type": "video/mp4",
         "Content-Disposition": `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
         "Cache-Control": "no-store",
+        "Access-Control-Allow-Origin": "https://web.telegram.org",
+        Vary: "Origin",
         "X-Accel-Buffering": "no",
       },
     });
   } catch (error) {
+    console.error("[promo-download] render failed", {
+      internalDramaId,
+      episodeIndex,
+      qualityKind,
+      qualityIndex,
+      error,
+    });
     const resolvedError = toStreamErrorResponse(error);
-    return NextResponse.json(resolvedError.body, { status: resolvedError.status });
+    return NextResponse.json(resolvedError.body, {
+      status: resolvedError.status === 502 ? 500 : resolvedError.status,
+    });
   }
 }

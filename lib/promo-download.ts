@@ -8,7 +8,18 @@ import { pipeline } from "node:stream/promises";
 
 import { ensureSeriesPlayableFresh } from "@/lib/catalog";
 import { prisma } from "@/lib/prisma";
+import { signPromoDownloadUrl } from "@/lib/promo-download-links";
+import {
+  buildPromoDownloadFfmpegArgs,
+  createNormalizedSubtitleTempFile,
+  CURRENT_PROMO_DOWNLOAD_OUTPUT_VERSION,
+  FFMPEG_USER_AGENT,
+  PROMO_DOWNLOAD_SUBTITLE_MODE,
+  removePromoSubtitleTempFile,
+  type PromoDownloadSubtitleStatus,
+} from "@/lib/promo-download-rendering";
 import { resolveDramaStreamSources } from "@/lib/stream-access";
+import { findIndonesianSubtitle } from "@/lib/subtitles";
 
 export const PROMO_DOWNLOAD_STATUSES = [
   "queued",
@@ -28,6 +39,11 @@ export type PromoDownloadJobRow = {
   qualityLabel: string;
   outputPath: string;
   fileSizeBytes: bigint | number | null;
+  outputVersion: number;
+  subtitleMode: string;
+  subtitleStatus: string;
+  subtitleLabel: string;
+  subtitleLanguage: string;
   error: string;
   attempts: number;
   maxAttempts: number;
@@ -44,12 +60,14 @@ type PromoDownloadProcessResult = {
   fileSizeBytes: number;
   sourceType: "mp4" | "hls";
   qualityLabel: string;
+  outputVersion: number;
+  subtitleMode: typeof PROMO_DOWNLOAD_SUBTITLE_MODE;
+  subtitleStatus: PromoDownloadSubtitleStatus;
+  subtitleLabel: string;
+  subtitleLanguage: string;
 };
 
 const FFMPEG_PATH = process.env.FFMPEG_PATH?.trim() || "ffmpeg";
-const FFMPEG_LOG_LEVEL = process.env.FFMPEG_LOG_LEVEL?.trim() || "error";
-const FFMPEG_USER_AGENT =
-  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36";
 const MIN_FREE_MB = Number.parseInt(
   process.env.PROMO_DOWNLOAD_MIN_FREE_MB?.trim() || "1024",
   10,
@@ -110,13 +128,19 @@ function numberFromBigInt(value: bigint | number | null) {
   return value;
 }
 
+function normalizeStoredSubtitleStatus(status: string): PromoDownloadSubtitleStatus {
+  return status === "burned" ? "burned" : "missing";
+}
+
 function serializeJob(job: PromoDownloadJobRow) {
   return {
     ...job,
     fileSizeBytes: numberFromBigInt(job.fileSizeBytes),
     downloadUrl:
       job.status === "done"
-        ? `/api/admin/promo-download/file?jobId=${encodeURIComponent(job.id)}`
+        ? signPromoDownloadUrl(
+            `/api/admin/promo-download/file?jobId=${encodeURIComponent(job.id)}`,
+          )
         : null,
   };
 }
@@ -177,28 +201,31 @@ export async function getPromoDownloadSummary(seriesId: string) {
   };
 }
 
-async function requeueInvalidDoneJobs(seriesId: string) {
+async function requeueInvalidOrOutdatedDoneJobs(seriesId: string) {
   const doneJobs = await prisma.$queryRaw<PromoDownloadJobRow[]>`
     select *
     from "PromoDownloadJob"
     where "seriesId" = ${seriesId}::uuid
       and "status" = 'done'
-      and "outputPath" <> ''
     order by "episodeIndex" asc
   `;
 
   for (const job of doneJobs) {
     let absolutePath = "";
     let isUsable = false;
+    const isOutdated =
+      job.outputVersion < CURRENT_PROMO_DOWNLOAD_OUTPUT_VERSION;
 
-    try {
-      absolutePath = resolveStoredOutputPath(job.outputPath);
-      isUsable = await hasUsableOutput(absolutePath);
-    } catch {
-      isUsable = false;
+    if (job.outputPath) {
+      try {
+        absolutePath = resolveStoredOutputPath(job.outputPath);
+        isUsable = await hasUsableOutput(absolutePath);
+      } catch {
+        isUsable = false;
+      }
     }
 
-    if (isUsable) {
+    if (!isOutdated && isUsable) {
       continue;
     }
 
@@ -212,6 +239,11 @@ async function requeueInvalidDoneJobs(seriesId: string) {
         "status" = 'queued',
         "outputPath" = '',
         "fileSizeBytes" = null,
+        "outputVersion" = 1,
+        "subtitleMode" = '',
+        "subtitleStatus" = '',
+        "subtitleLabel" = '',
+        "subtitleLanguage" = '',
         "error" = '',
         "attempts" = 0,
         "scheduledAt" = now(),
@@ -248,7 +280,7 @@ export async function enqueuePromoDownloadAll(seriesId: string) {
     throw new Error("Episode belum tersedia untuk drama ini.");
   }
 
-  await requeueInvalidDoneJobs(seriesId);
+  await requeueInvalidOrOutdatedDoneJobs(seriesId);
 
   for (let episodeIndex = 1; episodeIndex <= episodeCount; episodeIndex += 1) {
     await prisma.$executeRaw`
@@ -314,6 +346,11 @@ export async function completePromoDownloadJob(
       "qualityLabel" = ${result.qualityLabel},
       "outputPath" = ${result.outputPath},
       "fileSizeBytes" = ${result.fileSizeBytes},
+      "outputVersion" = ${result.outputVersion},
+      "subtitleMode" = ${result.subtitleMode},
+      "subtitleStatus" = ${result.subtitleStatus},
+      "subtitleLabel" = ${result.subtitleLabel},
+      "subtitleLanguage" = ${result.subtitleLanguage},
       "error" = '',
       "finishedAt" = now(),
       "updatedAt" = now()
@@ -378,46 +415,23 @@ async function assertEnoughDiskSpace() {
   }
 }
 
-function buildFfmpegArgs(sourceUrl: string, outputPath: string) {
-  const baseUrl = getWorkerBaseUrl();
-
-  return [
-    "-y",
-    "-hide_banner",
-    "-loglevel",
-    FFMPEG_LOG_LEVEL,
-    "-nostdin",
-    "-protocol_whitelist",
-    "file,http,https,tcp,tls,crypto,data",
-    "-allowed_extensions",
-    "ALL",
-    "-user_agent",
-    FFMPEG_USER_AGENT,
-    "-headers",
-    `Referer: ${baseUrl}\r\nOrigin: ${baseUrl}\r\n`,
-    "-i",
-    sourceUrl,
-    "-map",
-    "0:v:0?",
-    "-map",
-    "0:a:0?",
-    "-c",
-    "copy",
-    "-bsf:a",
-    "aac_adtstoasc",
-    "-movflags",
-    "+faststart",
-    "-f",
-    "mp4",
-    outputPath,
-  ];
-}
-
-function runFfmpeg(sourceUrl: string, outputPath: string) {
+function runFfmpeg(
+  sourceUrl: string,
+  outputPath: string,
+  subtitlePath: string | null,
+) {
   return new Promise<void>((resolvePromise, reject) => {
-    const ffmpeg = spawn(FFMPEG_PATH, buildFfmpegArgs(sourceUrl, outputPath), {
-      stdio: ["ignore", "ignore", "pipe"],
-    });
+    const ffmpeg = spawn(
+      FFMPEG_PATH,
+      buildPromoDownloadFfmpegArgs(sourceUrl, outputPath, {
+        refererOrigin: getWorkerBaseUrl(),
+        allowAllExtensions: sourceUrl.toLowerCase().includes("m3u8"),
+        subtitlePath,
+      }),
+      {
+        stdio: ["ignore", "ignore", "pipe"],
+      },
+    );
     let stderr = "";
 
     ffmpeg.stderr.setEncoding("utf8");
@@ -529,13 +543,21 @@ export async function processPromoDownloadJob(job: PromoDownloadJobRow) {
   const tempPath = `${outputPath}.${process.pid}.partial.mp4`;
   await mkdir(dirname(outputPath), { recursive: true });
 
-  if (await hasUsableOutput(outputPath)) {
+  if (
+    job.outputVersion >= CURRENT_PROMO_DOWNLOAD_OUTPUT_VERSION &&
+    (await hasUsableOutput(outputPath))
+  ) {
     const stats = await stat(outputPath);
     return {
       outputPath: toStoredOutputPath(outputPath),
       fileSizeBytes: stats.size,
       sourceType: job.sourceType === "mp4" ? "mp4" : "hls",
       qualityLabel: job.qualityLabel || "existing",
+      outputVersion: CURRENT_PROMO_DOWNLOAD_OUTPUT_VERSION,
+      subtitleMode: PROMO_DOWNLOAD_SUBTITLE_MODE,
+      subtitleStatus: normalizeStoredSubtitleStatus(job.subtitleStatus),
+      subtitleLabel: job.subtitleLabel,
+      subtitleLanguage: job.subtitleLanguage,
     } satisfies PromoDownloadProcessResult;
   }
 
@@ -568,12 +590,25 @@ export async function processPromoDownloadJob(job: PromoDownloadJobRow) {
 
   const sourceUrl = toAbsoluteUrl(quality.url);
   const sourceType = quality.mimeType === "video/mp4" ? "mp4" : "hls";
+  const subtitle = findIndonesianSubtitle(resolved.stream.subtitles);
+  const subtitleStatus: PromoDownloadSubtitleStatus = subtitle ? "burned" : "missing";
+  let subtitleTempFile: { directory: string; path: string } | null = null;
 
-  if (sourceType === "hls") {
-    assertFfmpegAvailable();
-    await runFfmpeg(sourceUrl, tempPath);
-  } else {
-    await downloadMp4(sourceUrl, tempPath);
+  try {
+    if (subtitle) {
+      subtitleTempFile = await createNormalizedSubtitleTempFile(
+        toAbsoluteUrl(subtitle.url),
+      );
+    }
+
+    if (sourceType === "hls" || subtitleTempFile) {
+      assertFfmpegAvailable();
+      await runFfmpeg(sourceUrl, tempPath, subtitleTempFile?.path ?? null);
+    } else {
+      await downloadMp4(sourceUrl, tempPath);
+    }
+  } finally {
+    await removePromoSubtitleTempFile(subtitleTempFile);
   }
 
   const stats = await stat(tempPath);
@@ -590,6 +625,11 @@ export async function processPromoDownloadJob(job: PromoDownloadJobRow) {
     fileSizeBytes: stats.size,
     sourceType,
     qualityLabel: quality.label,
+    outputVersion: CURRENT_PROMO_DOWNLOAD_OUTPUT_VERSION,
+    subtitleMode: PROMO_DOWNLOAD_SUBTITLE_MODE,
+    subtitleStatus,
+    subtitleLabel: subtitle?.label ?? "",
+    subtitleLanguage: subtitle?.language ?? "",
   } satisfies PromoDownloadProcessResult;
 }
 

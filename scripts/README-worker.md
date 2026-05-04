@@ -50,6 +50,8 @@ Environment penting:
 ```bash
 WORKER_BASE_URL=https://layardrama.id
 FFMPEG_PATH=ffmpeg
+PROMO_DOWNLOAD_INTERNAL_ORIGIN=http://127.0.0.1:3000
+PROMO_DOWNLOAD_TOKEN_SECRET=change-me
 PROMO_DOWNLOAD_DIR=storage/promo-downloads
 PROMO_DOWNLOAD_MIN_FREE_MB=1024
 ```

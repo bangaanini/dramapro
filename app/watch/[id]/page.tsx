@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { Layers3, Sparkles } from "lucide-react";
 
 import { DramaDetailShareButton } from "@/components/drama-detail-share-button";
+import { DramaDetailAdminDownloadPanel } from "@/components/drama-detail-admin-download-panel";
 import { EpisodeGridLink } from "@/components/episode-grid-link";
 import { FavoriteDramaButton } from "@/components/favorite-drama-button";
 import { PlayDramaButton } from "@/components/play-drama-button";
@@ -12,6 +13,7 @@ import { DramaCard } from "@/components/drama-card";
 import { SiteFooter } from "@/components/site-footer";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { getCurrentAdmin } from "@/lib/admin-auth";
 import { getAppSettings } from "@/lib/app-settings";
 import { ensureSeriesHydrated, ensureSeriesPlayableFresh } from "@/lib/catalog";
 import { prisma } from "@/lib/prisma";
@@ -92,9 +94,9 @@ export async function generateMetadata(
 
 export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
   const { id } = await props.params;
-  const user = await getCurrentUser();
+  const [user, admin] = await Promise.all([getCurrentUser(), getCurrentAdmin()]);
 
-  const [series, watchHistory, favorite, vipSettings, settings, hasAdminBypass] =
+  const [series, watchHistory, favorite, vipSettings, settings, hasAdminUserBypass] =
     await Promise.all([
       ensureSeriesPlayableFresh(id, {
         hideOnFailure: true,
@@ -134,6 +136,7 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
       getAppSettings(),
       userHasAdminVideoBypass(user),
     ]);
+  const hasAdminBypass = Boolean(admin) || hasAdminUserBypass;
 
   if (!series) {
     notFound();
@@ -144,12 +147,13 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
     series.description,
     `${series.title} dengan ${series.chapterCount} episode di ${settings.site.name}.`,
   );
+  const episodeTotal = Math.max(series.chapterCount, series.episodes.length, 1);
   const vipLockFromEpisode = hasAdminBypass || isVipActive(user?.vipExpiresAt)
     ? null
     : getVipLockStartEpisode(vipSettings);
   const preferredInitialEpisode = clampEpisodeForVipAccess(
     watchHistory?.episodeIndex ?? 1,
-    Math.max(series.chapterCount, 1),
+    episodeTotal,
     vipLockFromEpisode,
   );
 
@@ -183,50 +187,59 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
   return (
     <main className="route-transition-shell mx-auto min-h-screen w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)] lg:items-start">
-        <Card className="glass-panel overflow-hidden rounded-[2.2rem] border-white/10">
-          <CardContent className="p-0">
-            <div className="relative aspect-[9/14] overflow-hidden bg-black sm:aspect-[9/12]">
-              {coverUrl ? (
-                <Image
-                  src={coverUrl}
-                  alt={series.title}
-                  fill
-                  priority
-                  className="object-cover"
-                  sizes="(max-width: 1024px) 100vw, 60vw"
-                  unoptimized={shouldBypassImageOptimization(coverUrl)}
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center text-sm text-white/65">
-                  Poster belum tersedia
-                </div>
-              )}
-              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,7,8,0.02),rgba(7,7,8,0.86))]" />
-              <div className="absolute inset-x-0 bottom-0 p-6 sm:p-8">
-                <Badge className="border-accent/30 bg-accent-soft text-accent">
-                  {series.platformId}
-                </Badge>
-                <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                  {series.title}
-                </h1>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Badge variant="secondary">
-                    {Math.max(series.chapterCount, series.episodes.length)} episode
+        <div className="space-y-6">
+          <Card className="glass-panel overflow-hidden rounded-[2.2rem] border-white/10">
+            <CardContent className="p-0">
+              <div className="relative aspect-[9/14] overflow-hidden bg-black sm:aspect-[9/12]">
+                {coverUrl ? (
+                  <Image
+                    src={coverUrl}
+                    alt={series.title}
+                    fill
+                    priority
+                    className="object-cover"
+                    sizes="(max-width: 1024px) 100vw, 60vw"
+                    unoptimized={shouldBypassImageOptimization(coverUrl)}
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-white/65">
+                    Poster belum tersedia
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,7,8,0.02),rgba(7,7,8,0.86))]" />
+                <div className="absolute inset-x-0 bottom-0 p-6 sm:p-8">
+                  <Badge className="border-accent/30 bg-accent-soft text-accent">
+                    {series.platformId}
                   </Badge>
-                  {series.playCount ? (
-                    <Badge variant="secondary">{series.playCount} tayangan</Badge>
-                  ) : null}
-                  {series.lastDetailSyncedAt ? (
-                    <Badge variant="secondary">Episode siap diputar</Badge>
-                  ) : null}
+                  <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                    {series.title}
+                  </h1>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Badge variant="secondary">{episodeTotal} episode</Badge>
+                    {series.playCount ? (
+                      <Badge variant="secondary">{series.playCount} tayangan</Badge>
+                    ) : null}
+                    {series.lastDetailSyncedAt ? (
+                      <Badge variant="secondary">Episode siap diputar</Badge>
+                    ) : null}
+                  </div>
+                  <p className="mt-4 max-w-2xl text-sm leading-7 text-white/78">
+                    {detailDescription}
+                  </p>
                 </div>
-                <p className="mt-4 max-w-2xl text-sm leading-7 text-white/78">
-                  {detailDescription}
-                </p>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+
+          {admin ? (
+            <DramaDetailAdminDownloadPanel
+              dramaId={series.id}
+              episodeTotal={episodeTotal}
+              initialEpisode={preferredInitialEpisode}
+              className="w-full"
+            />
+          ) : null}
+        </div>
 
         <div className="space-y-6">
           <Card className="glass-panel rounded-[2rem] border-white/10">
@@ -291,9 +304,7 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
                 </div>
               </div>
               <div className="mt-5 grid grid-cols-4 gap-3 sm:grid-cols-5 lg:grid-cols-4 xl:grid-cols-5">
-                {Array.from({
-                  length: Math.max(series.chapterCount, series.episodes.length, 1),
-                }).map((_, index) => {
+                {Array.from({ length: episodeTotal }).map((_, index) => {
                   const episode = index + 1;
                   const isLocked = isEpisodeVipLocked(episode, vipLockFromEpisode);
                   const episodePlayHref = `/watch/${series.id}/play?episode=${episode}`;
