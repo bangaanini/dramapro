@@ -66,6 +66,11 @@ function publicReadySeriesWhere(platformId?: string | null): Prisma.CatalogSerie
       ? normalizedPlatformId
       : { in: [...STREAMAPI_PROVIDER_CODES] },
     coverUrl: { not: "" },
+    NOT: {
+      title: {
+        startsWith: "Untitled "
+      }
+    },
     isHomepageVisible: true,
     platform: {
       isHomepageVisible: true,
@@ -87,6 +92,7 @@ function publicReadySeriesSql(platformId?: string | null) {
         : Prisma.sql`s."platformId" IN (${Prisma.join([...STREAMAPI_PROVIDER_CODES])})`
     }
     AND s."coverUrl" <> ''
+    AND s."title" NOT LIKE 'Untitled %'
     AND s."isHomepageVisible" = true
     AND p."isHomepageVisible" = true
     AND EXISTS (

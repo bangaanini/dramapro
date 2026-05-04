@@ -392,9 +392,9 @@ export const providerCatalogSections: Record<ProviderCode, CatalogSectionDefinit
   meloshort: [
     endpoint({
       value: "dramas",
-      label: "Drama List",
-      description: "Mengambil daftar drama utama MeloShort.",
-      pathLabel: "GET /api/v1/dramas",
+      label: "Discover utama",
+      description: "Mengambil daftar utama MeloShort dari endpoint discover.",
+      pathLabel: "GET /api/v1/dramas/discover",
       supportsPage: true,
       defaultPage: 1,
       params: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis."), pageParam(1), pageSizeParam("limit", 20)]

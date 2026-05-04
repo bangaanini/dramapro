@@ -18,9 +18,16 @@ import type {
 export const STREAMAPI_SOURCE = "streamapi";
 const LEGACY_HIDDEN_REASON = "legacy_catalog_hidden";
 const MISSING_COVER_HIDDEN_REASON = "missing_provider_cover";
+const MISSING_TITLE_HIDDEN_REASON = "missing_provider_title";
 const PENDING_DETAIL_HIDDEN_REASON = "pending_provider_detail";
 const PLAYBACK_REFRESH_GRACE_MS = 120_000;
-const ON_DEMAND_PLAYBACK_PROVIDERS = new Set<ProviderCode>(["dramabox", "hishort", "melolo", "reelife"]);
+const ON_DEMAND_PLAYBACK_PROVIDERS = new Set<ProviderCode>([
+  "dramabox",
+  "hishort",
+  "melolo",
+  "reelife",
+  "reelshort"
+]);
 
 export type ProviderSyncDashboard = {
   providers: Array<{
@@ -301,6 +308,10 @@ function hasResolvableEpisodes(provider: ProviderCode, episodeSync: { playableEp
   return episodeSync.playableEpisodeCount > 0 || (ON_DEMAND_PLAYBACK_PROVIDERS.has(provider) && episodes.length > 0);
 }
 
+function isFallbackProviderTitle(title: string | null | undefined) {
+  return !title?.trim() || title.trim().startsWith("Untitled ");
+}
+
 async function repairOnDemandProviderHomepageVisibility(provider: ProviderCode) {
   if (!ON_DEMAND_PLAYBACK_PROVIDERS.has(provider)) {
     return 0;
@@ -471,7 +482,9 @@ async function upsertSeries(provider: ProviderCode, languageId: string, drama: C
       providerRawPayload: json(drama.rawPayload),
       isHomepageVisible: false,
       homepageHiddenReason: coverUrl
-        ? PENDING_DETAIL_HIDDEN_REASON
+        ? isFallbackTitle
+          ? MISSING_TITLE_HIDDEN_REASON
+          : PENDING_DETAIL_HIDDEN_REASON
         : MISSING_COVER_HIDDEN_REASON
     },
     update: {
@@ -483,7 +496,9 @@ async function upsertSeries(provider: ProviderCode, languageId: string, drama: C
       ...(shouldMarkPendingDetail
         ? {
             isHomepageVisible: false,
-            homepageHiddenReason: PENDING_DETAIL_HIDDEN_REASON
+            homepageHiddenReason: isFallbackTitle
+              ? MISSING_TITLE_HIDDEN_REASON
+              : PENDING_DETAIL_HIDDEN_REASON
           }
         : {}),
       catalogSource: STREAMAPI_SOURCE,
@@ -647,7 +662,8 @@ export async function syncProviderDetail(provider: ProviderCode, externalId: str
 
   const episodeSync = await upsertEpisodes(series.id, provider, episodes);
   const hasCover = Boolean((drama.posterUrl ?? series.coverUrl ?? "").trim());
-  const shouldShowOnHomepage = hasCover && hasResolvableEpisodes(provider, episodeSync, episodes);
+  const hasTitle = !isFallbackProviderTitle(series.title);
+  const shouldShowOnHomepage = hasCover && hasTitle && hasResolvableEpisodes(provider, episodeSync, episodes);
   await prisma.catalogSeries.update({
     where: { id: series.id },
     data: {
@@ -658,7 +674,12 @@ export async function syncProviderDetail(provider: ProviderCode, externalId: str
             isHomepageVisible: true,
             homepageHiddenReason: null
           }
-        : {})
+        : !hasTitle
+          ? {
+              isHomepageVisible: false,
+              homepageHiddenReason: MISSING_TITLE_HIDDEN_REASON
+            }
+          : {})
     }
   });
 

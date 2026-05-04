@@ -516,14 +516,13 @@ export const providerConfigs: Record<ProviderCode, ProviderConfig> = {
     code: "meloshort",
     name: "MeloShort",
     baseUrl: "https://streamapi.web.id/p/meloshort",
-    defaultSection: "dramas",
+    defaultSection: "discover",
     supportedSections: ["dramas", "discover", "top"],
     catalogSections: providerCatalogSections.meloshort,
     catalog: (input, lang) => {
       if (input.section === "top") return { path: "/api/v1/dramas/top", query: { lang } };
-      const path = input.section === "discover" ? "/api/v1/dramas/discover" : "/api/v1/dramas";
       return {
-        path,
+        path: "/api/v1/dramas/discover",
         query: {
           page: numberParam(input, "page", input.page),
           limit: numberParam(input, "limit", input.pageSize ?? 20),

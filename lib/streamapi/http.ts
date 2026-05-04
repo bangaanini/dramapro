@@ -20,7 +20,7 @@ export interface ProviderRequest {
 }
 
 export async function fetchProviderJson<T = JsonRecord>(request: ProviderRequest): Promise<T> {
-  const token = process.env.STREAMAPI_TOKEN;
+  const token = process.env.STREAMAPI_TOKEN?.trim();
   const url = new URL(`${request.baseUrl}${request.path}`);
 
   for (const [key, value] of Object.entries(request.query ?? {})) {
