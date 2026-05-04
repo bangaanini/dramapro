@@ -285,6 +285,7 @@ export function extractListPayload(payload: unknown): unknown[] {
     readPath(payload, "data.classifyBookList.records"),
     readPath(payload, "data.newTheaterList.records"),
     readPath(payload, "data.recommendList.records"),
+    readPath(payload, "data.searchResult.records"),
     readPath(payload, "data.searchList"),
     readPath(payload, "data.floor"),
     readPath(payload, "data.place_list"),

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 
 import { hasValidInternalSecret } from "@/lib/internal-route-auth";
+import { prisma } from "@/lib/prisma";
 import {
   enqueueProviderEndpointSync,
   getProviderSyncDashboard,
@@ -86,6 +87,34 @@ export async function POST(request: NextRequest) {
         lang: validated.lang,
         params: validated.params,
       });
+      const externalIds = Array.from(
+        new Set(
+          result.items
+            .map((item) => item.externalId.trim())
+            .filter(Boolean),
+        ),
+      );
+      const existingSeries = externalIds.length
+        ? await prisma.catalogSeries.findMany({
+            where: {
+              platformId: validated.provider,
+              upstreamSeriesId: {
+                in: externalIds,
+              },
+            },
+            select: {
+              id: true,
+              upstreamSeriesId: true,
+              title: true,
+            },
+          })
+        : [];
+      const existingByExternalId = new Map(
+        existingSeries.map((series) => [series.upstreamSeriesId, series]),
+      );
+      const savedCount = result.items.filter((item) =>
+        existingByExternalId.has(item.externalId),
+      ).length;
 
       await logProviderWorker({
         level: "info",
@@ -106,7 +135,19 @@ export async function POST(request: NextRequest) {
           provider: validated.provider,
           section: validated.section.value,
           count: result.items.length,
+          savedCount,
+          newCount: Math.max(0, result.items.length - savedCount),
           durationMs: Date.now() - startedAt,
+          items: result.items.slice(0, 20).map((item) => {
+            const existing = existingByExternalId.get(item.externalId);
+            return {
+              externalId: item.externalId,
+              title: item.title,
+              status: existing ? "saved" : "new",
+              seriesId: existing?.id ?? null,
+              savedTitle: existing?.title ?? null,
+            };
+          }),
         },
         dashboard: await getProviderSyncDashboard(),
       });

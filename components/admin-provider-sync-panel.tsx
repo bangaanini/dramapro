@@ -15,6 +15,22 @@ type AdminProviderSyncPanelProps = {
 
 type RequestMode = "init" | "health" | "enqueue";
 
+type HealthPreviewItem = {
+  externalId: string;
+  title: string;
+  status: "saved" | "new";
+  seriesId: string | null;
+  savedTitle: string | null;
+};
+
+type HealthPreview = {
+  count: number;
+  savedCount: number;
+  newCount: number;
+  durationMs: number;
+  items: HealthPreviewItem[];
+};
+
 function formatNumber(value: number) {
   return new Intl.NumberFormat("id-ID").format(value);
 }
@@ -86,6 +102,7 @@ export function AdminProviderSyncPanel({
   const [isLoading, setIsLoading] = useState<RequestMode | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [healthPreview, setHealthPreview] = useState<HealthPreview | null>(null);
 
   function applySection(nextSection: CatalogSectionDefinition | undefined) {
     setSectionValue(nextSection?.value ?? "");
@@ -136,6 +153,7 @@ export function AdminProviderSyncPanel({
     setIsLoading(mode);
     setNotice("");
     setError("");
+    setHealthPreview(null);
 
     try {
       const response = await fetch("/api/admin/provider-sync", {
@@ -154,7 +172,7 @@ export function AdminProviderSyncPanel({
       const data = await response.json() as {
         error?: string;
         dashboard?: ProviderSyncDashboard;
-        health?: { count: number; durationMs: number };
+        health?: HealthPreview;
       };
 
       if (!response.ok) {
@@ -168,8 +186,9 @@ export function AdminProviderSyncPanel({
       if (mode === "init") {
         setNotice("Provider StreamAPI siap, katalog legacy disembunyikan dari homepage.");
       } else if (mode === "health") {
+        setHealthPreview(data.health ?? null);
         setNotice(
-          `Health ok. Ditemukan ${formatNumber(data.health?.count ?? 0)} item dalam ${formatNumber(data.health?.durationMs ?? 0)}ms.`,
+          `Health ok. Ditemukan ${formatNumber(data.health?.count ?? 0)} item: ${formatNumber(data.health?.savedCount ?? 0)} sudah tersimpan, ${formatNumber(data.health?.newCount ?? 0)} baru dalam ${formatNumber(data.health?.durationMs ?? 0)}ms.`,
         );
       } else {
         setNotice("Job sync masuk queue. Worker akan memproses di background.");
@@ -255,7 +274,7 @@ export function AdminProviderSyncPanel({
 
                 <label className="space-y-2 text-sm text-white">
                   <span className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">
-                    Endpoint katalog
+                    Endpoint katalog/search
                   </span>
                   <select
                     className="h-11 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none"
@@ -282,6 +301,40 @@ export function AdminProviderSyncPanel({
                   <p className="mt-2 font-mono text-xs text-[var(--muted)]">
                     {section.pathLabel}
                   </p>
+                </div>
+              ) : null}
+
+              {healthPreview?.items.length ? (
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-white">
+                      Preview hasil health
+                    </p>
+                    <Badge className="border-emerald-400/20 bg-emerald-400/10 text-emerald-100">
+                      {formatNumber(healthPreview.savedCount)} tersimpan
+                    </Badge>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {healthPreview.items.map((item) => (
+                      <div
+                        key={`${item.externalId}-${item.status}`}
+                        className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs"
+                      >
+                        <span className="min-w-0 truncate text-white">
+                          {item.savedTitle || item.title}
+                        </span>
+                        <Badge
+                          className={
+                            item.status === "saved"
+                              ? "shrink-0 border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
+                              : "shrink-0 border-sky-400/20 bg-sky-400/10 text-sky-100"
+                          }
+                        >
+                          {item.status === "saved" ? "Sudah tersimpan" : "Baru"}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : null}
 

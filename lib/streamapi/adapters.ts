@@ -217,6 +217,12 @@ function netshortCatalog(input: CatalogInput, lang: string): ProviderEndpoint {
       }
     };
   }
+  if (clean === "search") {
+    return {
+      path: `/api/v1/search/${encodeURIComponent(stringParam(input, "query", "cinta"))}/${page}`,
+      query: { lang }
+    };
+  }
   const supported = new Set(["feed", "explore", "new", "dubbing", "vip"]);
   const route = supported.has(clean) ? clean : "feed";
   return { path: `/api/v1/${route}/${page}`, query: { lang } };
@@ -228,17 +234,25 @@ export const providerConfigs: Record<ProviderCode, ProviderConfig> = {
     name: "CashDrama",
     baseUrl: "https://streamapi.web.id/p/cashdrama",
     defaultSection: "home",
-    supportedSections: ["home"],
+    supportedSections: ["home", "search"],
     catalogSections: providerCatalogSections.cashdrama,
-    catalog: (input, lang) => ({
-      path: "/api/v1/home",
-      query: {
-        lang,
-        page: numberParam(input, "page", input.page),
-        pageSize: numberParam(input, "pageSize", input.pageSize ?? 20),
-        blockId: numberParam(input, "blockId", numberOr(input.section, 5))
+    catalog: (input, lang) => {
+      if (input.section === "search") {
+        return {
+          path: "/api/v1/search",
+          query: { q: stringParam(input, "query", "cinta"), page: numberParam(input, "page", input.page), lang }
+        };
       }
-    }),
+      return {
+        path: "/api/v1/home",
+        query: {
+          lang,
+          page: numberParam(input, "page", input.page),
+          pageSize: numberParam(input, "pageSize", input.pageSize ?? 20),
+          blockId: numberParam(input, "blockId", numberOr(input.section, 5))
+        }
+      };
+    },
     drama: (input, lang) => ({ path: `/api/v1/drama/${encodeURIComponent(input.externalId)}`, query: { ep: 1, lang } }),
     episodes: (input, lang) => ({ path: `/api/v1/drama/${encodeURIComponent(input.externalId)}/episodes`, query: { lang } }),
     playback: (input, lang) => ({
@@ -265,10 +279,16 @@ export const providerConfigs: Record<ProviderCode, ProviderConfig> = {
     name: "DramaBite",
     baseUrl: "https://streamapi.web.id/p/dramabite",
     defaultSection: "dramas",
-    supportedSections: ["dramas", "foryou", "recommend"],
+    supportedSections: ["dramas", "foryou", "recommend", "search"],
     catalogSections: providerCatalogSections.dramabite,
     catalog: (input, lang) => {
       if (input.section === "hot") return { path: "/api/v1/hot" };
+      if (input.section === "search") {
+        return {
+          path: "/api/v1/search",
+          query: { q: stringParam(input, "query", "cinta"), lang, limit: numberParam(input, "limit", input.pageSize ?? 20) }
+        };
+      }
       const route = ["foryou", "recommend"].includes(input.section) ? input.section : "dramas";
       return { path: `/api/v1/${route}`, query: { lang, page: numberParam(input, "page", Math.max(input.page - 1, 0)) } };
     },
@@ -284,9 +304,14 @@ export const providerConfigs: Record<ProviderCode, ProviderConfig> = {
     name: "DramaDash",
     baseUrl: "https://streamapi.web.id/p/dramadash",
     defaultSection: "tabs",
-    supportedSections: ["tabs", "15"],
+    supportedSections: ["tabs", "15", "search"],
     catalogSections: providerCatalogSections.dramadash,
-    catalog: (input) => ({ path: `/api/v1/tabs/${numberParam(input, "tabId", numberOr(input.section, 15))}` }),
+    catalog: (input) => {
+      if (input.section === "search") {
+        return { path: `/api/v1/search/${encodeURIComponent(stringParam(input, "query", "cinta"))}` };
+      }
+      return { path: `/api/v1/tabs/${numberParam(input, "tabId", numberOr(input.section, 15))}` };
+    },
     drama: (input) => ({ path: `/api/v1/drama/${encodeURIComponent(input.externalId)}` }),
     episodes: (input) => ({ path: `/api/v1/drama/${encodeURIComponent(input.externalId)}` }),
     playback: (input) => ({ path: `/api/v1/episode/${encodeURIComponent(input.externalId)}/${input.episodeNumber}` })
@@ -296,9 +321,12 @@ export const providerConfigs: Record<ProviderCode, ProviderConfig> = {
     name: "DramaNova",
     baseUrl: "https://streamapi.web.id/p/dramanova",
     defaultSection: "dramas",
-    supportedSections: ["dramas", "recommend", "dramanova_hot"],
+    supportedSections: ["dramas", "recommend", "dramanova_hot", "search"],
     catalogSections: providerCatalogSections.dramanova,
     catalog: (input, lang) => {
+      if (input.section === "search") {
+        return { path: "/api/v1/search", query: { q: stringParam(input, "query", "cinta"), lang } };
+      }
       if (input.section && !["dramas", "popular"].includes(input.section)) {
         const categoryKey = stringParam(input, "categoryKey", input.section === "recommend" ? "dramanova_hot" : input.section);
         const size = numberParam(input, "size", input.pageSize ?? 20);
@@ -327,9 +355,12 @@ export const providerConfigs: Record<ProviderCode, ProviderConfig> = {
     name: "DramaRush",
     baseUrl: "https://streamapi.web.id/p/dramarush",
     defaultSection: "tabs",
-    supportedSections: ["tabs", "0"],
+    supportedSections: ["tabs", "0", "search"],
     catalogSections: providerCatalogSections.dramarush,
     catalog: (input, lang) => {
+      if (input.section === "search") {
+        return { path: `/api/v1/search/${encodeURIComponent(stringParam(input, "query", "cinta"))}`, query: { lang } };
+      }
       if (input.section === "ranking") return { path: "/api/v1/ranking", query: { lang } };
       return { path: `/api/v1/tabs/${numberParam(input, "tabId", numberOr(input.section, 0))}`, query: { lang } };
     },
@@ -345,12 +376,17 @@ export const providerConfigs: Record<ProviderCode, ProviderConfig> = {
     name: "DramaWave",
     baseUrl: "https://streamapi.web.id/p/dramawave",
     defaultSection: "popular",
-    supportedSections: ["popular", "free", "female", "new", "male", "vip", "exclusive", "dubbing", "coming-soon", "recommend"],
+    supportedSections: ["popular", "free", "female", "new", "male", "vip", "exclusive", "dubbing", "coming-soon", "recommend", "search"],
     catalogSections: providerCatalogSections.dramawave,
-    catalog: (input, lang) => ({
-      path: `/api/v1/feed/${encodeURIComponent(input.section || "popular")}`,
-      query: { page: numberParam(input, "page", input.page), lang }
-    }),
+    catalog: (input, lang) => {
+      if (input.section === "search") {
+        return { path: "/api/v1/search", query: { q: stringParam(input, "query", "cinta"), lang } };
+      }
+      return {
+        path: `/api/v1/feed/${encodeURIComponent(input.section || "popular")}`,
+        query: { page: numberParam(input, "page", input.page), lang }
+      };
+    },
     drama: (input, lang) => ({ path: `/api/v1/dramas/${encodeURIComponent(input.externalId)}`, query: { lang } }),
     episodes: (input, lang) => ({ path: `/api/v1/dramas/${encodeURIComponent(input.externalId)}`, query: { lang } }),
     playback: (input, lang) => ({ path: `/api/v1/dramas/${encodeURIComponent(input.externalId)}/play/${input.episodeNumber}`, query: { lang } })
@@ -379,9 +415,14 @@ export const providerConfigs: Record<ProviderCode, ProviderConfig> = {
     name: "FlexTV",
     baseUrl: "https://streamapi.web.id/p/flextv",
     defaultSection: "popular",
-    supportedSections: ["popular", "new", "chart", "female", "male", "anime"],
+    supportedSections: ["popular", "new", "chart", "female", "male", "anime", "search"],
     catalogSections: providerCatalogSections.flextv,
-    catalog: (input, lang) => ({ path: `/api/v1/tabs/${flexTab(input.section)}`, query: { page: numberParam(input, "page", input.page), lang } }),
+    catalog: (input, lang) => {
+      if (input.section === "search") {
+        return { path: "/api/v1/search", query: { q: stringParam(input, "query", "love"), page: numberParam(input, "page", input.page), lang } };
+      }
+      return { path: `/api/v1/tabs/${flexTab(input.section)}`, query: { page: numberParam(input, "page", input.page), lang } };
+    },
     drama: (input, lang) => ({ path: `/api/v1/series/${encodeURIComponent(input.externalId)}`, query: { lang } }),
     episodes: (input, lang) => ({ path: `/api/v1/series/${encodeURIComponent(input.externalId)}/episodes`, query: { lang } }),
     playback: (input, lang) => ({
@@ -394,9 +435,12 @@ export const providerConfigs: Record<ProviderCode, ProviderConfig> = {
     name: "FlickReels",
     baseUrl: "https://streamapi.web.id/p/flickreels",
     defaultSection: "for-you",
-    supportedSections: ["for-you", "hot-rank", "category"],
+    supportedSections: ["for-you", "hot-rank", "category", "search"],
     catalogSections: providerCatalogSections.flickreels,
     catalog: (input, lang) => {
+      if (input.section === "search") {
+        return { path: "/api/v1/search", query: { keyword: stringParam(input, "query", "cinta"), lang } };
+      }
       if (input.section === "hot-rank") return { path: "/api/v1/hot-rank", query: { lang } };
       if (input.section === "category") {
         return {
@@ -426,9 +470,12 @@ export const providerConfigs: Record<ProviderCode, ProviderConfig> = {
     name: "FreeReels",
     baseUrl: "https://streamapi.web.id/p/freereels",
     defaultSection: "popular",
-    supportedSections: ["foryou", "popular", "new", "female", "male", "dubbing"],
+    supportedSections: ["foryou", "popular", "new", "female", "male", "dubbing", "search"],
     catalogSections: providerCatalogSections.freereels,
     catalog: (input, lang) => {
+      if (input.section === "search") {
+        return { path: "/api/v1/search", query: { q: stringParam(input, "query", "love"), page: numberParam(input, "page", input.page), lang } };
+      }
       const section = freereelsSection(input.section);
       if (section === "foryou") return { path: "/api/v1/foryou", query: { lang } };
       return {
@@ -445,12 +492,17 @@ export const providerConfigs: Record<ProviderCode, ProviderConfig> = {
     name: "FunDrama",
     baseUrl: "https://streamapi.web.id/p/fundrama",
     defaultSection: "dramas",
-    supportedSections: ["dramas"],
+    supportedSections: ["dramas", "search"],
     catalogSections: providerCatalogSections.fundrama,
-    catalog: (input, lang) => ({
-      path: "/api/v1/dramas",
-      query: { lang, page: numberParam(input, "page", input.page), limit: numberParam(input, "limit", input.pageSize ?? 50) }
-    }),
+    catalog: (input, lang) => {
+      if (input.section === "search") {
+        return { path: "/api/v1/search", query: { q: stringParam(input, "query", "love"), lang: stringParam(input, "lang", "en") } };
+      }
+      return {
+        path: "/api/v1/dramas",
+        query: { lang, page: numberParam(input, "page", input.page), limit: numberParam(input, "limit", input.pageSize ?? 50) }
+      };
+    },
     drama: (input) => ({ path: `/api/v1/drama/${encodeURIComponent(input.externalId)}` }),
     episodes: (input, lang) => ({ path: `/api/v1/drama/${encodeURIComponent(input.externalId)}/episodes`, query: { lang } }),
     playback: (input) => ({
@@ -463,16 +515,21 @@ export const providerConfigs: Record<ProviderCode, ProviderConfig> = {
     name: "GoodShort",
     baseUrl: "https://streamapi.web.id/p/goodshort",
     defaultSection: "home",
-    supportedSections: ["home"],
+    supportedSections: ["home", "search"],
     catalogSections: providerCatalogSections.goodshort,
-    catalog: (input, lang) => ({
-      path: "/api/v1/home",
-      query: {
-        channelId: goodshortChannel(lang),
-        page: numberParam(input, "page", input.page),
-        pageSize: numberParam(input, "pageSize", input.pageSize ?? 12)
+    catalog: (input, lang) => {
+      if (input.section === "search") {
+        return { path: "/api/v1/search", query: { q: stringParam(input, "query", "cinta") } };
       }
-    }),
+      return {
+        path: "/api/v1/home",
+        query: {
+          channelId: goodshortChannel(lang),
+          page: numberParam(input, "page", input.page),
+          pageSize: numberParam(input, "pageSize", input.pageSize ?? 12)
+        }
+      };
+    },
     drama: (input) => ({ path: `/api/v1/book/${encodeURIComponent(input.externalId)}` }),
     episodes: (input) => ({ path: `/api/v1/chapters/${encodeURIComponent(input.externalId)}` }),
     playback: (input) => ({
@@ -485,9 +542,14 @@ export const providerConfigs: Record<ProviderCode, ProviderConfig> = {
     name: "HiShort",
     baseUrl: "https://streamapi.web.id/p/hishort",
     defaultSection: "home",
-    supportedSections: ["home"],
+    supportedSections: ["home", "search"],
     catalogSections: providerCatalogSections.hishort,
-    catalog: () => ({ path: "/api/v1/home" }),
+    catalog: (input) => {
+      if (input.section === "search") {
+        return { path: `/api/v1/search/${encodeURIComponent(stringParam(input, "query", "cinta"))}` };
+      }
+      return { path: "/api/v1/home" };
+    },
     drama: (input) => ({ path: `/api/v1/drama/${encodeURIComponent(input.externalId)}` }),
     episodes: (input) => ({ path: `/api/v1/drama/${encodeURIComponent(input.externalId)}` }),
     playback: (input) => ({ path: `/api/v1/episode/${encodeURIComponent(input.episodeExternalId)}` })
@@ -576,7 +638,7 @@ export const providerConfigs: Record<ProviderCode, ProviderConfig> = {
     name: "NetShort",
     baseUrl: "https://streamapi.web.id/p/netshort",
     defaultSection: "feed",
-    supportedSections: ["feed", "explore", "new", "dubbing", "vip", "category", "tab:*"],
+    supportedSections: ["feed", "explore", "new", "dubbing", "vip", "category", "search", "tab:*"],
     catalogSections: providerCatalogSections.netshort,
     catalog: (input, lang) => netshortCatalog(input, lang),
     drama: (input, lang) => ({ path: `/api/v1/detail/${encodeURIComponent(input.externalId)}`, query: { lang } }),
@@ -619,7 +681,7 @@ export const providerConfigs: Record<ProviderCode, ProviderConfig> = {
     name: "Reelife",
     baseUrl: "https://streamapi.web.id/p/reelife",
     defaultSection: "dramas",
-    supportedSections: ["dramas", "foryou", "ranking"],
+    supportedSections: ["dramas", "foryou", "ranking", "search"],
     catalogSections: providerCatalogSections.reelife,
     catalog: (input) => {
       if (input.section === "foryou") {
@@ -627,6 +689,16 @@ export const providerConfigs: Record<ProviderCode, ProviderConfig> = {
       }
       if (input.section === "ranking") {
         return { path: "/api/v1/ranking", query: { rankId: stringParam(input, "rankId", "1") } };
+      }
+      if (input.section === "search") {
+        return {
+          path: "/api/v1/search",
+          query: {
+            q: stringParam(input, "query", "cinta"),
+            page: numberParam(input, "page", input.page),
+            size: numberParam(input, "size", input.pageSize ?? 20)
+          }
+        };
       }
       return {
         path: "/api/v1/dramas",
@@ -648,9 +720,12 @@ export const providerConfigs: Record<ProviderCode, ProviderConfig> = {
     name: "ReelShort",
     baseUrl: "https://streamapi.web.id/p/reelshort",
     defaultSection: "foryou",
-    supportedSections: ["foryou", "new", "completed", "romance", "drama"],
+    supportedSections: ["foryou", "new", "completed", "romance", "drama", "search"],
     catalogSections: providerCatalogSections.reelshort,
     catalog: (input, lang) => {
+      if (input.section === "search") {
+        return { path: "/api/v1/search", query: { q: stringParam(input, "query", "love"), page: numberParam(input, "page", input.page), lang } };
+      }
       const route = ["foryou", "new", "completed", "romance", "drama"].includes(input.section)
         ? input.section
         : "foryou";

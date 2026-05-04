@@ -66,6 +66,31 @@ const selectParam = (
 
 const endpoint = (input: CatalogSectionDefinition) => input;
 
+const searchEndpoint = (input: {
+  providerName: string;
+  pathLabel: string;
+  defaultQuery?: string;
+  supportsPage?: boolean;
+  defaultPage?: number;
+  pageMin?: number;
+  paramsBefore?: CatalogParamDefinition[];
+  paramsAfter?: CatalogParamDefinition[];
+}) =>
+  endpoint({
+    value: "search",
+    label: "Search Judul",
+    description: `Mencari judul ${input.providerName} dari upstream, lalu hasilnya bisa di-sync ke katalog.`,
+    pathLabel: input.pathLabel,
+    supportsPage: input.supportsPage ?? false,
+    defaultPage: input.defaultPage ?? 1,
+    params: [
+      ...(input.paramsBefore ?? []),
+      textParam("query", "Judul", input.defaultQuery ?? "cinta", `Kata kunci judul ${input.providerName}.`),
+      ...(input.supportsPage ? [pageParam(input.defaultPage ?? 1, input.pageMin)] : []),
+      ...(input.paramsAfter ?? [])
+    ]
+  });
+
 export const providerCatalogSections: Record<ProviderCode, CatalogSectionDefinition[]> = {
   cashdrama: [
     endpoint({
@@ -81,6 +106,13 @@ export const providerCatalogSections: Record<ProviderCode, CatalogSectionDefinit
         pageSizeParam("pageSize", 20),
         numberParam("blockId", "Block ID", 5, "ID blok kategori dari endpoint helper /api/v1/blocks.", 1)
       ]
+    }),
+    searchEndpoint({
+      providerName: "CashDrama",
+      pathLabel: "GET /api/v1/search?q=:query",
+      supportsPage: true,
+      defaultPage: 1,
+      paramsBefore: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis.")]
     })
   ],
   dotdrama: [
@@ -121,6 +153,12 @@ export const providerCatalogSections: Record<ProviderCode, CatalogSectionDefinit
       supportsPage: true,
       defaultPage: 0,
       params: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis."), pageParam(0, 0)]
+    }),
+    searchEndpoint({
+      providerName: "DramaBite",
+      pathLabel: "GET /api/v1/search?q=:query",
+      paramsBefore: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis.")],
+      paramsAfter: [pageSizeParam("limit", 20)]
     })
   ],
   dramadash: [
@@ -132,6 +170,10 @@ export const providerCatalogSections: Record<ProviderCode, CatalogSectionDefinit
       supportsPage: false,
       defaultPage: 1,
       params: [numberParam("tabId", "Tab ID", 15, "ID tab dari dokumentasi Dramadash.", 1)]
+    }),
+    searchEndpoint({
+      providerName: "DramaDash",
+      pathLabel: "GET /api/v1/search/:query"
     })
   ],
   dramanova: [
@@ -158,6 +200,11 @@ export const providerCatalogSections: Record<ProviderCode, CatalogSectionDefinit
         pageSizeParam("size", 5),
         pageSizeParam("limit", 6)
       ]
+    }),
+    searchEndpoint({
+      providerName: "DramaNova",
+      pathLabel: "GET /api/v1/search?q=:query",
+      paramsBefore: [fixedParam("lang", "in", "Bahasa Indonesia dikirim otomatis.")]
     })
   ],
   dramarush: [
@@ -169,6 +216,11 @@ export const providerCatalogSections: Record<ProviderCode, CatalogSectionDefinit
       supportsPage: false,
       defaultPage: 1,
       params: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis."), numberParam("tabId", "Tab ID", 0, "ID tab home DramaRush.", 0)]
+    }),
+    searchEndpoint({
+      providerName: "DramaRush",
+      pathLabel: "GET /api/v1/search/:query",
+      paramsBefore: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis.")]
     })
   ],
   dramawave: [
@@ -182,7 +234,12 @@ export const providerCatalogSections: Record<ProviderCode, CatalogSectionDefinit
         defaultPage: 1,
         params: [fixedParam("lang", "id-ID", "Bahasa Indonesia dikirim otomatis."), pageParam(1)]
       })
-    )
+    ),
+    searchEndpoint({
+      providerName: "DramaWave",
+      pathLabel: "GET /api/v1/search?q=:query",
+      paramsBefore: [fixedParam("lang", "id-ID", "Bahasa Indonesia dikirim otomatis.")]
+    })
   ],
   dramabox: [
     endpoint({
@@ -241,19 +298,27 @@ export const providerCatalogSections: Record<ProviderCode, CatalogSectionDefinit
     }),
     endpoint({
       value: "search",
-      label: "Search",
+      label: "Search Judul",
       description: "Mengambil hasil pencarian DramaBox.",
       pathLabel: "GET /?search=:query",
       supportsPage: true,
       defaultPage: 1,
       params: [
         fixedParam("lang", "in", "Bahasa Indonesia dikirim otomatis."),
-        textParam("query", "Keyword", "cinta", "Kata kunci pencarian DramaBox."),
+        textParam("query", "Judul", "cinta", "Kata kunci judul DramaBox."),
         pageParam(1)
       ]
     })
   ],
   flextv: [
+    searchEndpoint({
+      providerName: "FlexTV",
+      pathLabel: "GET /api/v1/search?q=:query",
+      defaultQuery: "love",
+      supportsPage: true,
+      defaultPage: 1,
+      paramsBefore: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis.")]
+    }),
     ...[
       ["popular", "Popular/Fokus", 1],
       ["new", "New/Baru", 2],
@@ -274,6 +339,11 @@ export const providerCatalogSections: Record<ProviderCode, CatalogSectionDefinit
     )
   ],
   flickreels: [
+    searchEndpoint({
+      providerName: "FlickReels",
+      pathLabel: "GET /api/v1/search?keyword=:query",
+      paramsBefore: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis.")]
+    }),
     endpoint({
       value: "for-you",
       label: "For You",
@@ -327,7 +397,16 @@ export const providerCatalogSections: Record<ProviderCode, CatalogSectionDefinit
         defaultPage: 0,
         params: [fixedParam("lang", "id-ID", "Bahasa Indonesia dikirim otomatis."), pageParam(0, 0)]
       })
-    )
+    ),
+    searchEndpoint({
+      providerName: "FreeReels",
+      pathLabel: "GET /api/v1/search?q=:query",
+      defaultQuery: "love",
+      supportsPage: true,
+      defaultPage: 0,
+      pageMin: 0,
+      paramsBefore: [fixedParam("lang", "id-ID", "Bahasa Indonesia dikirim otomatis.")]
+    })
   ],
   fundrama: [
     endpoint({
@@ -338,6 +417,12 @@ export const providerCatalogSections: Record<ProviderCode, CatalogSectionDefinit
       supportsPage: true,
       defaultPage: 1,
       params: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis."), pageParam(1), pageSizeParam("limit", 50)]
+    }),
+    searchEndpoint({
+      providerName: "FunDrama",
+      pathLabel: "GET /api/v1/search?q=:query",
+      defaultQuery: "love",
+      paramsBefore: [fixedParam("lang", "en", "Bahasa search FunDrama dikirim otomatis.")]
     })
   ],
   goodshort: [
@@ -349,6 +434,10 @@ export const providerCatalogSections: Record<ProviderCode, CatalogSectionDefinit
       supportsPage: true,
       defaultPage: 1,
       params: [fixedParam("channelId", 562, "Channel Indonesia dikirim otomatis."), pageParam(1), pageSizeParam("pageSize", 12)]
+    }),
+    searchEndpoint({
+      providerName: "GoodShort",
+      pathLabel: "GET /api/v1/search?q=:query"
     })
   ],
   hishort: [
@@ -360,6 +449,10 @@ export const providerCatalogSections: Record<ProviderCode, CatalogSectionDefinit
       supportsPage: false,
       defaultPage: 1,
       params: []
+    }),
+    searchEndpoint({
+      providerName: "HiShort",
+      pathLabel: "GET /api/v1/search/:query"
     })
   ],
   melolo: [
@@ -495,6 +588,19 @@ export const providerCatalogSections: Record<ProviderCode, CatalogSectionDefinit
           help: "Opsional. Tag level 3 dari endpoint helper /api/v1/categories."
         }
       ]
+    }),
+    endpoint({
+      value: "search",
+      label: "Search Judul",
+      description: "Mencari judul NetShort dari upstream, lalu hasilnya bisa di-sync ke katalog.",
+      pathLabel: "GET /api/v1/search/:keyword/:page",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [
+        fixedParam("lang", "id_ID", "Bahasa Indonesia dikirim otomatis."),
+        textParam("query", "Judul", "cinta", "Kata kunci judul NetShort."),
+        pageParam(1)
+      ]
     })
   ],
   rapidtv: [
@@ -555,6 +661,19 @@ export const providerCatalogSections: Record<ProviderCode, CatalogSectionDefinit
       supportsPage: false,
       defaultPage: 1,
       params: [textParam("rankId", "Rank ID", "1", "ID ranking Reelife.")]
+    }),
+    endpoint({
+      value: "search",
+      label: "Search Judul",
+      description: "Mencari judul Reelife dari upstream, lalu hasilnya bisa di-sync ke katalog.",
+      pathLabel: "GET /api/v1/search?q=:query",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [
+        textParam("query", "Judul", "cinta", "Kata kunci judul Reelife."),
+        pageParam(1),
+        pageSizeParam("size", 20)
+      ]
     })
   ],
   reelshort: [
@@ -602,6 +721,14 @@ export const providerCatalogSections: Record<ProviderCode, CatalogSectionDefinit
       supportsPage: false,
       defaultPage: 1,
       params: [fixedParam("lang", "in", "Bahasa Indonesia dikirim otomatis.")]
+    }),
+    searchEndpoint({
+      providerName: "ReelShort",
+      pathLabel: "GET /api/v1/search?q=:query",
+      defaultQuery: "love",
+      supportsPage: true,
+      defaultPage: 1,
+      paramsBefore: [fixedParam("lang", "in", "Bahasa Indonesia dikirim otomatis.")]
     })
   ]
 };
