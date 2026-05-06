@@ -93,6 +93,55 @@ function stringRecordValue(record: JsonRecord, key: string) {
   return null;
 }
 
+function booleanRecordValue(record: JsonRecord, key: string) {
+  const value = record[key];
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized === "true" || normalized === "1";
+  }
+  return false;
+}
+
+function numberRecordValue(record: JsonRecord, key: string) {
+  const value = record[key];
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parsedJsonRecordValue(record: JsonRecord, key: string) {
+  const value = record[key];
+  if (!value || typeof value !== "string") return {};
+
+  try {
+    return asRecord(JSON.parse(value));
+  } catch {
+    return {};
+  }
+}
+
+function isDramawaveUnplayablePreview(item: unknown) {
+  const record = asRecord(item);
+  const listingTime = numberRecordValue(record, "listing_time");
+  const rInfo = asRecord(record.r_info);
+  const rInfo1 = parsedJsonRecordValue(record, "r_info1");
+  const sceneSource =
+    stringRecordValue(rInfo, "scene_source") ??
+    stringRecordValue(rInfo1, "scene_source") ??
+    "";
+
+  return (
+    booleanRecordValue(record, "is_preview") ||
+    Boolean(listingTime && listingTime > Date.now() / 1000) ||
+    sceneSource.includes("coming_soon")
+  );
+}
+
+function shouldSkipCatalogItem(provider: ProviderCode, item: unknown) {
+  return provider === "dramawave" && isDramawaveUnplayablePreview(item);
+}
+
 function selectMeloloPlaybackPayload(payload: JsonRecord, input: PlaybackInput) {
   const episodes = Array.isArray(payload.episodes) ? payload.episodes : [];
   const selected = episodes
@@ -771,6 +820,7 @@ export class ConfiguredProviderAdapter implements ProviderAdapter {
     const payload = await this.fetch(endpoint);
     const seen = new Set<string>();
     const items = extractListPayload(payload)
+      .filter((item) => !shouldSkipCatalogItem(this.code, item))
       .map((item) => normalizeDrama(item, this.code, input.lang))
       .filter(isValidDrama)
       .filter((item) => {

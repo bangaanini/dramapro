@@ -23,6 +23,7 @@ const PENDING_DETAIL_HIDDEN_REASON = "pending_provider_detail";
 const PLAYBACK_REFRESH_GRACE_MS = 120_000;
 const ON_DEMAND_PLAYBACK_PROVIDERS = new Set<ProviderCode>([
   "dramabox",
+  "dramarush",
   "hishort",
   "melolo",
   "reelife",
@@ -306,6 +307,38 @@ function hasPlayablePlaybackSource(playback: CanonicalPlayback) {
 
 function hasResolvableEpisodes(provider: ProviderCode, episodeSync: { playableEpisodeCount: number }, episodes: CanonicalEpisode[]) {
   return episodeSync.playableEpisodeCount > 0 || (ON_DEMAND_PLAYBACK_PROVIDERS.has(provider) && episodes.length > 0);
+}
+
+function buildOnDemandEpisodesFromCount(input: {
+  provider: ProviderCode;
+  externalId: string;
+  lang: string;
+  episodeCount: number;
+}) {
+  const count = Math.min(Math.max(0, input.episodeCount), 500);
+
+  return Array.from({ length: count }, (_, index) => {
+    const episodeNumber = index + 1;
+    return {
+      id: `${input.provider}:${input.lang}:${input.externalId}:ep:${episodeNumber}`,
+      dramaId: `${input.provider}:${input.lang}:${input.externalId}`,
+      provider: input.provider,
+      dramaExternalId: input.externalId,
+      externalId: String(episodeNumber),
+      episodeNumber,
+      title: `EP-${episodeNumber}`,
+      thumbnailUrl: null,
+      duration: null,
+      isLocked: false,
+      rawPayload: {
+        provider: input.provider,
+        dramaExternalId: input.externalId,
+        episodeNumber,
+        episodeExternalId: String(episodeNumber),
+        onDemandPlayback: true,
+      },
+    } satisfies CanonicalEpisode;
+  });
 }
 
 function isFallbackProviderTitle(title: string | null | undefined) {
@@ -646,17 +679,36 @@ export async function syncProviderDetail(provider: ProviderCode, externalId: str
   }
 
   const series = await upsertSeries(provider, language.id, drama);
-  const episodes = await adapter.getEpisodes({ provider, externalId, lang, params: effectiveParams });
+  let episodes = await adapter.getEpisodes({ provider, externalId, lang, params: effectiveParams });
   const expectedEpisodeCount = Math.max(drama.episodeCount ?? 0, series.chapterCount ?? 0);
+
+  if (
+    episodes.length === 0 &&
+    expectedEpisodeCount > 0 &&
+    ON_DEMAND_PLAYBACK_PROVIDERS.has(provider)
+  ) {
+    episodes = buildOnDemandEpisodesFromCount({
+      provider,
+      externalId,
+      lang,
+      episodeCount: expectedEpisodeCount,
+    });
+  }
 
   if (episodes.length === 0 && expectedEpisodeCount > 0) {
     await prisma.catalogSeries.update({
       where: { id: series.id },
       data: {
         isHomepageVisible: false,
-        homepageHiddenReason: PENDING_DETAIL_HIDDEN_REASON
+        homepageHiddenReason: PENDING_DETAIL_HIDDEN_REASON,
+        ...(provider === "dramawave" ? { lastDetailSyncedAt: new Date() } : {})
       }
     });
+
+    if (provider === "dramawave") {
+      return { seriesId: series.id, episodeCount: 0 };
+    }
+
     throw new Error(`Provider ${provider} returned no episodes for ${externalId}.`);
   }
 
