@@ -255,10 +255,87 @@ function streamApiLanguage(provider: ProviderCode, lang = "id") {
   return getProvider(provider).mapLang(lang);
 }
 
+function parseExpiryMs(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return value > 10_000_000_000 ? value : value * 1000;
+  }
+
+  if (typeof value !== "string" || !value.trim()) {
+    return null;
+  }
+
+  const numericValue = Number.parseInt(value, 10);
+
+  if (Number.isFinite(numericValue) && String(numericValue) === value.trim()) {
+    return numericValue > 10_000_000_000 ? numericValue : numericValue * 1000;
+  }
+
+  const dateValue = new Date(value);
+  return Number.isNaN(dateValue.getTime()) ? null : dateValue.getTime();
+}
+
+function readTencentPathExpiryMs(sourceUrl: string): number | null {
+  try {
+    const url = new URL(sourceUrl);
+    const hostname = url.hostname.toLowerCase();
+
+    if (!hostname.endsWith("dramahue.com")) {
+      return null;
+    }
+
+    const minExpirySeconds = Date.UTC(2024, 0, 1) / 1000;
+    const maxExpirySeconds = Date.UTC(2038, 0, 1) / 1000;
+
+    for (const segment of url.pathname.split("/")) {
+      if (!/^[0-9a-f]{8}$/i.test(segment)) continue;
+
+      const expirySeconds = Number.parseInt(segment, 16);
+
+      if (
+        Number.isFinite(expirySeconds) &&
+        expirySeconds >= minExpirySeconds &&
+        expirySeconds <= maxExpirySeconds
+      ) {
+        return expirySeconds * 1000;
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function playbackSourceExpiryMs(source: unknown): number | null {
+  if (!source || typeof source !== "object" || Array.isArray(source)) {
+    return null;
+  }
+
+  const record = source as { expiresAt?: unknown; url?: unknown };
+  const explicitExpiry = parseExpiryMs(record.expiresAt);
+
+  if (explicitExpiry) {
+    return explicitExpiry;
+  }
+
+  return typeof record.url === "string"
+    ? readTencentPathExpiryMs(record.url)
+    : null;
+}
+
 function playbackExpiresAt(playback: CanonicalPlayback) {
-  if (!playback.expiresAt) return null;
-  const date = new Date(playback.expiresAt);
-  return Number.isNaN(date.getTime()) ? null : date;
+  const expiries = [
+    parseExpiryMs(playback.expiresAt),
+    ...playback.sources.map(playbackSourceExpiryMs),
+  ].filter((value): value is number => Boolean(value));
+
+  if (!expiries.length) return null;
+  return new Date(Math.min(...expiries));
+}
+
+function isExpiredPlaybackSource(source: unknown) {
+  const expiresAt = playbackSourceExpiryMs(source);
+  return Boolean(expiresAt && expiresAt <= Date.now() + PLAYBACK_REFRESH_GRACE_MS);
 }
 
 function isCachedPlaybackFresh(episode: {
@@ -268,6 +345,7 @@ function isCachedPlaybackFresh(episode: {
   const sources = Array.isArray(episode.playbackSources) ? episode.playbackSources : [];
   if (!sources.length) return false;
   if (sources.some(isUnpreparedTencentVodSource)) return false;
+  if (sources.some(isExpiredPlaybackSource)) return false;
   if (!episode.playbackExpiresAt) return true;
   return episode.playbackExpiresAt.getTime() > Date.now() + PLAYBACK_REFRESH_GRACE_MS;
 }

@@ -191,6 +191,33 @@ function encodeBase64Url(value: string) {
   return Buffer.from(value, "utf8").toString("base64url");
 }
 
+function readTencentPathExpiry(url: URL): number | null {
+  const hostname = url.hostname.toLowerCase();
+
+  if (!hostname.endsWith("dramahue.com")) {
+    return null;
+  }
+
+  const minExpirySeconds = Date.UTC(2024, 0, 1) / 1000;
+  const maxExpirySeconds = Date.UTC(2038, 0, 1) / 1000;
+
+  for (const segment of url.pathname.split("/")) {
+    if (!/^[0-9a-f]{8}$/i.test(segment)) continue;
+
+    const expiry = Number.parseInt(segment, 16);
+
+    if (
+      Number.isFinite(expiry) &&
+      expiry >= minExpirySeconds &&
+      expiry <= maxExpirySeconds
+    ) {
+      return expiry;
+    }
+  }
+
+  return null;
+}
+
 function readSignedUrlExpiry(sourceUrl: string): number | null {
   try {
     const parsedUrl = new URL(sourceUrl);
@@ -205,7 +232,11 @@ function readSignedUrlExpiry(sourceUrl: string): number | null {
       const verify = url.searchParams.get("verify");
       const verifyExpires = Number.parseInt(verify?.split("-")[0] ?? "", 10);
 
-      return Number.isFinite(verifyExpires) ? verifyExpires : null;
+      if (Number.isFinite(verifyExpires)) {
+        return verifyExpires;
+      }
+
+      return readTencentPathExpiry(url);
     };
 
     const directExpiry = readExpiryFromUrl(parsedUrl);

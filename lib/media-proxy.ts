@@ -34,6 +34,7 @@ export function shouldProxyMediaUrl(url: string) {
       hostname.includes("video-v5.mydramawave.com") ||
       hostname.includes("video-v6.mydramawave.com") ||
       hostname.includes("dramaboxdb.com") ||
+      hostname.endsWith("dramahue.com") ||
       hostname.endsWith("dramahub.cc") ||
       hostname.endsWith("dramahub.me") ||
       hostname.endsWith("goodreels.com") ||
