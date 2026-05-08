@@ -1,7 +1,7 @@
 import { Prisma } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
-export type AdminRevenueRange = "7d" | "30d";
+export type AdminRevenueRange = "24h" | "7d" | "30d" | "90d" | "all";
 export type AdminPartnerRevenueSort = "highest" | "lowest";
 
 type RevenueSummaryRow = {
@@ -56,10 +56,13 @@ type PartnerBotRevenueRow = {
 const RANGE_OPTIONS: Array<{
   key: AdminRevenueRange;
   label: string;
-  days: number;
+  days: number | null;
 }> = [
+  { key: "24h", label: "24 jam", days: 1 },
   { key: "7d", label: "7 hari", days: 7 },
   { key: "30d", label: "30 hari", days: 30 },
+  { key: "90d", label: "90 hari", days: 90 },
+  { key: "all", label: "Sepanjang masa", days: null },
 ];
 
 const PARTNER_REVENUE_SORT_OPTIONS: Array<{
@@ -111,13 +114,14 @@ export function parseAdminPartnerRevenueSort(
 
 async function getRevenueSummary(input: { since: Date; until: Date }) {
   const paidAtSql = getPaidAtSql();
+  const sinceWhere = Prisma.sql`AND ${paidAtSql} >= ${input.since}`;
   const rows = await prisma.$queryRaw<RevenueSummaryRow[]>(Prisma.sql`
     SELECT
       COALESCE(SUM(COALESCE(vp."paidAmount", vp."amount")), 0)::bigint AS "revenue",
       COUNT(*)::int AS "transactions"
     FROM "VipPayment" vp
     WHERE vp."status" = 'paid'
-      AND ${paidAtSql} >= ${input.since}
+      ${sinceWhere}
       AND ${paidAtSql} < ${input.until}
   `);
   const row = rows[0];
@@ -135,11 +139,21 @@ export async function getAdminRevenueDashboard(input: {
   const range = parseAdminRevenueRange(input.range);
   const partnerSort = parseAdminPartnerRevenueSort(input.partnerSort);
   const now = new Date();
-  const since = new Date(now.getTime() - range.days * 24 * 60 * 60 * 1000);
-  const previousSince = new Date(
-    since.getTime() - range.days * 24 * 60 * 60 * 1000,
-  );
+  const since =
+    range.days === null
+      ? null
+      : new Date(now.getTime() - range.days * 24 * 60 * 60 * 1000);
+  const previousSince =
+    since && range.days !== null
+      ? new Date(since.getTime() - range.days * 24 * 60 * 60 * 1000)
+      : null;
   const paidAtSql = getPaidAtSql();
+  const rangeWhere = since
+    ? Prisma.sql`AND ${paidAtSql} >= ${since}`
+    : Prisma.empty;
+  const commissionRangeWhere = since
+    ? Prisma.sql`AND ac."createdAt" >= ${since}`
+    : Prisma.empty;
   const partnerOrderBySql =
     partnerSort.key === "lowest"
       ? Prisma.sql`"commission" ASC, "revenue" ASC, "transactions" ASC, bot."botUsername" ASC`
@@ -154,8 +168,12 @@ export async function getAdminRevenueDashboard(input: {
     recentRows,
     partnerBotRows,
   ] = await Promise.all([
-    getRevenueSummary({ since, until: now }),
-    getRevenueSummary({ since: previousSince, until: since }),
+    since
+      ? getRevenueSummary({ since, until: now })
+      : getRevenueSummary({ since: new Date(0), until: now }),
+    previousSince && since
+      ? getRevenueSummary({ since: previousSince, until: since })
+      : Promise.resolve({ revenue: 0, transactions: 0 }),
     prisma.user.count({
       where: {
         vipExpiresAt: {
@@ -173,7 +191,7 @@ export async function getAdminRevenueDashboard(input: {
       FROM "VipPayment" vp
       JOIN "VipPricePlan" plan ON plan."id" = vp."vipPricePlanId"
       WHERE vp."status" = 'paid'
-        AND ${paidAtSql} >= ${since}
+        ${rangeWhere}
         AND ${paidAtSql} < ${now}
       GROUP BY plan."id", plan."name", plan."slug"
       ORDER BY "revenue" DESC, "transactions" DESC, plan."name" ASC
@@ -186,7 +204,7 @@ export async function getAdminRevenueDashboard(input: {
         COALESCE(SUM(COALESCE(vp."paidAmount", vp."amount")), 0)::bigint AS "revenue"
       FROM "VipPayment" vp
       WHERE vp."status" = 'paid'
-        AND ${paidAtSql} >= ${since}
+        ${rangeWhere}
         AND ${paidAtSql} < ${now}
       GROUP BY 1
       ORDER BY "revenue" DESC, "transactions" DESC, "method" ASC
@@ -210,7 +228,7 @@ export async function getAdminRevenueDashboard(input: {
       JOIN "User" u ON u."id" = vp."userId"
       JOIN "VipPricePlan" plan ON plan."id" = vp."vipPricePlanId"
       WHERE vp."status" = 'paid'
-        AND ${paidAtSql} >= ${since}
+        ${rangeWhere}
         AND ${paidAtSql} < ${now}
       ORDER BY ${paidAtSql} DESC
       LIMIT 20
@@ -226,7 +244,7 @@ export async function getAdminRevenueDashboard(input: {
         JOIN "User" u ON u."id" = vp."userId"
         WHERE vp."status" = 'paid'
           AND u."referredByPartnerBotId" IS NOT NULL
-          AND ${paidAtSql} >= ${since}
+          ${rangeWhere}
           AND ${paidAtSql} < ${now}
         GROUP BY u."referredByPartnerBotId"
       ),
@@ -237,7 +255,7 @@ export async function getAdminRevenueDashboard(input: {
         FROM "AffiliateCommission" ac
         WHERE ac."partnerBotId" IS NOT NULL
           AND ac."status" <> 'cancelled'
-          AND ac."createdAt" >= ${since}
+          ${commissionRangeWhere}
           AND ac."createdAt" < ${now}
         GROUP BY ac."partnerBotId"
       ),
@@ -292,11 +310,15 @@ export async function getAdminRevenueDashboard(input: {
       activeVipUsers,
       averageTransaction,
       deltas: {
-        totalRevenue: calculateDelta(totalRevenue, previousSummary.revenue),
-        transactions: calculateDelta(
-          currentSummary.transactions,
-          previousSummary.transactions,
-        ),
+        totalRevenue: since
+          ? calculateDelta(totalRevenue, previousSummary.revenue)
+          : undefined,
+        transactions: since
+          ? calculateDelta(
+              currentSummary.transactions,
+              previousSummary.transactions,
+            )
+          : undefined,
       },
     },
     revenueByPlan: planRows.map((row) => {

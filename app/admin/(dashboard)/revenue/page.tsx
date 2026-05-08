@@ -317,13 +317,13 @@ function RangeFilter({
   items: Array<{ href: string; label: string; active: boolean }>;
 }) {
   return (
-    <div className="grid min-w-0 max-w-full grid-cols-2 overflow-hidden rounded-[1.2rem] bg-[#202023] p-1 md:min-w-[24rem]">
+    <div className="grid min-w-0 max-w-full grid-cols-2 overflow-hidden rounded-[1.2rem] bg-[#202023] p-1 sm:grid-cols-5 md:min-w-[34rem]">
       {items.map((item) => (
         <Link
           key={item.href}
           href={item.href}
           className={cn(
-            "min-w-0 truncate rounded-[0.95rem] px-3 py-3 text-center text-sm font-semibold transition",
+            "min-w-0 truncate rounded-[0.95rem] px-2 py-3 text-center text-xs font-semibold transition md:text-sm",
             item.active
               ? "bg-[#2a2a2d] text-white md:bg-accent"
               : "text-[rgba(255,255,255,0.42)] hover:text-white",

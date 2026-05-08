@@ -1,7 +1,7 @@
 import { Prisma } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
-export type AdminAnalyticsRange = "24h" | "7d" | "30d" | "90d";
+export type AdminAnalyticsRange = "24h" | "7d" | "30d" | "90d" | "all";
 export type AdminAnalyticsSource = "all" | "web" | "telegram";
 
 type BreakdownRow = {
@@ -17,12 +17,13 @@ type RetentionRow = {
 const RANGE_OPTIONS: Array<{
   key: AdminAnalyticsRange;
   label: string;
-  days: number;
+  days: number | null;
 }> = [
   { key: "24h", label: "24 jam", days: 1 },
   { key: "7d", label: "7 hari", days: 7 },
   { key: "30d", label: "30 hari", days: 30 },
   { key: "90d", label: "90 hari", days: 90 },
+  { key: "all", label: "Sepanjang masa", days: null },
 ];
 
 const SOURCE_OPTIONS: Array<{
@@ -149,18 +150,22 @@ async function getBreakdown(input: {
     | "osName"
     | "browserName"
     | "countryCode";
-  since: Date;
+  since: Date | null;
   source: AdminAnalyticsSource;
   limit?: number;
 }) {
   const column = Prisma.raw(`"${input.column}"`);
   const sourceWhere = getSourceWhereSql(input.source);
+  const sinceWhere = input.since
+    ? Prisma.sql`AND "startedAt" >= ${input.since}`
+    : Prisma.empty;
   const rows = await prisma.$queryRaw<BreakdownRow[]>(Prisma.sql`
     SELECT
       COALESCE(NULLIF(${column}, ''), 'unknown') AS "label",
       COUNT(*)::int AS "value"
     FROM "AnalyticsSession"
-    WHERE "startedAt" >= ${input.since}
+    WHERE TRUE
+      ${sinceWhere}
       ${sourceWhere}
     GROUP BY 1
     ORDER BY "value" DESC, "label" ASC
@@ -234,12 +239,13 @@ export async function getAdminAnalyticsDashboard(input: {
   const range = parseAdminAnalyticsRange(input.range);
   const source = parseAdminAnalyticsSource(input.source);
   const now = new Date();
-  const since = new Date(now.getTime() - range.days * 24 * 60 * 60 * 1000);
+  const since =
+    range.days === null
+      ? null
+      : new Date(now.getTime() - range.days * 24 * 60 * 60 * 1000);
   const onlineSince = new Date(now.getTime() - 5 * 60 * 1000);
   const sessionWhere = {
-    startedAt: {
-      gte: since,
-    },
+    ...(since ? { startedAt: { gte: since } } : {}),
     ...(source.key === "all" ? {} : { source: source.key }),
   };
   const onlineWhere = {
@@ -270,9 +276,7 @@ export async function getAdminAnalyticsDashboard(input: {
     prisma.user.count(),
     prisma.user.count({
       where: {
-        createdAt: {
-          gte: since,
-        },
+        ...(since ? { createdAt: { gte: since } } : {}),
       },
     }),
     prisma.catalogSeries.count({

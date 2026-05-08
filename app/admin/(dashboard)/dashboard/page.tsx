@@ -251,7 +251,11 @@ function FilterGroup({
       <div
         className={cn(
           "grid min-w-0 max-w-full overflow-hidden rounded-[1.2rem] bg-[#202023] p-1 md:flex md:flex-wrap md:gap-2 md:bg-transparent md:p-0",
-          items.length === 3 ? "grid-cols-3" : "grid-cols-4",
+          items.length === 3
+            ? "grid-cols-3"
+            : items.length === 5
+              ? "grid-cols-2 sm:grid-cols-5"
+              : "grid-cols-4",
         )}
       >
         {items.map((item) => (
