@@ -400,7 +400,7 @@ export function PwaInstallBanner({
   }
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-[calc(5.75rem+env(safe-area-inset-top))] z-[90] px-4 sm:top-24">
+    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-[90] px-4 sm:bottom-6">
       <div className="pointer-events-auto mx-auto flex max-w-xl items-center gap-3 rounded-[1.25rem] border border-white/36 bg-[radial-gradient(circle_at_84%_50%,rgba(212,0,98,0.24),transparent_32%),linear-gradient(135deg,rgba(63,49,70,0.96),rgba(35,29,44,0.97))] px-4 py-3 shadow-[0_18px_60px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-2xl">
         <div className="min-w-0 flex-1">
           <p className="truncate text-base font-semibold tracking-tight text-white">

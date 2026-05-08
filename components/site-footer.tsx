@@ -149,11 +149,18 @@ export function SiteFooter({ siteName = "Layar Drama" }: { siteName?: string }) 
 
   return (
     <>
-      <PwaInstallBanner
-        autoShow={shouldAutoShowInstallBanner}
-        siteName={siteName}
-      />
-      {portalTarget ? createPortal(navMarkup, portalTarget) : null}
+      {portalTarget
+        ? createPortal(
+            <>
+              <PwaInstallBanner
+                autoShow={shouldAutoShowInstallBanner}
+                siteName={siteName}
+              />
+              {navMarkup}
+            </>,
+            portalTarget,
+          )
+        : null}
     </>
   );
 }
