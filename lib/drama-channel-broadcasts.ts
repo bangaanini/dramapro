@@ -88,9 +88,10 @@ export function buildDefaultDramaChannelBroadcastCaption(input: {
   description?: string | null;
   title: string;
 }) {
+  const title = truncateText(input.title, 120) || "Drama pilihan";
   const description = truncateText(input.description ?? "", 360) || "Sinopsis belum tersedia.";
   const lines = [
-    "SINOPSIS",
+    `🎬 ${title}`,
     "",
     description,
     "",
