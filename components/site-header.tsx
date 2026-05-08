@@ -106,10 +106,9 @@ export async function SiteHeader({ current }: SiteHeaderProps) {
             </Link>
           ) : null}
 
-          <div className="group relative">
-            <button
-              type="button"
-              className="flex size-12 items-center justify-center overflow-hidden rounded-full border border-white/12 bg-white/8 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(0,0,0,0.2)] transition hover:border-accent/35 hover:bg-white/12"
+          <details className="group relative">
+            <summary
+              className="flex size-12 cursor-pointer list-none items-center justify-center overflow-hidden rounded-full border border-white/12 bg-white/8 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(0,0,0,0.2)] transition hover:border-accent/35 hover:bg-white/12 focus:outline-none focus-visible:border-accent/45 [&::-webkit-details-marker]:hidden"
               aria-label="Buka menu profil"
             >
               {avatarUrl ? (
@@ -125,9 +124,9 @@ export async function SiteHeader({ current }: SiteHeaderProps) {
               ) : (
                 <UserRound className="size-6" />
               )}
-            </button>
+            </summary>
 
-            <div className="invisible absolute right-0 top-full z-50 mt-3 w-[min(86vw,320px)] translate-y-2 rounded-2xl border border-white/10 bg-[#0b0808]/96 p-2 opacity-0 shadow-[0_26px_80px_rgba(0,0,0,0.58)] backdrop-blur-2xl transition duration-180 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
+            <div className="invisible absolute right-0 top-full z-50 mt-3 w-[min(86vw,320px)] translate-y-2 rounded-2xl border border-white/10 bg-[#0b0808]/96 p-2 opacity-0 shadow-[0_26px_80px_rgba(0,0,0,0.58)] backdrop-blur-2xl transition duration-180 group-open:visible group-open:translate-y-0 group-open:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
               <div className="mb-1 rounded-xl border border-white/8 bg-white/[0.045] p-4">
                 <div className="flex items-center gap-3">
                   <div className="flex size-12 items-center justify-center overflow-hidden rounded-full bg-accent text-sm font-bold text-white">
@@ -213,7 +212,7 @@ export async function SiteHeader({ current }: SiteHeaderProps) {
                 </>
               )}
             </div>
-          </div>
+          </details>
         </div>
       </div>
     </header>
