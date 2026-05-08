@@ -9,7 +9,7 @@ export const DEFAULT_SITE_TAGLINE = "Nonton short drama sub Indo fresh setiap ha
 export const DEFAULT_SITE_TITLE = `${DEFAULT_SITE_NAME} - ${DEFAULT_SITE_TAGLINE}`;
 export const DEFAULT_SITE_DESCRIPTION =
   "Nonton ribuan short drama dalam 1 platform. Short drama terbaru dari berbagai sumber cepat dan aman.";
-export const DEFAULT_SITE_LOGO = "/site-logo.jpg";
+export const DEFAULT_SITE_LOGO = "/site-logo.png";
 export const DEFAULT_OG_IMAGE = "/opengraph.jpg";
 export const DEFAULT_TELEGRAM_DRAMA_CHANNEL_URL = "https://t.me/LayarDramaID";
 export const DEFAULT_TELEGRAM_MOVIE_CHANNEL_URL = "https://t.me/layarboxoffice";
@@ -55,6 +55,37 @@ const LEGACY_INLINE_BUTTON_FIELD_MAP = [
 
 function readTrimmed(value?: string | null) {
   return value?.trim() ?? "";
+}
+
+function splitTelegramAdminList(value?: string | null) {
+  return readTrimmed(value)
+    .split(/[\s,;]+/u)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function normalizeTelegramAdminIdList(value?: string | null) {
+  return Array.from(
+    new Set(
+      splitTelegramAdminList(value)
+        .map((item) => item.replace(/^id:/iu, "").trim())
+        .filter((item) => /^\d+$/u.test(item)),
+    ),
+  );
+}
+
+function normalizeTelegramUsername(value: string) {
+  return value.trim().replace(/^@/, "").toLowerCase();
+}
+
+function normalizeTelegramAdminUsernameList(value?: string | null) {
+  return Array.from(
+    new Set(
+      splitTelegramAdminList(value)
+        .map((item) => normalizeTelegramUsername(item))
+        .filter((item) => /^[a-z0-9_]{5,32}$/u.test(item)),
+    ),
+  );
 }
 
 function createEmptyInlineButton(index: number): TelegramInlineButtonConfig {
@@ -183,7 +214,11 @@ export const getAppSettings = cache(async () => {
   const siteName = readTrimmed(row?.siteName) || DEFAULT_SITE_NAME;
   const siteDescription =
     readTrimmed(row?.siteDescription) || DEFAULT_SITE_DESCRIPTION;
-  const siteLogoUrl = readTrimmed(row?.siteLogoUrl) || DEFAULT_SITE_LOGO;
+  const configuredSiteLogoUrl = readTrimmed(row?.siteLogoUrl);
+  const siteLogoUrl =
+    !configuredSiteLogoUrl || configuredSiteLogoUrl.endsWith("/site-logo.jpg")
+      ? DEFAULT_SITE_LOGO
+      : configuredSiteLogoUrl;
   const telegramBotUsername =
     (readTrimmed(row?.telegramBotUsername) ||
       readTrimmed(process.env.TELEGRAM_BOT_USERNAME)
@@ -224,6 +259,12 @@ export const getAppSettings = cache(async () => {
   );
   const telegramBoxOfficeBotUrl = readTrimmed(
     row?.telegramBoxOfficeBotUrl,
+  );
+  const telegramAdminIds = normalizeTelegramAdminIdList(
+    row?.telegramAdminIds || process.env.TELEGRAM_ADMIN_IDS,
+  );
+  const telegramAdminUsernames = normalizeTelegramAdminUsernameList(
+    row?.telegramAdminUsernames || process.env.TELEGRAM_ADMIN_USERNAMES,
   );
   const telegramMenu = {
     welcomeMessage:
@@ -280,7 +321,7 @@ export const getAppSettings = cache(async () => {
       description: siteDescription,
       logoUrl: siteLogoUrl,
       ogImageUrl: DEFAULT_OG_IMAGE,
-      customLogoUrl: readTrimmed(row?.siteLogoUrl) || DEFAULT_SITE_LOGO,
+      customLogoUrl: siteLogoUrl,
     },
     telegram: {
       botUsername: telegramBotUsername,
@@ -291,6 +332,12 @@ export const getAppSettings = cache(async () => {
       defaultBroadcastChannel: telegramDefaultBroadcastChannel,
       boxOfficeBotUrl:
         telegramBoxOfficeBotUrl || telegramMenu.movieChannelUrl || "",
+      adminIds: telegramAdminIds,
+      adminUsernames: telegramAdminUsernames,
+      adminIdentifiers: [
+        ...telegramAdminIds,
+        ...telegramAdminUsernames.map((username) => `@${username}`),
+      ],
       inlineButtons: telegramInlineButtons,
       webhookUrl: absoluteUrlFromSiteUrl(siteUrl, "/api/telegram/webhook"),
       menu: telegramMenu,

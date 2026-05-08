@@ -37,6 +37,7 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { trackAnalyticsEvent } from "@/lib/analytics/client";
 import { triggerImpactHaptic, triggerSelectionHaptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 import {
@@ -138,6 +139,7 @@ export function VideoPlayer({
   } | null>(null);
   const hasAttemptedAutoFullscreenRef = useRef(false);
   const saveEpisodeRequestRef = useRef(false);
+  const trackedAnalyticsVideoPlaysRef = useRef<Set<string>>(new Set());
   const attemptedSourceUrlsRef = useRef<Set<string>>(new Set());
   const h265FallbackAttemptedUrlsRef = useRef<Set<string>>(new Set());
   const isMutedRef = useRef(false);
@@ -342,6 +344,39 @@ export function VideoPlayer({
     setSavedEpisodeIndices(initialSavedEpisodes);
   }, [initialSavedEpisodes]);
 
+  const trackVideoPlayAnalytics = useCallback(() => {
+    if (
+      selectedEpisodeIsLocked ||
+      !hasUnlockedEpisodes ||
+      !internalDramaId ||
+      selectedEpisode < 1
+    ) {
+      return;
+    }
+
+    const key = `${internalDramaId}:${selectedEpisode}`;
+
+    if (trackedAnalyticsVideoPlaysRef.current.has(key)) {
+      return;
+    }
+
+    trackedAnalyticsVideoPlaysRef.current.add(key);
+    trackAnalyticsEvent({
+      type: "video_play",
+      internalDramaId,
+      episodeIndex: selectedEpisode,
+      meta: {
+        episodeCount,
+      },
+    });
+  }, [
+    episodeCount,
+    hasUnlockedEpisodes,
+    internalDramaId,
+    selectedEpisode,
+    selectedEpisodeIsLocked,
+  ]);
+
   useEffect(() => {
     const video = videoElementRef.current;
 
@@ -350,6 +385,10 @@ export function VideoPlayer({
     }
 
     const handlePlay = () => setIsPlaying(true);
+    const handlePlaying = () => {
+      setIsPlaying(true);
+      trackVideoPlayAnalytics();
+    };
     const handlePause = () => setIsPlaying(false);
     const handleTimeUpdate = () => {
       setCurrentTimeSeconds(video.currentTime || 0);
@@ -372,6 +411,7 @@ export function VideoPlayer({
 
     video.muted = false;
     video.addEventListener("play", handlePlay);
+    video.addEventListener("playing", handlePlaying);
     video.addEventListener("pause", handlePause);
     video.addEventListener("timeupdate", handleTimeUpdate);
     video.addEventListener("loadedmetadata", handleLoadedMetadata);
@@ -381,6 +421,7 @@ export function VideoPlayer({
 
     return () => {
       video.removeEventListener("play", handlePlay);
+      video.removeEventListener("playing", handlePlaying);
       video.removeEventListener("pause", handlePause);
       video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("loadedmetadata", handleLoadedMetadata);
@@ -391,7 +432,12 @@ export function VideoPlayer({
       hlsRef.current?.destroy();
       hlsRef.current = null;
     };
-  }, [episodeCount, lastUnlockedEpisode, playNextEpisodeAfterEnd]);
+  }, [
+    episodeCount,
+    lastUnlockedEpisode,
+    playNextEpisodeAfterEnd,
+    trackVideoPlayAnalytics,
+  ]);
 
   useEffect(() => {
     attemptedSourceUrlsRef.current.clear();
@@ -1484,11 +1530,16 @@ export function VideoPlayer({
   }
 
   function goToVipUpgrade(targetEpisode = selectedEpisode) {
-    router.push(
-      `/vip?next=${encodeURIComponent(
-        `/watch/${internalDramaId}/play?episode=${targetEpisode}`,
-      )}`,
-    );
+    const params = new URLSearchParams(window.location.search);
+    const next = `/watch/${internalDramaId}/play?episode=${targetEpisode}`;
+    params.set("episode", String(targetEpisode));
+    params.set("premiumEpisode", String(targetEpisode));
+    params.set("premiumTitle", title);
+    params.set("premiumNext", next);
+
+    router.push(`/watch/${internalDramaId}/play?${params.toString()}`, {
+      scroll: false,
+    });
   }
 
   async function handleEpisodeSaveToggle() {
@@ -1716,7 +1767,10 @@ export function VideoPlayer({
                   playNextEpisodeAfterEnd();
                 }}
                 onPause={() => setIsPlaying(false)}
-                onPlay={() => setIsPlaying(true)}
+                onPlay={() => {
+                  setIsPlaying(true);
+                  trackVideoPlayAnalytics();
+                }}
                 onTimeUpdate={(currentTime, duration) => {
                   setCurrentTimeSeconds(currentTime);
 

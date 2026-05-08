@@ -3,6 +3,7 @@ import { AdminSidebar } from "@/components/admin-sidebar";
 import { getCurrentAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { isPrismaDatabaseConnectionError } from "@/lib/prisma-errors";
+import { AdminTelegramLoginRedirect } from "./AdminTelegramLoginRedirect";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,7 @@ export default async function AdminDashboardLayout({
   if (!admin) {
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-none items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
+        <AdminTelegramLoginRedirect />
         <section className="glass-panel w-full max-w-xl rounded-[2rem] border border-white/10 p-6">
           <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">
             Admin

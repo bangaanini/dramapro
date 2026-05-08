@@ -13,6 +13,7 @@ type FavoriteDramaButtonProps = {
   size?: ButtonProps["size"];
   className?: string;
   compact?: boolean;
+  iconOnly?: boolean;
 };
 
 export async function FavoriteDramaButton({
@@ -22,6 +23,7 @@ export async function FavoriteDramaButton({
   size = "sm",
   className,
   compact = false,
+  iconOnly = false,
 }: FavoriteDramaButtonProps) {
   const user = await getCurrentUser();
 
@@ -34,8 +36,20 @@ export async function FavoriteDramaButton({
           className,
         )}
       >
-        <Heart className={compact ? "size-4 sm:mr-2" : "mr-2 size-4"} />
-        <span className={compact ? "sr-only sm:not-sr-only" : undefined}>
+        <Heart
+          className={
+            iconOnly
+              ? "size-5"
+              : compact
+                ? "size-4 sm:mr-2"
+                : "mr-2 size-4"
+          }
+        />
+        <span
+          className={
+            iconOnly ? "sr-only" : compact ? "sr-only sm:not-sr-only" : undefined
+          }
+        >
           Sign in untuk favorit
         </span>
       </Link>
@@ -58,11 +72,17 @@ export async function FavoriteDramaButton({
         aria-label={isFavorite ? "Hapus dari favorit" : "Simpan ke favorit"}
       >
         <Heart
-          className={`${compact ? "size-4 sm:mr-2" : "mr-2 size-4"} ${
+          className={`${
+            iconOnly ? "size-5" : compact ? "size-4 sm:mr-2" : "mr-2 size-4"
+          } ${
             isFavorite ? "fill-current" : ""
           }`}
         />
-        <span className={compact ? "sr-only sm:not-sr-only" : undefined}>
+        <span
+          className={
+            iconOnly ? "sr-only" : compact ? "sr-only sm:not-sr-only" : undefined
+          }
+        >
           {isFavorite ? "Tersimpan di favorit" : "Simpan ke favorit"}
         </span>
       </button>

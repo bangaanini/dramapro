@@ -2,10 +2,15 @@ import type { Metadata } from "next";
 
 import { AffiliateCaptureEffect } from "@/components/affiliate-capture-effect";
 import { HomeCatalogPanel } from "@/components/home-catalog-panel";
+import { HomeShowcase } from "@/components/home-showcase";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getAppSettings } from "@/lib/app-settings";
-import { getHomepageCatalogData } from "@/lib/catalog-data";
+import { getCatalogShortcuts } from "@/lib/catalog";
+import {
+  getHomepageCatalogData,
+  getHomepageShowcaseData,
+} from "@/lib/catalog-data";
 import { SITE_DESCRIPTION, absoluteResolvedUrl, toSeoDescription } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
@@ -92,19 +97,29 @@ export default async function HomePage(props: PageProps<"/">) {
   }
 
   const settings = await getAppSettings();
-  const catalogData = await getHomepageCatalogData().catch(() => ({
-    initialFeed: {
-      entries: [],
-      total: 0,
-      nextOffset: 0,
-      hasMore: false,
-    },
-    providerTabs: [],
-    stats: {
-      totalSeries: 0,
-      totalEpisodes: 0,
-    },
-  }));
+  const [catalogData, showcaseData, shortcuts] = await Promise.all([
+    getHomepageCatalogData().catch(() => ({
+      initialFeed: {
+        entries: [],
+        total: 0,
+        nextOffset: 0,
+        hasMore: false,
+      },
+      providerTabs: [],
+      stats: {
+        totalSeries: 0,
+        totalEpisodes: 0,
+      },
+    })),
+    getHomepageShowcaseData().catch(() => ({
+      heroEntries: [],
+      popularEntries: [],
+    })),
+    getCatalogShortcuts().catch(() => ({
+      filters: [],
+      tags: [],
+    })),
+  ]);
   const homeDescription = getHomeDescription(settings.site.name);
   const structuredData = {
     "@context": "https://schema.org",
@@ -140,7 +155,8 @@ export default async function HomePage(props: PageProps<"/">) {
       {referralCode ? <AffiliateCaptureEffect referralCode={referralCode} /> : null}
       <SiteHeader current="home" />
 
-      <HomeCatalogPanel data={catalogData} />
+      <HomeShowcase data={showcaseData} />
+      <HomeCatalogPanel data={catalogData} tags={shortcuts.tags} />
 
       <SiteFooter />
     </main>

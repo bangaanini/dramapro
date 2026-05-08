@@ -13,14 +13,14 @@ export async function UserSessionNav() {
     return (
       <div className="flex flex-wrap items-center justify-end gap-2">
         <Link
-          href="/sign-in"
+          href="?auth=sign-in"
           className={buttonVariants({ variant: "ghost", size: "sm" })}
         >
           <LogIn className="mr-2 size-4" />
           Sign in
         </Link>
         <Link
-          href="/sign-up"
+          href="?auth=sign-up"
           className={buttonVariants({ variant: "default", size: "sm" })}
         >
           <UserPlus className="mr-2 size-4" />
@@ -69,7 +69,7 @@ export async function UserLibraryHint() {
 
   return (
       <Link
-      href="/sign-up?next=/profile"
+      href="?auth=sign-up"
       className={buttonVariants({ variant: "secondary", size: "sm" })}
     >
       <Heart className="mr-2 size-4" />

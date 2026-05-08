@@ -2,17 +2,18 @@ import type { Metadata } from "next";
 import { cache } from "react";
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { Layers3, Sparkles } from "lucide-react";
+import { Bell, MessageCircle, Send, Zap } from "lucide-react";
 
 import { DramaDetailShareButton } from "@/components/drama-detail-share-button";
 import { DramaDetailAdminDownloadPanel } from "@/components/drama-detail-admin-download-panel";
 import { EpisodeGridLink } from "@/components/episode-grid-link";
 import { FavoriteDramaButton } from "@/components/favorite-drama-button";
+import { PartnerBotDownloadPanel } from "@/components/partner-bot-download-panel";
 import { PlayDramaButton } from "@/components/play-drama-button";
 import { DramaCard } from "@/components/drama-card";
+import { SaveEpisodeButton } from "@/components/save-episode-button";
 import { SiteFooter } from "@/components/site-footer";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { SiteHeader } from "@/components/site-header";
 import { getCurrentAdmin } from "@/lib/admin-auth";
 import { getAppSettings } from "@/lib/app-settings";
 import { ensureSeriesHydrated, ensureSeriesPlayableFresh } from "@/lib/catalog";
@@ -26,8 +27,10 @@ import {
   buildDramaShareStartParam,
   buildTelegramMiniAppStartAppLink,
 } from "@/lib/telegram-bot";
+import { getPartnerDownloadBotsForOwner } from "@/lib/partner-downloads";
 import { getCurrentUser, userHasAdminVideoBypass } from "@/lib/user-auth";
 import {
+  filterVisibleDisplayTags,
   normalizeDisplayImageUrl,
   shouldBypassImageOptimization,
 } from "@/lib/utils";
@@ -96,8 +99,15 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
   const { id } = await props.params;
   const [user, admin] = await Promise.all([getCurrentUser(), getCurrentAdmin()]);
 
-  const [series, watchHistory, favorite, vipSettings, settings, hasAdminUserBypass] =
-    await Promise.all([
+  const [
+    series,
+    watchHistory,
+    favorite,
+    vipSettings,
+    settings,
+    hasAdminUserBypass,
+    partnerDownloadBots,
+  ] = await Promise.all([
       ensureSeriesPlayableFresh(id, {
         hideOnFailure: true,
       }),
@@ -135,6 +145,7 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
       }),
       getAppSettings(),
       userHasAdminVideoBypass(user),
+      user ? getPartnerDownloadBotsForOwner(user.id) : Promise.resolve([]),
     ]);
   const hasAdminBypass = Boolean(admin) || hasAdminUserBypass;
 
@@ -147,7 +158,11 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
     series.description,
     `${series.title} dengan ${series.chapterCount} episode di ${settings.site.name}.`,
   );
+  const fullDescription =
+    series.description.replace(/\s+/g, " ").trim() || detailDescription;
   const episodeTotal = Math.max(series.chapterCount, series.episodes.length, 1);
+  const visibleTags = filterVisibleDisplayTags(series.tags);
+  const primaryTag = visibleTags.find((tag) => tag.trim().length > 0) ?? "Drama";
   const vipLockFromEpisode = hasAdminBypass || isVipActive(user?.vipExpiresAt)
     ? null
     : getVipLockStartEpisode(vipSettings);
@@ -156,10 +171,35 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
     episodeTotal,
     vipLockFromEpisode,
   );
+  const [initialSavedEpisode] = user
+    ? await Promise.all([
+        prisma.savedEpisode.findUnique({
+          where: {
+            userId_seriesId_episodeIndex: {
+              userId: user.id,
+              seriesId: series.id,
+              episodeIndex: preferredInitialEpisode,
+            },
+          },
+          select: {
+            id: true,
+          },
+        }),
+      ])
+    : [null];
+  const detailHref = `/watch/${series.id}`;
+  const telegramOpenUrl = settings.telegram.botUsername
+    ? `https://t.me/${settings.telegram.botUsername}`
+    : settings.telegram.supportUrl || settings.site.url;
 
   const relatedSeries = await prisma.catalogSeries.findMany({
     where: {
       id: { not: series.id },
+      coverUrl: { not: "" },
+      isHomepageVisible: true,
+      platform: {
+        isHomepageVisible: true,
+      },
       OR: [
         { tags: { hasSome: series.tags.slice(0, 4) } },
         { platformId: series.platformId },
@@ -185,12 +225,27 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
       : null;
 
   return (
-    <main className="route-transition-shell mx-auto min-h-screen w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-      <section className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)] lg:items-start">
-        <div className="space-y-6">
-          <Card className="glass-panel overflow-hidden rounded-[2.2rem] border-white/10">
-            <CardContent className="p-0">
-              <div className="relative aspect-[9/14] overflow-hidden bg-black sm:aspect-[9/12]">
+    <main className="route-transition-shell min-h-screen w-full overflow-hidden bg-[#050407] text-white">
+      <SiteHeader current="watch" />
+
+      <section className="relative px-3 pb-5 pt-5 sm:px-4 lg:px-8 lg:pb-6 lg:pt-8">
+        <div className="relative mx-auto max-w-7xl overflow-hidden border border-white/8 bg-[#070817] shadow-[0_26px_90px_rgba(0,0,0,0.44)] lg:rounded-[1.65rem]">
+          {coverUrl ? (
+            <Image
+              src={coverUrl}
+              alt=""
+              fill
+              priority
+              className="scale-110 object-cover opacity-[0.18] blur-3xl"
+              sizes="100vw"
+              unoptimized={shouldBypassImageOptimization(coverUrl)}
+            />
+          ) : null}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_18%,rgba(255,122,69,0.18),transparent_28%),radial-gradient(circle_at_84%_22%,rgba(88,79,255,0.16),transparent_30%),linear-gradient(90deg,rgba(7,8,23,0.86),rgba(7,8,23,0.78)),linear-gradient(180deg,rgba(255,255,255,0.045),transparent)]" />
+
+          <div className="relative grid gap-7 px-4 py-6 sm:px-6 sm:py-8 lg:grid-cols-[minmax(205px,280px)_minmax(0,1fr)] lg:gap-10 lg:px-7 lg:py-8 xl:gap-12 xl:px-8">
+            <div className="mx-auto w-full max-w-[245px] lg:mx-0 lg:max-w-none">
+              <div className="relative aspect-[3/4] overflow-hidden rounded-[1.05rem] bg-white/6 shadow-[0_28px_72px_rgba(0,0,0,0.5)] ring-1 ring-white/10">
                 {coverUrl ? (
                   <Image
                     src={coverUrl}
@@ -198,164 +253,227 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
                     fill
                     priority
                     className="object-cover"
-                    sizes="(max-width: 1024px) 100vw, 60vw"
+                    sizes="(max-width: 1024px) 245px, 280px"
                     unoptimized={shouldBypassImageOptimization(coverUrl)}
                   />
                 ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-white/65">
+                  <div className="flex h-full items-center justify-center px-4 text-center text-sm text-white/65">
                     Poster belum tersedia
                   </div>
                 )}
-                <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,7,8,0.02),rgba(7,7,8,0.86))]" />
-                <div className="absolute inset-x-0 bottom-0 p-6 sm:p-8">
-                  <Badge className="border-accent/30 bg-accent-soft text-accent">
-                    {series.platformId}
-                  </Badge>
-                  <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                    {series.title}
-                  </h1>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Badge variant="secondary">{episodeTotal} episode</Badge>
-                    {series.playCount ? (
-                      <Badge variant="secondary">{series.playCount} tayangan</Badge>
-                    ) : null}
-                    {series.lastDetailSyncedAt ? (
-                      <Badge variant="secondary">Episode siap diputar</Badge>
-                    ) : null}
-                  </div>
-                  <p className="mt-4 max-w-2xl text-sm leading-7 text-white/78">
-                    {detailDescription}
-                  </p>
-                </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
 
-          {admin ? (
-            <DramaDetailAdminDownloadPanel
-              dramaId={series.id}
-              episodeTotal={episodeTotal}
-              initialEpisode={preferredInitialEpisode}
-              className="w-full"
-            />
-          ) : null}
-        </div>
+            <div className="flex min-w-0 flex-col justify-center text-center lg:text-left">
+              <div className="flex flex-wrap justify-center gap-2 lg:justify-start">
+                <span className="inline-flex h-8 items-center rounded-full border border-white/10 bg-white/8 px-3 text-xs font-semibold text-white/78">
+                  {episodeTotal} Episode
+                </span>
+                <span className="inline-flex h-8 items-center rounded-full border border-white/10 bg-white/8 px-3 text-xs font-semibold text-white/78">
+                  {primaryTag}
+                </span>
+              </div>
 
-        <div className="space-y-6">
-          <Card className="glass-panel rounded-[2rem] border-white/10">
-            <CardContent className="space-y-5 p-6">
-              <div className="flex flex-wrap gap-3">
-                <PlayDramaButton href={playHref} label="Tonton sekarang" />
+              <h1 className="mt-4 max-w-4xl text-3xl font-semibold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
+                {series.title}
+              </h1>
+
+              <p className="mt-5 max-w-4xl whitespace-pre-line text-sm leading-7 text-white/62 sm:text-base sm:leading-8 lg:line-clamp-4">
+                {fullDescription}
+              </p>
+
+              {visibleTags.length > 1 ? (
+                <div className="mt-5 flex flex-wrap justify-center gap-2 lg:justify-start">
+                  {visibleTags.slice(0, 5).map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded-md border border-white/10 bg-white/[0.055] px-2.5 py-1 text-xs font-medium text-white/58"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="mt-7 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+                <PlayDramaButton
+                  href={playHref}
+                  label="Tonton Sekarang"
+                  className="h-12 min-w-[190px] rounded-xl bg-accent px-5 text-sm font-semibold text-white shadow-[0_18px_42px_rgba(255,122,69,0.34)] hover:bg-[var(--accent-strong)] sm:h-14 sm:min-w-[220px] sm:text-base"
+                />
                 <FavoriteDramaButton
                   dramaId={series.id}
-                  redirectTo={`/watch/${series.id}`}
+                  redirectTo={detailHref}
                   isFavorite={Boolean(favorite)}
-                  className="h-12 rounded-full px-5"
+                  size="lg"
+                  iconOnly
+                  className={`h-12 w-12 rounded-xl px-0 sm:h-14 sm:w-14 ${
+                    favorite
+                      ? "border-accent/45 bg-accent-soft text-white"
+                      : "border-white/12 bg-white/[0.045] text-white/84 hover:border-white/22 hover:bg-white/9"
+                  }`}
+                />
+                <SaveEpisodeButton
+                  dramaId={series.id}
+                  episodeIndex={preferredInitialEpisode}
+                  isSignedIn={Boolean(user)}
+                  initialSaved={Boolean(initialSavedEpisode)}
+                  redirectTo={detailHref}
                 />
                 <DramaDetailShareButton
                   title={series.title}
                   shareUrl={shareUrl}
                   telegramShareUrl={telegramShareUrl}
+                  compact
+                  iconOnly
+                  className="h-12 w-12 rounded-xl border border-white/12 bg-white/[0.045] px-0 text-white/84 hover:border-white/22 hover:bg-white/9 sm:h-14 sm:w-14"
                 />
               </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[1.35rem] border border-white/10 bg-black/20 p-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                    Episode siap
-                  </p>
-                  <p className="mt-2 text-2xl font-semibold text-white">
-                    {series.episodes.length}
-                  </p>
-                </div>
-                <div className="rounded-[1.35rem] border border-white/10 bg-black/20 p-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                    Lanjut nonton
-                  </p>
-                  <p className="mt-2 text-2xl font-semibold text-white">
-                    EP.{preferredInitialEpisode}
-                  </p>
-                </div>
-              </div>
-
-              {series.tags.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {series.tags.map((tag) => (
-                    <Badge key={tag} variant="secondary">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
-
-          <Card className="glass-panel rounded-[2rem] border-white/10">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-accent">
-                  <Layers3 className="size-5" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-semibold text-white">Daftar episode</h2>
-                  <p className="text-sm text-[var(--muted)]">
-                    Episode VIP akan terkunci sesuai aturan akunmu.
-                  </p>
-                </div>
-              </div>
-              <div className="mt-5 grid grid-cols-4 gap-3 sm:grid-cols-5 lg:grid-cols-4 xl:grid-cols-5">
-                {Array.from({ length: episodeTotal }).map((_, index) => {
-                  const episode = index + 1;
-                  const isLocked = isEpisodeVipLocked(episode, vipLockFromEpisode);
-                  const episodePlayHref = `/watch/${series.id}/play?episode=${episode}`;
-                  const episodeHref = isLocked
-                    ? `/vip?next=${encodeURIComponent(episodePlayHref)}`
-                    : episodePlayHref;
-
-                  return (
-                    <EpisodeGridLink
-                      key={episode}
-                      href={episodeHref}
-                      episode={episode}
-                      locked={isLocked}
-                      isResume={episode === preferredInitialEpisode}
-                    />
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-
-          {relatedSeries.length > 0 ? (
-            <Card className="glass-panel rounded-[2rem] border-white/10">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-accent">
-                    <Sparkles className="size-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-semibold text-white">Drama serupa</h2>
-                    
-                  </div>
-                </div>
-                <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3">
-                  {relatedSeries.map((item) => (
-                    <DramaCard
-                      key={item.id}
-                      href={`/watch/${item.id}`}
-                      title={item.title}
-                      thumbUrl={item.coverUrl}
-                      providerName={item.platform.name}
-                      episodeCount={item.chapterCount}
-                      extraMeta={item.tags.slice(0, 2).join(" • ") || item.playCount}
-                    />
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          ) : null}
+            </div>
+          </div>
         </div>
       </section>
+
+      {admin ? (
+        <section className="mx-auto w-full max-w-7xl px-3 pb-5 sm:px-4 lg:px-8">
+          <DramaDetailAdminDownloadPanel
+            dramaId={series.id}
+            episodeTotal={episodeTotal}
+            initialEpisode={preferredInitialEpisode}
+            className="w-full"
+          />
+        </section>
+      ) : null}
+
+      {partnerDownloadBots.length > 0 ? (
+        <section className="mx-auto w-full max-w-7xl px-3 pb-5 sm:px-4 lg:px-8">
+          <PartnerBotDownloadPanel
+            bots={partnerDownloadBots}
+            fixedDrama={{
+              episodeTotal,
+              id: series.id,
+              initialEpisode: preferredInitialEpisode,
+              providerName: series.platformId,
+              thumbUrl: coverUrl,
+              title: series.title,
+            }}
+            title="Download episode partner"
+          />
+        </section>
+      ) : null}
+
+      <section className="mx-auto w-full max-w-7xl px-3 pb-2 sm:px-4 lg:px-8">
+        <div className="relative overflow-hidden rounded-[1.15rem] border border-cyan-300/10 bg-[#061021]/92 px-4 py-4 shadow-[0_20px_70px_rgba(0,0,0,0.34)] sm:px-6 lg:px-7">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_13%_45%,rgba(24,173,255,0.18),transparent_27%),linear-gradient(90deg,rgba(255,255,255,0.04),transparent_45%)]" />
+          <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="mt-0.5 inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-cyan-400/15 text-cyan-300 ring-1 ring-cyan-300/20">
+                <Send className="size-5" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold text-white">
+                  Lebih Seru di Telegram!
+                </h2>
+                <p className="mt-1 text-xs text-white/52">
+                  Pengalaman nonton terbaik langsung dari chat dan Mini App.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-[11px] text-white/45">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Zap className="size-3.5 text-cyan-300/80" />
+                    Lebih cepat & ringan
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Bell className="size-3.5 text-cyan-300/80" />
+                    Notifikasi episode baru
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <MessageCircle className="size-3.5 text-cyan-300/80" />
+                    Langsung dari chat
+                  </span>
+                </div>
+              </div>
+            </div>
+            <a
+              href={telegramOpenUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-cyan-400 px-5 text-sm font-semibold text-[#03111a] shadow-[0_16px_34px_rgba(34,211,238,0.22)] transition hover:brightness-110"
+            >
+              <Send className="size-4" />
+              Buka di Telegram
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto w-full max-w-7xl px-3 pb-8 pt-4 sm:px-4 lg:px-8 lg:pb-10">
+        <div className="rounded-[1.1rem] border border-white/8 bg-[#211827] px-4 py-5 shadow-[0_18px_60px_rgba(0,0,0,0.28)] sm:px-5 lg:px-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">
+              Daftar Episode
+            </h2>
+            {vipLockFromEpisode ? (
+              <p className="inline-flex items-center gap-2 text-xs font-medium text-amber-200/80">
+                <span className="inline-flex size-5 items-center justify-center rounded-full bg-amber-400 text-[10px] font-bold text-[#21110a]">
+                  P
+                </span>
+                Episode premium mulai dari {vipLockFromEpisode}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="mt-5 grid grid-cols-5 gap-2 sm:grid-cols-8 lg:grid-cols-16">
+            {Array.from({ length: episodeTotal }).map((_, index) => {
+              const episode = index + 1;
+              const isLocked = isEpisodeVipLocked(episode, vipLockFromEpisode);
+              const episodePlayHref = `/watch/${series.id}/play?episode=${episode}`;
+              const lockedEpisodeParams = new URLSearchParams({
+                premiumEpisode: String(episode),
+                premiumTitle: series.title,
+                premiumNext: episodePlayHref,
+              });
+              const episodeHref = isLocked
+                ? `?${lockedEpisodeParams.toString()}`
+                : episodePlayHref;
+
+              return (
+                <EpisodeGridLink
+                  key={episode}
+                  href={episodeHref}
+                  episode={episode}
+                  locked={isLocked}
+                  isResume={episode === preferredInitialEpisode}
+                />
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {relatedSeries.length > 0 ? (
+        <section className="border-t border-white/7 bg-[#060716] px-3 py-7 sm:px-4 lg:px-8 lg:py-8">
+          <div className="mx-auto w-full max-w-7xl">
+            <h2 className="text-base font-semibold tracking-tight text-white sm:text-lg">
+              Kamu Mungkin Suka Ini
+            </h2>
+            <div className="mt-4 grid grid-cols-3 gap-x-3 gap-y-6 sm:grid-cols-4 lg:grid-cols-6 lg:gap-x-5">
+              {relatedSeries.map((item) => (
+                <DramaCard
+                  key={item.id}
+                  href={`/watch/${item.id}`}
+                  title={item.title}
+                  thumbUrl={item.coverUrl}
+                  providerName={item.platform.name}
+                  episodeCount={item.chapterCount}
+                  hideCta
+                  compact
+                  hideCompactMeta
+                />
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <SiteFooter />
     </main>

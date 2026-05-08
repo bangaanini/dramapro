@@ -1,10 +1,17 @@
 "use client";
 
-import { startTransition, useDeferredValue, useEffect, useState } from "react";
-import { LoaderCircle, Search, Sparkles } from "lucide-react";
+import {
+  type FormEvent,
+  startTransition,
+  useDeferredValue,
+  useEffect,
+  useState,
+} from "react";
+import { Film, LoaderCircle, Search, SlidersHorizontal, X } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { DramaCard } from "@/components/drama-card";
-import { Card, CardContent } from "@/components/ui/card";
+import { triggerSelectionHaptic } from "@/lib/haptics";
 
 type SearchResult = {
   id: string;
@@ -29,8 +36,19 @@ const DEFAULT_EMPTY_RESPONSE: SearchResponse = {
   minimumQueryLength: 2,
 };
 
+const POPULAR_SEARCHES = ["Romantis", "Aksi", "Komedi", "Misteri", "Fantasi"];
+
+function buildSearchPath(query: string) {
+  const trimmedQuery = query.trim();
+
+  return trimmedQuery ? `/search?q=${encodeURIComponent(trimmedQuery)}` : "/search";
+}
+
 export function SearchPanel() {
-  const [query, setQuery] = useState("");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlQuery = searchParams.get("q")?.trim().slice(0, 80) ?? "";
+  const [query, setQuery] = useState(urlQuery);
   const [results, setResults] = useState<SearchResponse>(DEFAULT_EMPTY_RESPONSE);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +56,10 @@ export function SearchPanel() {
   const deferredQuery = useDeferredValue(query.trim());
   const canSearch =
     deferredQuery.length >= DEFAULT_EMPTY_RESPONSE.minimumQueryLength;
+
+  useEffect(() => {
+    setQuery(urlQuery);
+  }, [urlQuery]);
 
   useEffect(() => {
     if (!canSearch) {
@@ -54,7 +76,7 @@ export function SearchPanel() {
       searchParams.set("q", deferredQuery);
     }
 
-    searchParams.set("limit", "18");
+    searchParams.set("limit", "24");
     setIsLoading(true);
     setError(null);
 
@@ -97,75 +119,169 @@ export function SearchPanel() {
     return () => controller.abort();
   }, [canSearch, deferredQuery]);
 
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    triggerSelectionHaptic();
+    router.push(buildSearchPath(query), { scroll: false });
+  }
+
+  function clearQuery() {
+    triggerSelectionHaptic();
+    setQuery("");
+    router.replace("/search", { scroll: false });
+  }
+
+  function applyPopularSearch(value: string) {
+    triggerSelectionHaptic();
+    setQuery(value);
+    router.replace(buildSearchPath(value), { scroll: false });
+  }
+
   return (
-    <section id="search" className="mt-4 scroll-mt-24 sm:mt-5">
-      <Card className="glass-panel overflow-hidden rounded-[2rem] border-white/10">
-        <CardContent className="space-y-5 p-6 sm:p-7">
-          <div className="space-y-2">
-            <h2 className="text-2xl font-semibold text-white">
-              Cari judul drama
+    <section
+      id="search"
+      className="relative z-10 mx-auto min-h-[calc(100dvh-5rem)] w-full max-w-[1580px] scroll-mt-24 px-4 pb-14 pt-12 sm:px-6 sm:pt-16 lg:px-10"
+    >
+      <div className="mx-auto max-w-3xl text-center">
+        <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl">
+          Cari Serial
+        </h1>
+        <p className="mt-4 text-sm font-medium text-white/42">
+          Jelajahi koleksi drama premium pilihan kami
+        </p>
+
+        <form
+          onSubmit={handleSubmit}
+          className="mx-auto mt-8 flex h-14 max-w-[620px] items-center gap-3 rounded-[1.05rem] border border-accent/50 bg-[#070b1d]/92 px-4 shadow-[0_0_0_3px_rgba(255,55,55,0.1),0_22px_70px_rgba(255,43,43,0.14)] transition focus-within:border-accent focus-within:shadow-[0_0_0_3px_rgba(255,55,55,0.16),0_24px_74px_rgba(255,43,43,0.2)] sm:h-16 sm:px-5"
+          role="search"
+        >
+          <Search className="size-5 shrink-0 text-accent" />
+          <label htmlFor="search-page-input" className="sr-only">
+            Cari serial
+          </label>
+          <input
+            id="search-page-input"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Cari berdasarkan judul, genre, atau deskripsi..."
+            className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-white outline-none placeholder:text-white/38 sm:text-base"
+            autoComplete="off"
+          />
+          {query ? (
+            <button
+              type="button"
+              onClick={clearQuery}
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-white/42 transition hover:bg-white/8 hover:text-white"
+              aria-label="Hapus pencarian"
+            >
+              <X className="size-4.5" />
+            </button>
+          ) : null}
+          <button
+            type="submit"
+            className="inline-flex h-10 shrink-0 items-center justify-center rounded-[0.8rem] bg-accent px-5 text-sm font-bold text-white shadow-[0_14px_32px_rgba(255,56,56,0.28)] transition hover:brightness-110 active:scale-[0.98] sm:h-11 sm:px-6"
+          >
+            Cari
+          </button>
+        </form>
+
+        <p className="mt-3 text-xs font-medium text-white/34">
+          Ketik minimal {DEFAULT_EMPTY_RESPONSE.minimumQueryLength} karakter untuk mencari
+        </p>
+      </div>
+
+      <div className="mx-auto mt-8 max-w-[960px]">
+        {canSearch ? (
+          <p className="mb-4 text-sm font-semibold text-white/58">
+            <span className="text-accent">{results.total}</span> hasil untuk{" "}
+            <span className="text-white">&quot;{deferredQuery}&quot;</span>
+          </p>
+        ) : null}
+
+        <div className="mb-5 flex flex-wrap items-center gap-2 text-xs text-white/56">
+          <span className="inline-flex h-8 items-center gap-2 rounded-full border border-white/8 bg-white/[0.04] px-3">
+            <SlidersHorizontal className="size-3.5" />
+            Urutkan
+          </span>
+          <span className="inline-flex h-8 items-center rounded-full bg-accent px-3 font-semibold text-white">
+            Relevansi
+          </span>
+          <span className="inline-flex h-8 items-center rounded-full border border-white/8 bg-white/[0.04] px-3 font-semibold text-white/70">
+            Terbaru
+          </span>
+          <span className="inline-flex h-8 items-center rounded-full border border-white/8 bg-white/[0.04] px-3 font-semibold text-white/70">
+            Populer
+          </span>
+        </div>
+
+        {!canSearch ? (
+          <div className="flex min-h-[22rem] flex-col items-center justify-center text-center">
+            <div className="relative">
+              <div className="absolute -inset-5 rounded-full bg-accent/10 blur-2xl" />
+              <div className="relative flex size-24 items-center justify-center rounded-full border border-white/8 bg-white/[0.045] shadow-[0_24px_70px_rgba(0,0,0,0.34)]">
+                <div className="flex size-16 items-center justify-center rounded-full bg-accent/10 text-accent ring-1 ring-accent/14">
+                  <Film className="size-8" />
+                </div>
+              </div>
+            </div>
+            <h2 className="mt-7 text-lg font-semibold text-white">
+              Siap Menjelajah?
             </h2>
-            <p className="text-sm text-[var(--muted)]">
-              Temukan Drama Favoritmu
+            <p className="mt-3 max-w-md text-sm leading-6 text-white/42">
+              Mulai ketik untuk menemukan ribuan drama premium dari China,
+              Amerika, dan seluruh dunia.
+            </p>
+            <p className="mt-6 text-xs font-medium text-white/34">
+              Pencarian populer
+            </p>
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
+              {POPULAR_SEARCHES.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => applyPopularSearch(item)}
+                  className="inline-flex h-8 items-center rounded-full border border-white/8 bg-white/[0.05] px-3 text-xs font-semibold text-white/72 transition hover:border-accent/35 hover:bg-accent/12 hover:text-white"
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : isLoading ? (
+          <div className="flex min-h-[20rem] items-center justify-center gap-3 text-sm font-semibold text-white/70">
+            <LoaderCircle className="size-5 animate-spin text-accent" />
+            Menjalankan pencarian...
+          </div>
+        ) : error ? (
+          <div className="rounded-[1.2rem] border border-red-400/20 bg-red-500/10 px-4 py-4 text-sm text-red-100">
+            {error}
+          </div>
+        ) : results.results.length === 0 ? (
+          <div className="flex min-h-[20rem] flex-col items-center justify-center gap-2 text-center">
+            <p className="font-semibold text-white">Belum ada hasil cocok</p>
+            <p className="text-sm text-white/42">
+              Coba gunakan kata kunci lain.
             </p>
           </div>
-
-          <label className="block space-y-2">
-            <span className="text-sm font-medium text-white">Pencarian</span>
-            <div className="flex items-center gap-3 rounded-[1.4rem] border border-white/10 bg-black/20 px-4 py-3">
-              <Search className="size-4 text-[var(--muted-foreground)]" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Contoh: cinta, CEO, mafia"
-                className="w-full bg-transparent text-sm text-white outline-none placeholder:text-[var(--muted-foreground)]"
+        ) : (
+          <div className="grid grid-cols-3 gap-x-3 gap-y-6 sm:grid-cols-4 lg:grid-cols-6 lg:gap-x-6 lg:gap-y-8">
+            {results.results.map((drama) => (
+              <DramaCard
+                key={drama.id}
+                href={`/watch/${drama.id}`}
+                title={drama.title}
+                thumbUrl={drama.thumbUrl}
+                providerName={drama.providerName}
+                episodeCount={drama.episodeCount}
+                extraMeta={null}
+                hideCta
+                compact
+                hideCompactMeta
               />
-            </div>
-          </label>
-
-          <div className="rounded-[1.5rem] border border-white/10 bg-black/18 p-4">
-            {!canSearch ? (
-              <div className="flex min-h-36 flex-col items-center justify-center gap-3 text-center">
-                <div className="rounded-full border border-white/10 bg-white/5 p-3">
-                  <Sparkles className="size-6 text-accent" />
-                </div>
-                <p className="max-w-md text-sm text-[var(--muted)]">
-                  Masukkan minimal {DEFAULT_EMPTY_RESPONSE.minimumQueryLength} karakter untuk mulai mencari judul drama.
-                </p>
-              </div>
-            ) : isLoading ? (
-              <div className="flex min-h-36 items-center justify-center gap-3 text-sm text-white">
-                <LoaderCircle className="size-4 animate-spin text-accent" />
-                Menjalankan pencarian...
-              </div>
-            ) : error ? (
-              <div className="rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-                {error}
-              </div>
-            ) : results.results.length === 0 ? (
-              <div className="flex min-h-36 flex-col items-center justify-center gap-2 text-center">
-                <p className="font-medium text-white">Belum ada hasil cocok</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
-                  {results.results.map((drama) => (
-                    <DramaCard
-                      key={drama.id}
-                      href={`/watch/${drama.id}`}
-                      title={drama.title}
-                      thumbUrl={drama.thumbUrl}
-                      providerName={drama.providerName}
-                      episodeCount={drama.episodeCount}
-                      extraMeta={drama.tags.slice(0, 2).join(" • ") || drama.playCount}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
+            ))}
           </div>
-        </CardContent>
-      </Card>
+        )}
+      </div>
     </section>
   );
 }

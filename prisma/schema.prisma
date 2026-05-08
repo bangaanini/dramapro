@@ -52,51 +52,84 @@ enum AffiliateWithdrawalStatus {
   paid
 }
 
+enum PushNotificationType {
+  custom
+  drama
+  episode
+  vip
+}
+
+enum PushNotificationAudience {
+  all
+  guest
+  users
+  vip
+  non_vip
+  partner_bot
+  specific_users
+}
+
+enum PushNotificationStatus {
+  draft
+  queued
+  sending
+  sent
+  failed
+  cancelled
+}
+
+enum PushNotificationDeliveryStatus {
+  queued
+  sent
+  failed
+  skipped
+}
+
 model CatalogPlatform {
-  id          String            @id
-  name        String
-  isActive    Boolean           @default(true)
-  isHomepageVisible Boolean     @default(true)
-  languages   CatalogLanguage[]
-  tabs        CatalogTab[]
-  series      CatalogSeries[]
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  id                String            @id
+  name              String
+  isActive          Boolean           @default(true)
+  isHomepageVisible Boolean           @default(true)
+  languages         CatalogLanguage[]
+  tabs              CatalogTab[]
+  series            CatalogSeries[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 }
 
 model CatalogLanguage {
-  id           String            @id @default(uuid()) @db.Uuid
+  id           String          @id @default(uuid()) @db.Uuid
   platformId   String
   code         String
   upstreamCode String?
-  isDefault    Boolean           @default(false)
-  isActive     Boolean           @default(true)
-  platform     CatalogPlatform   @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  isDefault    Boolean         @default(false)
+  isActive     Boolean         @default(true)
+  platform     CatalogPlatform @relation(fields: [platformId], references: [id], onDelete: Cascade)
   tabs         CatalogTab[]
   series       CatalogSeries[]
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
 
   @@unique([platformId, code])
   @@index([platformId, isActive])
 }
 
 model CatalogTab {
-  id            String            @id @default(uuid()) @db.Uuid
+  id            String             @id @default(uuid()) @db.Uuid
   platformId    String
-  languageId    String            @db.Uuid
+  languageId    String             @db.Uuid
   type          String
   name          String
   tabKey        String
   positionIndex Int
   sortOrder     Int
-  isActive      Boolean           @default(true)
-  platform      CatalogPlatform   @relation(fields: [platformId], references: [id], onDelete: Cascade)
-  language      CatalogLanguage   @relation(fields: [languageId], references: [id], onDelete: Cascade)
+  isActive      Boolean            @default(true)
+  platform      CatalogPlatform    @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  language      CatalogLanguage    @relation(fields: [languageId], references: [id], onDelete: Cascade)
   memberships   CatalogTabSeries[]
   syncState     CatalogSyncState?
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
 
   @@unique([languageId, type, positionIndex, sortOrder])
   @@index([platformId, languageId, isActive])
@@ -104,33 +137,35 @@ model CatalogTab {
 }
 
 model CatalogSeries {
-  id                 String                 @id @default(uuid()) @db.Uuid
-  platformId         String
-  languageId         String                 @db.Uuid
-  upstreamSeriesId   String
-  title              String
-  description        String                 @default("")
-  coverUrl           String                 @default("")
-  chapterCount       Int                    @default(0)
-  playCount          String                 @default("")
-  tags               String[]               @default([])
-  lastDetailSyncedAt DateTime?
-  isHomepageVisible  Boolean                @default(true)
+  id                   String                  @id @default(uuid()) @db.Uuid
+  platformId           String
+  languageId           String                  @db.Uuid
+  upstreamSeriesId     String
+  title                String
+  description          String                  @default("")
+  coverUrl             String                  @default("")
+  chapterCount         Int                     @default(0)
+  playCount            String                  @default("")
+  tags                 String[]                @default([])
+  lastDetailSyncedAt   DateTime?
+  isHomepageVisible    Boolean                 @default(true)
   homepageHiddenReason String?
-  catalogSource      String                 @default("streamapi")
-  providerRawPayload Json?                  @db.JsonB
-  platform           CatalogPlatform        @relation(fields: [platformId], references: [id], onDelete: Cascade)
-  language           CatalogLanguage        @relation(fields: [languageId], references: [id], onDelete: Cascade)
-  tabMemberships     CatalogTabSeries[]
-  episodes           CatalogEpisode[]
-  syncState          CatalogSyncState?
-  favorites          FavoriteDrama[]
-  savedEpisodes      SavedEpisode[]
-  watchHistory       WatchHistory[]
-  channelBroadcasts  DramaChannelBroadcast[]
-  promoDownloadJobs  PromoDownloadJob[]
-  createdAt          DateTime               @default(now())
-  updatedAt          DateTime               @updatedAt
+  catalogSource        String                  @default("streamapi")
+  providerRawPayload   Json?                   @db.JsonB
+  platform             CatalogPlatform         @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  language             CatalogLanguage         @relation(fields: [languageId], references: [id], onDelete: Cascade)
+  tabMemberships       CatalogTabSeries[]
+  episodes             CatalogEpisode[]
+  syncState            CatalogSyncState?
+  favorites            FavoriteDrama[]
+  savedEpisodes        SavedEpisode[]
+  watchHistory         WatchHistory[]
+  analyticsEvents      AnalyticsEvent[]
+  channelBroadcasts    DramaChannelBroadcast[]
+  promoDownloadJobs    PromoDownloadJob[]
+  partnerBotDownloads  PartnerBotDownloadLog[]
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
 
   @@unique([platformId, languageId, upstreamSeriesId])
   @@index([platformId, languageId, updatedAt])
@@ -156,24 +191,24 @@ model CatalogTabSeries {
 }
 
 model CatalogEpisode {
-  id           String        @id @default(uuid()) @db.Uuid
-  seriesId     String        @db.Uuid
-  episodeIndex Int
-  episodeLabel String        @default("")
-  videoUrl     String        @default("")
-  quality      Int?
-  subtitles    Json?         @db.JsonB
-  upstreamEpisodeId String?
-  isLocked     Boolean       @default(false)
-  sourceType   String?
-  playbackSources Json?      @db.JsonB
-  playbackSubtitles Json?    @db.JsonB
-  playbackExpiresAt DateTime?
-  providerRawPayload Json?   @db.JsonB
-  checksum     String        @default("")
-  series       CatalogSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id                 String        @id @default(uuid()) @db.Uuid
+  seriesId           String        @db.Uuid
+  episodeIndex       Int
+  episodeLabel       String        @default("")
+  videoUrl           String        @default("")
+  quality            Int?
+  subtitles          Json?         @db.JsonB
+  upstreamEpisodeId  String?
+  isLocked           Boolean       @default(false)
+  sourceType         String?
+  playbackSources    Json?         @db.JsonB
+  playbackSubtitles  Json?         @db.JsonB
+  playbackExpiresAt  DateTime?
+  providerRawPayload Json?         @db.JsonB
+  checksum           String        @default("")
+  series             CatalogSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   @@unique([seriesId, episodeIndex])
   @@index([seriesId, updatedAt])
@@ -181,51 +216,51 @@ model CatalogEpisode {
 }
 
 model CatalogSyncState {
-  id             String            @id @default(uuid()) @db.Uuid
-  scope          CatalogSyncScope
-  status         CatalogSyncStatus @default(pending)
-  tabId          String?           @unique @db.Uuid
-  seriesId       String?           @unique @db.Uuid
-  lastPageInfo   Json?             @db.JsonB
-  hasMore        Boolean           @default(false)
-  lastSyncedAt   DateTime?
-  lastError      String            @default("")
-  tab            CatalogTab?       @relation(fields: [tabId], references: [id], onDelete: Cascade)
-  series         CatalogSeries?    @relation(fields: [seriesId], references: [id], onDelete: Cascade)
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  id           String            @id @default(uuid()) @db.Uuid
+  scope        CatalogSyncScope
+  status       CatalogSyncStatus @default(pending)
+  tabId        String?           @unique @db.Uuid
+  seriesId     String?           @unique @db.Uuid
+  lastPageInfo Json?             @db.JsonB
+  hasMore      Boolean           @default(false)
+  lastSyncedAt DateTime?
+  lastError    String            @default("")
+  tab          CatalogTab?       @relation(fields: [tabId], references: [id], onDelete: Cascade)
+  series       CatalogSeries?    @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
 
   @@index([scope, status, updatedAt])
 }
 
 model CatalogSyncJob {
-  id                 String   @id @default(uuid()) @db.Uuid
-  status             String   @default("queued")
-  languageCode       String   @default("id")
-  phase              String   @default("init-platform")
-  platformIndex      Int      @default(0)
-  currentPlatformId  String   @default("")
-  currentTabId       String?  @db.Uuid
-  currentTabName     String   @default("")
-  totalPlatforms     Int      @default(0)
-  completedPlatforms Int      @default(0)
-  totalTabs          Int      @default(0)
-  completedTabs      Int      @default(0)
-  totalTitles        Int      @default(0)
-  totalEpisodes      Int      @default(0)
-  pendingDetails     Int      @default(0)
-  processedDetails   Int      @default(0)
-  errorCount         Int      @default(0)
-  recentErrors       Json?    @db.JsonB
-  recentLogs         Json?    @db.JsonB
-  lastMessage        String   @default("")
+  id                 String    @id @default(uuid()) @db.Uuid
+  status             String    @default("queued")
+  languageCode       String    @default("id")
+  phase              String    @default("init-platform")
+  platformIndex      Int       @default(0)
+  currentPlatformId  String    @default("")
+  currentTabId       String?   @db.Uuid
+  currentTabName     String    @default("")
+  totalPlatforms     Int       @default(0)
+  completedPlatforms Int       @default(0)
+  totalTabs          Int       @default(0)
+  completedTabs      Int       @default(0)
+  totalTitles        Int       @default(0)
+  totalEpisodes      Int       @default(0)
+  pendingDetails     Int       @default(0)
+  processedDetails   Int       @default(0)
+  errorCount         Int       @default(0)
+  recentErrors       Json?     @db.JsonB
+  recentLogs         Json?     @db.JsonB
+  lastMessage        String    @default("")
   runnerId           String?
   leaseExpiresAt     DateTime?
   lastHeartbeatAt    DateTime?
   startedAt          DateTime?
   finishedAt         DateTime?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   @@index([status, updatedAt])
   @@index([status, leaseExpiresAt])
@@ -233,21 +268,21 @@ model CatalogSyncJob {
 }
 
 model ProviderSyncJob {
-  id          String    @id @default(uuid()) @db.Uuid
-  type        String    @default("catalog")
+  id           String    @id @default(uuid()) @db.Uuid
+  type         String    @default("catalog")
   providerCode String
-  status      String    @default("queued")
-  payload     Json?     @db.JsonB
-  priority    Int       @default(50)
-  attempts    Int       @default(0)
-  maxAttempts Int       @default(5)
-  workerId    String?
-  lastError   String    @default("")
-  scheduledAt DateTime  @default(now())
-  startedAt   DateTime?
-  finishedAt  DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  status       String    @default("queued")
+  payload      Json?     @db.JsonB
+  priority     Int       @default(50)
+  attempts     Int       @default(0)
+  maxAttempts  Int       @default(5)
+  workerId     String?
+  lastError    String    @default("")
+  scheduledAt  DateTime  @default(now())
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@index([status, scheduledAt, priority])
   @@index([providerCode, status, createdAt])
@@ -297,13 +332,14 @@ model PromoDownloadJob {
 }
 
 model AdminUser {
-  id           String         @id @default(uuid()) @db.Uuid
-  email        String         @unique
-  name         String
-  passwordHash String
-  sessions     AdminSession[]
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  id                        String                     @id @default(uuid()) @db.Uuid
+  email                     String                     @unique
+  name                      String
+  passwordHash              String
+  sessions                  AdminSession[]
+  pushNotificationCampaigns PushNotificationCampaign[]
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
 }
 
 model AdminSession {
@@ -318,39 +354,45 @@ model AdminSession {
 }
 
 model User {
-  id                            String                @id @default(uuid()) @db.Uuid
-  email                         String?               @unique
-  name                          String
-  authProvider                  UserAuthProvider      @default(local)
-  passwordHash                  String?
-  telegramId                    String?               @unique
-  telegramUsername              String?
-  telegramPhotoUrl              String?
-  telegramFirstName             String?
-  telegramLastName              String?
-  telegramLanguageCode          String?
-  vipStartedAt                  DateTime?
-  vipExpiresAt                  DateTime?
-  affiliateCode                 String?               @unique
+  id                              String                  @id @default(uuid()) @db.Uuid
+  email                           String?                 @unique
+  name                            String
+  authProvider                    UserAuthProvider        @default(local)
+  passwordHash                    String?
+  telegramId                      String?                 @unique
+  telegramUsername                String?
+  telegramPhotoUrl                String?
+  telegramFirstName               String?
+  telegramLastName                String?
+  telegramLanguageCode            String?
+  vipStartedAt                    DateTime?
+  vipExpiresAt                    DateTime?
+  affiliateCode                   String?                 @unique
   affiliateCommissionOverrideRate Int?
-  referredById                  String?               @db.Uuid
-  referredByPartnerBotId        String?               @db.Uuid
-  referredBy                    User?                 @relation("AffiliateReferrals", fields: [referredById], references: [id], onDelete: SetNull)
-  referredByPartnerBot          TelegramPartnerBot?   @relation("PartnerBotReferrals", fields: [referredByPartnerBotId], references: [id], onDelete: SetNull)
-  referrals                     User[]                @relation("AffiliateReferrals")
-  sessions                      UserSession[]
-  favorites                     FavoriteDrama[]
-  savedEpisodes                 SavedEpisode[]
-  watchHistory                  WatchHistory[]
-  vipPayments                   VipPayment[]
-  affiliateCommissions          AffiliateCommission[] @relation("AffiliateOwner")
-  referredAffiliateSales        AffiliateCommission[] @relation("AffiliateReferred")
-  affiliateWithdrawals          AffiliateWithdrawal[]
-  affiliatePayoutProfile        AffiliatePayoutProfile?
-  ownedTelegramPartnerBots      TelegramPartnerBot[]
-  channelBroadcasts             DramaChannelBroadcast[]
-  createdAt                     DateTime              @default(now())
-  updatedAt                     DateTime              @updatedAt
+  referredById                    String?                 @db.Uuid
+  referredByPartnerBotId          String?                 @db.Uuid
+  referredBy                      User?                   @relation("AffiliateReferrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referredByPartnerBot            TelegramPartnerBot?     @relation("PartnerBotReferrals", fields: [referredByPartnerBotId], references: [id], onDelete: SetNull)
+  referrals                       User[]                  @relation("AffiliateReferrals")
+  sessions                        UserSession[]
+  analyticsVisitors               AnalyticsVisitor[]
+  analyticsSessions               AnalyticsSession[]
+  analyticsEvents                 AnalyticsEvent[]
+  favorites                       FavoriteDrama[]
+  savedEpisodes                   SavedEpisode[]
+  watchHistory                    WatchHistory[]
+  vipPayments                     VipPayment[]
+  affiliateCommissions            AffiliateCommission[]   @relation("AffiliateOwner")
+  referredAffiliateSales          AffiliateCommission[]   @relation("AffiliateReferred")
+  affiliateWithdrawals            AffiliateWithdrawal[]
+  affiliatePayoutProfile          AffiliatePayoutProfile?
+  ownedTelegramPartnerBots        TelegramPartnerBot[]
+  channelBroadcasts               DramaChannelBroadcast[]
+  partnerBotDownloadLogs          PartnerBotDownloadLog[]
+  pushSubscriptions               PushSubscription[]
+  pushNotificationDeliveries      PushNotificationDelivery[]
+  createdAt                       DateTime                @default(now())
+  updatedAt                       DateTime                @updatedAt
 
   @@index([referredById, createdAt])
   @@index([referredByPartnerBotId, createdAt])
@@ -365,6 +407,81 @@ model UserSession {
   createdAt DateTime @default(now())
 
   @@index([userId, expiresAt])
+}
+
+model PushSubscription {
+  id            String                     @id @default(uuid()) @db.Uuid
+  endpoint      String                     @unique
+  p256dh        String
+  auth          String
+  userId        String?                    @db.Uuid
+  user          User?                      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userAgent     String                     @default("")
+  deviceLabel   String                     @default("")
+  browserName   String                     @default("")
+  platformName  String                     @default("")
+  isActive      Boolean                    @default(true)
+  lastSeenAt    DateTime                   @default(now())
+  lastSuccessAt DateTime?
+  lastFailureAt DateTime?
+  failureCount  Int                        @default(0)
+  deliveries    PushNotificationDelivery[]
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+
+  @@index([userId, isActive])
+  @@index([isActive, updatedAt])
+}
+
+model PushNotificationCampaign {
+  id                   String                       @id @default(uuid()) @db.Uuid
+  type                 PushNotificationType         @default(custom)
+  audience             PushNotificationAudience     @default(all)
+  status               PushNotificationStatus       @default(draft)
+  title                String
+  body                 String
+  imageUrl             String                       @default("")
+  targetUrl            String                       @default("/")
+  targetPayload        Json?                        @db.JsonB
+  totalTargets         Int                          @default(0)
+  queuedCount          Int                          @default(0)
+  sentCount            Int                          @default(0)
+  failedCount          Int                          @default(0)
+  skippedCount         Int                          @default(0)
+  lastError            String                       @default("")
+  createdByAdminUserId String?                      @db.Uuid
+  createdByAdminUser   AdminUser?                   @relation(fields: [createdByAdminUserId], references: [id], onDelete: SetNull)
+  deliveries           PushNotificationDelivery[]
+  queuedAt             DateTime?
+  startedAt            DateTime?
+  finishedAt           DateTime?
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+
+  @@index([status, createdAt])
+  @@index([audience, createdAt])
+  @@index([createdByAdminUserId, createdAt])
+}
+
+model PushNotificationDelivery {
+  id             String                         @id @default(uuid()) @db.Uuid
+  campaignId     String                         @db.Uuid
+  subscriptionId String                         @db.Uuid
+  userId         String?                        @db.Uuid
+  status         PushNotificationDeliveryStatus @default(queued)
+  error          String                         @default("")
+  attemptedAt    DateTime?
+  sentAt         DateTime?
+  campaign       PushNotificationCampaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  subscription   PushSubscription               @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  user           User?                          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt      DateTime                       @default(now())
+  updatedAt      DateTime                       @updatedAt
+
+  @@unique([campaignId, subscriptionId])
+  @@index([status, createdAt])
+  @@index([subscriptionId, status])
+  @@index([userId, createdAt])
 }
 
 model FavoriteDrama {
@@ -410,6 +527,88 @@ model WatchHistory {
   @@index([seriesId, updatedAt])
 }
 
+model AnalyticsVisitor {
+  id          String             @id @default(uuid()) @db.Uuid
+  tokenHash   String             @unique
+  userId      String?            @db.Uuid
+  firstSource String             @default("web")
+  lastSource  String             @default("web")
+  firstSeenAt DateTime           @default(now())
+  lastSeenAt  DateTime           @default(now())
+  user        User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sessions    AnalyticsSession[]
+  events      AnalyticsEvent[]
+
+  @@index([userId, lastSeenAt])
+  @@index([firstSeenAt])
+  @@index([lastSeenAt])
+  @@index([firstSource, firstSeenAt])
+}
+
+model AnalyticsSession {
+  id             String              @id @default(uuid()) @db.Uuid
+  visitorId      String              @db.Uuid
+  userId         String?             @db.Uuid
+  partnerBotId   String?             @db.Uuid
+  source         String              @default("web")
+  deviceType     String              @default("unknown")
+  osName         String              @default("unknown")
+  browserName    String              @default("unknown")
+  countryCode    String              @default("unknown")
+  pageViewCount  Int                 @default(0)
+  videoPlayCount Int                 @default(0)
+  heartbeatCount Int                 @default(0)
+  isReturning    Boolean             @default(false)
+  startedAt      DateTime            @default(now())
+  lastSeenAt     DateTime            @default(now())
+  visitor        AnalyticsVisitor    @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  user           User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  partnerBot     TelegramPartnerBot? @relation(fields: [partnerBotId], references: [id], onDelete: SetNull)
+  events         AnalyticsEvent[]
+
+  @@index([visitorId, lastSeenAt])
+  @@index([userId, startedAt])
+  @@index([partnerBotId, startedAt])
+  @@index([partnerBotId, lastSeenAt])
+  @@index([lastSeenAt])
+  @@index([startedAt])
+  @@index([source, startedAt])
+  @@index([deviceType, startedAt])
+  @@index([osName, startedAt])
+  @@index([browserName, startedAt])
+  @@index([countryCode, startedAt])
+}
+
+model AnalyticsEvent {
+  id           String              @id @default(uuid()) @db.Uuid
+  dedupeKey    String?             @unique
+  visitorId    String              @db.Uuid
+  sessionId    String              @db.Uuid
+  userId       String?             @db.Uuid
+  partnerBotId String?             @db.Uuid
+  seriesId     String?             @db.Uuid
+  type         String
+  source       String              @default("web")
+  path         String              @default("")
+  episodeIndex Int?
+  meta         Json?               @db.JsonB
+  occurredAt   DateTime            @default(now())
+  visitor      AnalyticsVisitor    @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  session      AnalyticsSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user         User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  partnerBot   TelegramPartnerBot? @relation(fields: [partnerBotId], references: [id], onDelete: SetNull)
+  series       CatalogSeries?      @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+
+  @@index([type, occurredAt])
+  @@index([source, occurredAt])
+  @@index([sessionId, occurredAt])
+  @@index([visitorId, occurredAt])
+  @@index([seriesId, occurredAt])
+  @@index([partnerBotId, occurredAt])
+  @@index([partnerBotId, type, occurredAt])
+  @@index([occurredAt])
+}
+
 model VipSettings {
   id              String   @id @default("global")
   isEnabled       Boolean  @default(false)
@@ -438,65 +637,91 @@ model VipPricePlan {
 }
 
 model PaymentGatewaySettings {
-  id             String                 @id @default("global")
+  id             String                  @id @default("global")
   activeProvider PaymentGatewayProvider?
-  createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
 }
 
 model AppSettings {
-  id                             String   @id @default("global")
-  telegramBotUsername            String   @default("")
-  telegramBotTokenCiphertext     String?
+  id                              String   @id @default("global")
+  telegramBotUsername             String   @default("")
+  telegramBotTokenCiphertext      String?
   telegramWebhookSecretCiphertext String?
-  telegramSupportUrl             String   @default("")
-  telegramMiniAppUrl             String   @default("")
-  telegramDefaultBroadcastChannel String  @default("")
-  telegramBoxOfficeBotUrl        String   @default("")
-  telegramInlineButtons          Json?    @db.JsonB
-  telegramWelcomeMessage         String   @default("")
-  telegramOpenButtonText         String   @default("")
-  telegramOpenButtonUrl          String   @default("")
-  telegramSearchButtonText       String   @default("")
-  telegramSearchButtonUrl        String   @default("")
-  telegramAffiliateButtonText    String   @default("")
-  telegramAffiliateButtonUrl     String   @default("")
-  telegramDramaChannelButtonText String   @default("")
-  telegramDramaChannelUrl        String   @default("")
-  telegramMovieChannelButtonText String   @default("")
-  telegramMovieChannelUrl        String   @default("")
-  telegramSupportButtonText      String   @default("")
-  telegramSupportButtonUrl       String   @default("")
-  telegramVipButtonText          String   @default("")
-  telegramVipButtonUrl           String   @default("")
-  siteUrl                        String   @default("")
-  siteName                       String   @default("")
-  siteDescription                String   @default("")
-  siteLogoUrl                    String   @default("")
-  createdAt                      DateTime @default(now())
-  updatedAt                      DateTime @updatedAt
+  telegramSupportUrl              String   @default("")
+  telegramMiniAppUrl              String   @default("")
+  telegramDefaultBroadcastChannel String   @default("")
+  telegramBoxOfficeBotUrl         String   @default("")
+  telegramAdminIds                String   @default("")
+  telegramAdminUsernames          String   @default("")
+  telegramInlineButtons           Json?    @db.JsonB
+  telegramWelcomeMessage          String   @default("")
+  telegramOpenButtonText          String   @default("")
+  telegramOpenButtonUrl           String   @default("")
+  telegramSearchButtonText        String   @default("")
+  telegramSearchButtonUrl         String   @default("")
+  telegramAffiliateButtonText     String   @default("")
+  telegramAffiliateButtonUrl      String   @default("")
+  telegramDramaChannelButtonText  String   @default("")
+  telegramDramaChannelUrl         String   @default("")
+  telegramMovieChannelButtonText  String   @default("")
+  telegramMovieChannelUrl         String   @default("")
+  telegramSupportButtonText       String   @default("")
+  telegramSupportButtonUrl        String   @default("")
+  telegramVipButtonText           String   @default("")
+  telegramVipButtonUrl            String   @default("")
+  siteUrl                         String   @default("")
+  siteName                        String   @default("")
+  siteDescription                 String   @default("")
+  siteLogoUrl                     String   @default("")
+  createdAt                       DateTime @default(now())
+  updatedAt                       DateTime @updatedAt
 }
 
 model TelegramPartnerBot {
-  id                      String   @id @default(uuid()) @db.Uuid
-  botUsername             String   @unique
+  id                      String                  @id @default(uuid()) @db.Uuid
+  botUsername             String                  @unique
   botTokenCiphertext      String
   webhookSecretCiphertext String?
-  defaultChannelUsername  String   @default("")
-  boxOfficeBotUrl         String   @default("")
-  welcomeMessage          String   @default("")
-  inlineButtons           Json?    @db.JsonB
-  ownerUserId             String   @db.Uuid
-  owner                   User     @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
-  referredUsers           User[]   @relation("PartnerBotReferrals")
+  defaultChannelUsername  String                  @default("")
+  boxOfficeBotUrl         String                  @default("")
+  welcomeMessage          String                  @default("")
+  inlineButtons           Json?                   @db.JsonB
+  ownerUserId             String                  @db.Uuid
+  owner                   User                    @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  referredUsers           User[]                  @relation("PartnerBotReferrals")
   affiliateCommissions    AffiliateCommission[]
+  affiliateWithdrawals    AffiliateWithdrawal[]
+  analyticsSessions       AnalyticsSession[]
+  analyticsEvents         AnalyticsEvent[]
   channelBroadcasts       DramaChannelBroadcast[]
-  isEnabled               Boolean  @default(true)
-  notes                   String   @default("")
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  downloadLogs            PartnerBotDownloadLog[]
+  downloadEnabled         Boolean                 @default(false)
+  downloadDailyLimit      Int                     @default(0)
+  isEnabled               Boolean                 @default(true)
+  notes                   String                  @default("")
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
 
   @@index([ownerUserId, isEnabled])
+}
+
+model PartnerBotDownloadLog {
+  id           String             @id @default(uuid()) @db.Uuid
+  partnerBotId String             @db.Uuid
+  userId       String             @db.Uuid
+  seriesId     String             @db.Uuid
+  episodeIndex Int
+  periodKey    String
+  createdAt    DateTime           @default(now())
+  partnerBot   TelegramPartnerBot @relation(fields: [partnerBotId], references: [id], onDelete: Cascade)
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  series       CatalogSeries      @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+
+  @@unique([partnerBotId, userId, seriesId, episodeIndex, periodKey])
+  @@index([partnerBotId, userId, periodKey])
+  @@index([userId, createdAt])
+  @@index([seriesId, createdAt])
 }
 
 model DramaChannelBroadcast {
@@ -620,6 +845,7 @@ model AffiliateCommission {
 model AffiliateWithdrawal {
   id                      String                    @id @default(uuid()) @db.Uuid
   affiliateUserId         String                    @db.Uuid
+  partnerBotId            String?                   @db.Uuid
   amount                  Int
   status                  AffiliateWithdrawalStatus @default(pending)
   notes                   String                    @default("")
@@ -631,15 +857,17 @@ model AffiliateWithdrawal {
   requestedAt             DateTime                  @default(now())
   reviewedAt              DateTime?
   affiliateUser           User                      @relation(fields: [affiliateUserId], references: [id], onDelete: Cascade)
+  partnerBot              TelegramPartnerBot?       @relation(fields: [partnerBotId], references: [id], onDelete: SetNull)
   createdAt               DateTime                  @default(now())
   updatedAt               DateTime                  @updatedAt
 
   @@index([affiliateUserId, status, createdAt])
+  @@index([partnerBotId, status, createdAt])
 }
 
 model AffiliatePayoutProfile {
   id                String   @id @default(uuid()) @db.Uuid
-  userId            String   @db.Uuid @unique
+  userId            String   @unique @db.Uuid
   accountHolderName String
   bankName          String
   accountNumber     String

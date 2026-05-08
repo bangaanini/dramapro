@@ -3,11 +3,19 @@ import { Suspense } from "react";
 import Script from "next/script";
 import "./globals.css";
 
+import { AnalyticsTracker } from "@/components/analytics-tracker";
+import { AuthModal } from "@/components/auth-modal";
+import { PremiumEpisodeModal } from "@/components/premium-episode-modal";
+import { PremiumModal } from "@/components/premium-modal";
+import { PushNotificationAutoSync } from "@/components/push-notification-auto-sync";
+import { ServiceWorkerRegistration } from "@/components/service-worker-registration";
 import { TelegramMiniAppBridge } from "@/components/telegram-mini-app-bridge";
 import {
   getAppSettings,
   DEFAULT_OG_IMAGE,
 } from "@/lib/app-settings";
+
+const PWA_APP_NAME = "Layar Drama";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -24,7 +32,12 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     metadataBase: new URL(site.url),
-    applicationName: site.name,
+    applicationName: PWA_APP_NAME,
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: "black-translucent",
+      title: PWA_APP_NAME,
+    },
     title: {
       default: site.title,
       template: `%s | ${site.name}`,
@@ -54,6 +67,12 @@ export async function generateMetadata(): Promise<Metadata> {
         { url: "/favicon_io/favicon-32x32.png", sizes: "32x32", type: "image/png" },
       ],
       apple: [{ url: "/favicon_io/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+      other: [
+        {
+          rel: "apple-touch-icon",
+          url: "/pwa-icon-192.png",
+        },
+      ],
       shortcut: ["/favicon_io/favicon.ico"],
     },
     robots: {
@@ -107,6 +126,20 @@ export default function RootLayout({
         <Suspense fallback={null}>
           <TelegramMiniAppBridge />
         </Suspense>
+        <Suspense fallback={null}>
+          <AnalyticsTracker />
+        </Suspense>
+        <Suspense fallback={null}>
+          <AuthModal />
+        </Suspense>
+        <Suspense fallback={null}>
+          <PremiumEpisodeModal />
+        </Suspense>
+        <Suspense fallback={null}>
+          <PremiumModal />
+        </Suspense>
+        <ServiceWorkerRegistration />
+        <PushNotificationAutoSync />
         {children}
       </body>
     </html>

@@ -11,6 +11,7 @@ type DramaDetailShareButtonProps = {
   shareUrl: string;
   telegramShareUrl?: string | null;
   compact?: boolean;
+  iconOnly?: boolean;
   className?: string;
 };
 
@@ -24,6 +25,7 @@ export function DramaDetailShareButton({
   shareUrl,
   telegramShareUrl,
   compact = false,
+  iconOnly = false,
   className,
 }: DramaDetailShareButtonProps) {
   const [state, setState] = useState<"idle" | "sharing" | "copied">("idle");
@@ -82,13 +84,41 @@ export function DramaDetailShareButton({
       aria-label={state === "copied" ? "Link tersalin" : "Bagikan drama"}
     >
       {state === "sharing" ? (
-        <LoaderCircle className={compact ? "size-4 animate-spin sm:mr-2" : "mr-2 size-4 animate-spin"} />
+        <LoaderCircle
+          className={
+            iconOnly
+              ? "size-5 animate-spin"
+              : compact
+                ? "size-4 animate-spin sm:mr-2"
+                : "mr-2 size-4 animate-spin"
+          }
+        />
       ) : state === "copied" ? (
-        <Check className={compact ? "size-4 sm:mr-2" : "mr-2 size-4"} />
+        <Check
+          className={
+            iconOnly
+              ? "size-5"
+              : compact
+                ? "size-4 sm:mr-2"
+                : "mr-2 size-4"
+          }
+        />
       ) : (
-        <Share2 className={compact ? "size-4 sm:mr-2" : "mr-2 size-4"} />
+        <Share2
+          className={
+            iconOnly
+              ? "size-5"
+              : compact
+                ? "size-4 sm:mr-2"
+                : "mr-2 size-4"
+          }
+        />
       )}
-      <span className={compact ? "sr-only sm:not-sr-only" : undefined}>
+      <span
+        className={
+          iconOnly ? "sr-only" : compact ? "sr-only sm:not-sr-only" : undefined
+        }
+      >
         {state === "copied" ? "Link tersalin" : "Bagikan"}
       </span>
     </Button>

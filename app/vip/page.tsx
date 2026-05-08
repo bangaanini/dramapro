@@ -1,15 +1,10 @@
 import QRCode from "qrcode";
-import {
-  Crown,
-  Gem,
-  ShieldCheck,
-} from "lucide-react";
+import Link from "next/link";
+import { Crown, X } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { VipCheckoutPanel } from "@/components/vip-checkout-panel";
 import { VipPaymentSelector } from "@/components/vip-payment-selector";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   extractPaymenkuPaymentDetailsFromPayloads,
   getPaymenkuCheckoutChannels,
@@ -28,6 +23,8 @@ export default async function VipPage(props: PageProps<"/vip">) {
     typeof searchParams.error === "string" ? searchParams.error : null;
   const checkoutReferenceId =
     typeof searchParams.checkout === "string" ? searchParams.checkout : null;
+  const selectedPlanId =
+    typeof searchParams.plan === "string" ? searchParams.plan : null;
   const next = resolveSafeRedirectPath(
     typeof searchParams.next === "string" ? searchParams.next : "/vip",
   );
@@ -81,70 +78,56 @@ export default async function VipPage(props: PageProps<"/vip">) {
 
   const userHasVip = isVipActive(user?.vipExpiresAt);
   return (
-    <main className="route-transition-shell mx-auto flex h-[100dvh] w-full max-w-6xl flex-col overflow-hidden px-4 pb-4 pt-3 sm:px-6 sm:pb-6 sm:pt-5 lg:px-8">
-      <section className="relative shrink-0 overflow-hidden rounded-[2rem] border border-amber-400/10 bg-[linear-gradient(180deg,#17110b_0%,#120d09_55%,#0f0a08_100%)] px-5 py-5 sm:px-7 sm:py-6">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,178,42,0.14),transparent_34%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_right,rgba(255,122,69,0.12),transparent_28%)]" />
+    <main className="route-transition-shell relative min-h-screen overflow-hidden bg-[#020205] text-white">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_8%,rgba(255,66,74,0.16),transparent_30%),radial-gradient(circle_at_92%_32%,rgba(50,92,255,0.15),transparent_28%),linear-gradient(180deg,#030412_0%,#020205_72%)]" />
+      <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/72 to-transparent" />
 
-        <div className="relative mx-auto max-w-5xl text-center">
-          <Badge className="border-amber-400/20 bg-amber-500/10 px-4 py-1.5 text-amber-200">
-            <Gem className="mr-2 size-3.5" />
-            Premium membership
-          </Badge>
+      <section className="relative z-10 flex min-h-screen items-center justify-center px-4 py-5 sm:px-6">
+        <div className="w-full max-w-[560px]">
+          {error ? (
+            <div className="mb-3 rounded-[1.1rem] border border-red-400/18 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-100 shadow-[0_18px_52px_rgba(0,0,0,0.28)]">
+              {error}
+            </div>
+          ) : null}
 
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
-            {userHasVip ? (
-              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-100">
-                <ShieldCheck className="size-4 text-emerald-300" />
-                VIP aktif sampai{" "}
-                {user?.vipExpiresAt
-                  ? new Intl.DateTimeFormat("id-ID", {
-                      dateStyle: "medium",
-                    }).format(user.vipExpiresAt)
-                  : "-"}
+          {plans.length > 0 ? (
+            <VipPaymentSelector
+              plans={plans.map((plan) => ({
+                id: plan.id,
+                name: plan.name,
+                description: plan.description,
+                badgeText: plan.badgeText,
+                badgeColor: plan.badgeColor,
+                durationDays: plan.durationDays,
+                priceAmount: plan.priceAmount,
+                currency: plan.currency,
+              }))}
+              next={next}
+              userHasVip={userHasVip}
+              initialPlanId={selectedPlanId}
+              channels={availableChannels}
+            />
+          ) : (
+            <div className="relative overflow-hidden rounded-[1.55rem] border border-white/10 bg-[#050719]/98 px-5 py-8 text-center shadow-[0_28px_90px_rgba(0,0,0,0.62)] backdrop-blur-2xl sm:rounded-[1.8rem] sm:px-8">
+              <Link
+                href={next}
+                className="absolute left-4 top-4 inline-flex size-9 items-center justify-center rounded-full border border-white/8 bg-white/[0.025] text-white/48 transition hover:bg-white/8 hover:text-white"
+                aria-label="Tutup halaman VIP"
+              >
+                <X className="size-5" />
+              </Link>
+              <div className="mx-auto flex size-[4.5rem] items-center justify-center rounded-full bg-red-500/12 text-red-300 shadow-[0_0_46px_rgba(255,55,71,0.26)] ring-1 ring-red-400/10">
+                <Crown className="size-9" strokeWidth={2.4} />
               </div>
-            ) : null}
-          </div>
-
-        </div>
-      </section>
-
-      <section className="mt-4 flex min-h-0 flex-1 flex-col">
-        {error ? (
-          <div className="mb-3 shrink-0 rounded-[1.6rem] border border-red-400/20 bg-red-500/10 px-5 py-4 text-sm text-red-100">
-            {error}
-          </div>
-        ) : null}
-
-        {plans.length > 0 ? (
-          <VipPaymentSelector
-            plans={plans.map((plan) => ({
-              id: plan.id,
-              name: plan.name,
-              description: plan.description,
-              badgeText: plan.badgeText,
-              badgeColor: plan.badgeColor,
-              durationDays: plan.durationDays,
-              priceAmount: plan.priceAmount,
-              currency: plan.currency,
-            }))}
-            next={next}
-            userHasVip={userHasVip}
-            channels={availableChannels}
-          />
-        ) : (
-          <Card className="glass-panel col-span-full rounded-[2rem] border-white/10">
-            <CardContent className="space-y-4 p-8 text-center">
-              <Badge className="mx-auto border-amber-400/20 bg-amber-500/10 text-amber-200">
-                <Crown className="mr-2 size-3.5" />
+              <h1 className="mt-5 text-2xl font-semibold text-white">
                 Paket VIP belum tersedia
-              </Badge>
-              <h2 className="text-xl font-semibold text-white">
-                Admin belum menambahkan paket VIP
-              </h2>
-            </CardContent>
-          </Card>
-        )}
+              </h1>
+              <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-white/52">
+                Admin belum menambahkan paket VIP. Silakan cek kembali nanti.
+              </p>
+            </div>
+          )}
+        </div>
       </section>
 
       {resolvedCheckoutPayment && paymenkuDetails ? (

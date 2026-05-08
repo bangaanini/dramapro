@@ -23,6 +23,7 @@ type DramaCardProps = {
   hideCta?: boolean;
   compact?: boolean;
   cornerLabel?: string | null;
+  hideCompactMeta?: boolean;
 };
 
 export function DramaCard({
@@ -35,6 +36,7 @@ export function DramaCard({
   hideCta = false,
   compact = false,
   cornerLabel,
+  hideCompactMeta = false,
 }: DramaCardProps) {
   const router = useRouter();
   const displayThumbUrl = normalizeDisplayImageUrl(thumbUrl);
@@ -56,8 +58,8 @@ export function DramaCard({
         }}
         className="group block"
       >
-        <article className="overflow-hidden rounded-[1rem] border border-white/8 bg-[linear-gradient(180deg,rgba(34,22,20,0.96),rgba(14,10,10,0.98))] shadow-[0_14px_36px_rgba(0,0,0,0.26)] transition duration-300 active:scale-[0.985] hover:-translate-y-0.5 hover:border-accent/28">
-          <div className="relative aspect-[0.74] overflow-hidden bg-white/5">
+        <article className="transition duration-300 active:scale-[0.985] hover:-translate-y-0.5">
+          <div className="relative aspect-[3/4] overflow-hidden rounded-[0.65rem] bg-white/5 shadow-[0_14px_32px_rgba(0,0,0,0.26)] ring-1 ring-white/8">
             {displayThumbUrl ? (
               <Image
                 src={displayThumbUrl}
@@ -73,8 +75,6 @@ export function DramaCard({
               </div>
             )}
 
-            <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black via-black/62 to-transparent" />
-
             <div className="absolute inset-x-2 top-2 flex items-start justify-between gap-2">
               {cornerLabel ? (
                 <span className="rounded-md bg-[var(--accent)] px-1.5 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-white shadow-[0_10px_20px_rgba(255,122,69,0.3)]">
@@ -84,20 +84,18 @@ export function DramaCard({
                 <span />
               )}
             </div>
-
-            <div className="absolute inset-x-2 bottom-2 space-y-1.5">
-              <h3 className="line-clamp-3 text-[13px] font-semibold leading-4.5 text-white drop-shadow-[0_4px_12px_rgba(0,0,0,0.65)]">
-                {title}
-              </h3>
-              <p className="text-[11px] text-white/78">
-                {episodeCount > 0 ? `${episodeCount} eps` : "Episode belum tersedia"}
+          </div>
+          <div className="px-0.5 pt-2 text-center">
+            <h3 className="line-clamp-2 min-h-[2.45rem] text-[13px] font-semibold leading-5 text-white sm:text-sm">
+              {title}
+            </h3>
+            {!hideCompactMeta && extraMeta ? (
+              <p className="mt-1 line-clamp-1 text-[10px] text-white/54">
+                {extraMeta}
               </p>
-              {extraMeta ? (
-                <p className="line-clamp-1 text-[10px] text-white/68">
-                  {extraMeta}
-                </p>
-              ) : null}
-            </div>
+            ) : !hideCompactMeta && episodeCount > 0 ? (
+              <p className="mt-1 text-[10px] text-white/54">{episodeCount} eps</p>
+            ) : null}
           </div>
         </article>
       </Link>

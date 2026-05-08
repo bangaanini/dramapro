@@ -2,8 +2,13 @@
 
 import { spawn } from "node:child_process";
 import { createServer } from "node:net";
+import nextEnv from "@next/env";
 
 const mode = (process.argv[2] || "dev").trim().toLowerCase();
+const { loadEnvConfig } = nextEnv;
+
+loadEnvConfig(process.cwd(), mode === "dev");
+
 const appPort = (process.env.PORT || "3000").trim();
 const appBaseUrl =
   process.env.WORKER_BASE_URL?.trim() || `http://127.0.0.1:${appPort}`;
@@ -29,6 +34,12 @@ function createServices(currentMode) {
         command: "npm",
         args: ["run", "worker:promo-download"],
       },
+      {
+        name: "push-worker",
+        color: "\x1b[32m",
+        command: "npm",
+        args: ["run", "worker:push-notifications"],
+      },
     ];
   }
 
@@ -52,6 +63,12 @@ function createServices(currentMode) {
         command: "npm",
         args: ["run", "worker:promo-download"],
       },
+      {
+        name: "push-worker",
+        color: "\x1b[32m",
+        command: "npm",
+        args: ["run", "worker:push-notifications"],
+      },
     ];
   }
 
@@ -69,6 +86,8 @@ if (!services) {
 const reset = "\x1b[0m";
 const children = [];
 let exiting = false;
+let shutdownExitCode = 0;
+let shutdownTimer = null;
 
 function prefixOutput(name, color, chunk) {
   const lines = chunk.toString().split(/\r?\n/u);
@@ -117,18 +136,35 @@ async function assertPortAvailable(port) {
   });
 }
 
-function shutdown(signal = "SIGTERM") {
+function allChildrenExited() {
+  return children.every(
+    (child) => child.exitCode !== null || child.signalCode !== null,
+  );
+}
+
+function shutdown(signal = "SIGTERM", exitCode = 0) {
   if (exiting) {
     return;
   }
 
   exiting = true;
+  shutdownExitCode = exitCode;
 
   for (const child of children) {
-    if (!child.killed) {
+    if (child.exitCode === null && child.signalCode === null && !child.killed) {
       child.kill(signal);
     }
   }
+
+  shutdownTimer = setTimeout(() => {
+    for (const child of children) {
+      if (child.exitCode === null && child.signalCode === null && !child.killed) {
+        child.kill("SIGKILL");
+      }
+    }
+
+    process.exit(shutdownExitCode);
+  }, 5000);
 }
 
 function startService(service) {
@@ -151,8 +187,16 @@ function startService(service) {
       console.error(
         `${service.name} exited ${signal ? `with signal ${signal}` : `with code ${code}`}. Stopping all services.`,
       );
-      shutdown();
-      process.exit(code ?? 1);
+      shutdown("SIGTERM", code ?? 1);
+      return;
+    }
+
+    if (allChildrenExited()) {
+      if (shutdownTimer) {
+        clearTimeout(shutdownTimer);
+      }
+
+      process.exit(shutdownExitCode);
     }
   });
 
@@ -211,8 +255,8 @@ const appReady = await waitForAppReady();
 
 if (!appReady) {
   console.error(`App tidak siap di ${appBaseUrl} dalam 60 detik. Stopping all services.`);
-  shutdown();
-  process.exit(1);
+  shutdown("SIGTERM", 1);
+  await new Promise(() => {});
 }
 
 for (const workerService of workerServices) {
@@ -220,11 +264,9 @@ for (const workerService of workerServices) {
 }
 
 process.on("SIGINT", () => {
-  shutdown("SIGINT");
-  process.exit(0);
+  shutdown("SIGINT", 0);
 });
 
 process.on("SIGTERM", () => {
-  shutdown("SIGTERM");
-  process.exit(0);
+  shutdown("SIGTERM", 0);
 });

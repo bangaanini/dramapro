@@ -96,7 +96,7 @@ export function buildDefaultDramaChannelBroadcastCaption(input: {
     "",
     "———————————————",
     "💎 AKSES VIP - NONTON SEPUASNYA",
-    "Dapatkan akses ke semua episode premium short drama hanya mulai Rp2.000 per hari.",
+    "Dapatkan akses ke semua episode premium short drama hanya mulai Rp3.000 per hari.",
     VIP_LINK_LABEL,
     "",
     "☎️ BANTUAN & PERTANYAAN",

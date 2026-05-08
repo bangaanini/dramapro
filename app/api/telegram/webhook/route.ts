@@ -7,6 +7,7 @@ import {
   isTelegramWebhookAuthorized,
   sendTelegramMessage,
 } from "@/lib/telegram-bot";
+import { isMainTelegramAdminIdentity } from "@/lib/telegram-admin";
 
 export const runtime = "nodejs";
 
@@ -31,10 +32,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, ignored: true });
   }
 
+  const isMainAdmin = await isMainTelegramAdminIdentity({
+    telegramId: startPayload.telegramUserId,
+    telegramUsername: startPayload.telegramUsername,
+  });
+
   await sendTelegramMessage({
     chat_id: startPayload.chatId,
-    text: await buildTelegramStartMessage(startPayload.firstName),
-    reply_markup: await buildTelegramStartKeyboard(startPayload.referralCode),
+    text: `${await buildTelegramStartMessage(startPayload.firstName)}${
+      isMainAdmin ? "\n\n🔐 Mode admin utama aktif." : ""
+    }`,
+    reply_markup: await buildTelegramStartKeyboard(startPayload.referralCode, {
+      isMainAdmin,
+    }),
   });
 
   return NextResponse.json({ ok: true });

@@ -264,6 +264,130 @@ export async function requestAffiliateWithdrawalAction() {
   redirect("/affiliate?tab=history&success=1");
 }
 
+export async function requestPartnerBotWithdrawalAction(botUsername: string) {
+  const user = await getCurrentUser();
+  const normalizedBotUsername = normalizeTelegramBotUsername(botUsername);
+
+  if (!user) {
+    redirect(
+      `/sign-in?next=${encodeURIComponent(
+        `/affiliate/partner-bot/${normalizedBotUsername}?tab=balance`,
+      )}`,
+    );
+  }
+
+  if (!normalizedBotUsername) {
+    redirect("/affiliate?error=Bot%20partner%20tidak%20valid");
+  }
+
+  const partnerBot = await prisma.telegramPartnerBot.findFirst({
+    where: {
+      botUsername: normalizedBotUsername,
+      ownerUserId: user.id,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!partnerBot) {
+    redirect("/affiliate?error=Bot%20partner%20tidak%20ditemukan");
+  }
+
+  const balancePath = `/affiliate/partner-bot/${normalizedBotUsername}?tab=balance`;
+  const [settings, payoutProfile, commissionTotals, withdrawalGroups] =
+    await Promise.all([
+      getAffiliateSettings(),
+      prisma.affiliatePayoutProfile.findUnique({
+        where: {
+          userId: user.id,
+        },
+      }),
+      prisma.affiliateCommission.groupBy({
+        by: ["status"],
+        where: {
+          affiliateUserId: user.id,
+          partnerBotId: partnerBot.id,
+        },
+        _sum: {
+          amount: true,
+        },
+      }),
+      prisma.affiliateWithdrawal.groupBy({
+        by: ["status"],
+        where: {
+          affiliateUserId: user.id,
+          partnerBotId: partnerBot.id,
+        },
+        _sum: {
+          amount: true,
+        },
+      }),
+    ]);
+
+  const totalCommission = commissionTotals.reduce((sum, item) => {
+    if (item.status === "cancelled") {
+      return sum;
+    }
+
+    return sum + (item._sum.amount ?? 0);
+  }, 0);
+  const totalWithdrawn = withdrawalGroups.reduce((sum, item) => {
+    if (item.status !== "approved" && item.status !== "paid") {
+      return sum;
+    }
+
+    return sum + (item._sum.amount ?? 0);
+  }, 0);
+  const totalReserved = withdrawalGroups.reduce((sum, item) => {
+    if (item.status !== "pending") {
+      return sum;
+    }
+
+    return sum + (item._sum.amount ?? 0);
+  }, 0);
+  const availableBalance = calculateAffiliateAvailableBalance({
+    totalCommission,
+    totalWithdrawn,
+    totalReserved,
+  });
+
+  if (!payoutProfile) {
+    redirect(
+      `/profile/payout-settings?next=${encodeURIComponent(balancePath)}&error=${encodeURIComponent("Lengkapi detail payout default sebelum menarik komisi bot partner.")}`,
+    );
+  }
+
+  if (availableBalance < settings.minimumWithdrawalAmount) {
+    redirect(
+      `${balancePath}&error=${encodeURIComponent(
+        `Saldo bot partner belum mencapai minimum penarikan ${settings.minimumWithdrawalAmount}.`,
+      )}`,
+    );
+  }
+
+  await prisma.affiliateWithdrawal.create({
+    data: {
+      affiliateUserId: user.id,
+      partnerBotId: partnerBot.id,
+      amount: availableBalance,
+      payoutAccountHolderName: payoutProfile.accountHolderName,
+      payoutBankName: payoutProfile.bankName,
+      payoutAccountNumber: payoutProfile.accountNumber,
+      payoutWhatsappNumber: payoutProfile.whatsappNumber,
+      payoutEmail: payoutProfile.payoutEmail,
+      notes: payoutProfile.notes,
+    },
+  });
+
+  revalidatePath("/affiliate");
+  revalidatePath(`/affiliate/partner-bot/${normalizedBotUsername}`);
+  revalidatePath("/admin/affiliate-withdrawals");
+  redirect(
+    `${balancePath}&success=${encodeURIComponent("Request withdrawal bot partner berhasil diajukan.")}`,
+  );
+}
+
 export async function updatePartnerBotPresentationSettingsAction(
   botUsername: string,
   formData: FormData,

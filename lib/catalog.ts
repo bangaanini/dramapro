@@ -147,6 +147,11 @@ export type CatalogProviderTab = {
   seriesCount: number;
 };
 
+export type HomeShowcaseData = {
+  heroEntries: CatalogSeriesCard[];
+  popularEntries: CatalogSeriesCard[];
+};
+
 export type CatalogSyncAllJobPayload = {
   id: string;
   status: string;
@@ -182,6 +187,22 @@ function checksumEpisode(input: {
   videoUrl: string;
 }) {
   return `${input.episodeIndex}:${input.episodeLabel}:${input.videoUrl}`;
+}
+
+function getJakartaDateSeed(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
+  );
+
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
 function isSeriesDetailStale(lastDetailSyncedAt: Date | null) {
@@ -2252,17 +2273,110 @@ export async function getHomeCatalogData() {
   };
 }
 
+async function getSeriesCardsByIds(ids: string[]) {
+  if (ids.length === 0) {
+    return [];
+  }
+
+  const series = await prisma.catalogSeries.findMany({
+    where: {
+      id: { in: ids },
+    },
+    include: {
+      platform: true,
+    },
+  });
+  const seriesById = new Map(series.map((item) => [item.id, item]));
+
+  return ids
+    .map((id) => seriesById.get(id))
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .map((item) => toCatalogSeriesCard(item));
+}
+
+export async function getHomeShowcaseData(): Promise<HomeShowcaseData> {
+  const heroSeed = getJakartaDateSeed();
+  const heroRows = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT s."id"::text
+    FROM "CatalogSeries" s
+    JOIN "CatalogPlatform" p ON p."id" = s."platformId"
+    WHERE ${publicReadySeriesSql()}
+    ORDER BY md5(s."id"::text || ${heroSeed}), s."id"
+    LIMIT 10
+  `);
+  const popularRows = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT s."id"::text
+    FROM "CatalogSeries" s
+    JOIN "CatalogPlatform" p ON p."id" = s."platformId"
+    WHERE ${publicReadySeriesSql()}
+    ORDER BY
+      COALESCE(NULLIF(regexp_replace(s."playCount", '[^0-9]', '', 'g'), '')::bigint, 0) DESC,
+      s."createdAt" DESC,
+      s."id" DESC
+    LIMIT 10
+  `);
+
+  const [heroEntries, popularEntries] = await Promise.all([
+    getSeriesCardsByIds(heroRows.map((row) => row.id)),
+    getSeriesCardsByIds(popularRows.map((row) => row.id)),
+  ]);
+
+  return {
+    heroEntries,
+    popularEntries,
+  };
+}
+
 export async function getCatalogFeedPage(
   offset = 0,
   limit = DEFAULT_HOME_PAGE_SIZE,
   options?: {
     platformId?: string | null;
+    tag?: string | null;
+    sort?: "latest" | "popular" | null;
   },
 ) {
   const safeOffset = Math.max(0, offset);
   const safeLimit = Math.min(Math.max(1, limit), 30);
   const platformId = options?.platformId?.trim() ?? "";
-  const where = publicReadySeriesWhere(platformId);
+  const tag = options?.tag?.trim() ?? "";
+  const sort = options?.sort === "popular" ? "popular" : "latest";
+  const where: Prisma.CatalogSeriesWhereInput = {
+    ...publicReadySeriesWhere(platformId),
+    ...(tag ? { tags: { has: tag } } : {}),
+  };
+
+  if (sort === "popular") {
+    const tagCondition = tag
+      ? Prisma.sql`AND ${tag} = ANY(s."tags")`
+      : Prisma.empty;
+    const [seriesRows, total] = await Promise.all([
+      prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+        SELECT s."id"::text
+        FROM "CatalogSeries" s
+        JOIN "CatalogPlatform" p ON p."id" = s."platformId"
+        WHERE ${publicReadySeriesSql(platformId)}
+        ${tagCondition}
+        ORDER BY
+          COALESCE(NULLIF(regexp_replace(s."playCount", '[^0-9]', '', 'g'), '')::bigint, 0) DESC,
+          s."createdAt" DESC,
+          s."id" DESC
+        OFFSET ${safeOffset}
+        LIMIT ${safeLimit}
+      `),
+      prisma.catalogSeries.count({
+        where,
+      }),
+    ]);
+    const entries = await getSeriesCardsByIds(seriesRows.map((row) => row.id));
+
+    return {
+      entries,
+      total,
+      nextOffset: safeOffset + entries.length,
+      hasMore: safeOffset + entries.length < total,
+    };
+  }
 
   const [seriesEntries, total] = await Promise.all([
     prisma.catalogSeries.findMany({

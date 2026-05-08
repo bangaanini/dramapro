@@ -18,7 +18,9 @@ const adapter = new PrismaPg({
 
 const prismaSchemaSignature = Object.keys(
   Prisma.CatalogSeriesScalarFieldEnum,
-).join("|");
+)
+  .concat(Object.keys(Prisma.PushSubscriptionScalarFieldEnum ?? {}))
+  .join("|");
 
 function createPrismaClient() {
   return new PrismaClient({

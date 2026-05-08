@@ -50,6 +50,11 @@ export default async function AdminSettingsPage(
       ready: Boolean(telegram.miniAppUrl),
       description: "Tempel juga ke pengaturan Mini App di BotFather",
     },
+    {
+      label: "Admin Telegram",
+      ready: telegram.adminIds.length > 0 || telegram.adminUsernames.length > 0,
+      description: "Telegram ID/username yang boleh login admin dari Mini App",
+    },
   ];
 
   const missingTelegramFields = setupChecklist
@@ -223,6 +228,32 @@ export default async function AdminSettingsPage(
                 />
               </div>
 
+              <div className="rounded-[1.4rem] border border-white/10 bg-white/4 p-4">
+                <div className="mb-4">
+                  <p className="text-sm font-semibold text-white">
+                    Admin bot utama
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
+                    Isi Telegram User ID atau username admin agar tombol admin di
+                    Mini App bisa membuat sesi admin otomatis.
+                  </p>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field
+                    label="Telegram admin user ID"
+                    name="telegramAdminIds"
+                    defaultValue={telegram.adminIds.join(", ")}
+                    placeholder="123456789, 987654321"
+                  />
+                  <Field
+                    label="Telegram admin username"
+                    name="telegramAdminUsernames"
+                    defaultValue={telegram.adminUsernames.join(", ")}
+                    placeholder="username_admin, username_owner"
+                  />
+                </div>
+              </div>
+
               <Button type="submit" className="w-full sm:w-fit">
                 Simpan pengaturan bot
               </Button>
@@ -237,6 +268,11 @@ export default async function AdminSettingsPage(
                   `Support: ${telegram.supportUrl}`,
                   `Broadcast channel: ${telegram.defaultBroadcastChannel || "belum diatur"}`,
                   `Box Office: ${telegram.boxOfficeBotUrl || "belum diatur"}`,
+                  `Admin bot: ${
+                    telegram.adminIdentifiers.length > 0
+                      ? telegram.adminIdentifiers.join(", ")
+                      : "belum diatur"
+                  }`,
                   `Webhook: ${telegram.webhookUrl}`,
                   telegram.botUsername
                     ? `Bot link: https://t.me/${telegram.botUsername}`

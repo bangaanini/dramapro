@@ -50,7 +50,9 @@ type TelegramWebhookMessage = {
     };
     text?: string;
     from?: {
+      id?: number;
       first_name?: string;
+      username?: string;
     };
   };
 };
@@ -223,6 +225,7 @@ export async function buildTelegramStartKeyboard(
     botUsername?: string | null;
     inlineButtons?: TelegramInlineButtonConfig[] | null;
     partnerBoxOfficeBotUrl?: string | null;
+    isMainAdmin?: boolean;
   },
 ) {
   const settings = await getTelegramSettings();
@@ -259,6 +262,20 @@ export async function buildTelegramStartKeyboard(
   }
 
   if (rows.length > 0) {
+    if (options?.isMainAdmin) {
+      rows.push([
+        {
+          text: "⚙️ Admin",
+          web_app: {
+            url: absoluteUrlFromSiteUrl(
+              settings.miniAppUrl,
+              "/admin/telegram-login",
+            ),
+          },
+        },
+      ]);
+    }
+
     return {
       inline_keyboard: rows,
     };
@@ -306,6 +323,21 @@ export async function buildTelegramStartKeyboard(
           miniAppOptions,
         ),
       ],
+      ...(options?.isMainAdmin
+        ? [
+            [
+              {
+                text: "⚙️ Admin",
+                web_app: {
+                  url: absoluteUrlFromSiteUrl(
+                    settings.miniAppUrl,
+                    "/admin/telegram-login",
+                  ),
+                },
+              },
+            ],
+          ]
+        : []),
     ],
   };
 }
@@ -480,6 +512,11 @@ export function extractStartMessage(update: TelegramWebhookMessage) {
   return {
     chatId,
     firstName: update.message?.from?.first_name?.trim() || undefined,
+    telegramUserId:
+      typeof update.message?.from?.id === "number"
+        ? String(update.message.from.id)
+        : null,
+    telegramUsername: update.message?.from?.username?.trim() || null,
     referralCode: parseTelegramReferralCode(text),
   };
 }

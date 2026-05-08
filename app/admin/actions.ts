@@ -511,6 +511,14 @@ export async function saveTelegramSettingsAction(formData: FormData) {
     const defaultBroadcastChannel = parseOptionalText(
       formData.get("telegramDefaultBroadcastChannel"),
     );
+    const telegramAdminIds = parseOptionalText(formData.get("telegramAdminIds"));
+    const telegramAdminUsernames = parseOptionalText(
+      formData.get("telegramAdminUsernames"),
+    )
+      .split(/[\s,;]+/u)
+      .map((item) => item.trim().replace(/^@/, "").toLowerCase())
+      .filter(Boolean)
+      .join(", ");
 
     const existing = await prisma.appSettings.findUnique({
       where: { id: "global" },
@@ -543,6 +551,8 @@ export async function saveTelegramSettingsAction(formData: FormData) {
         telegramMiniAppUrl: miniAppUrl,
         telegramDefaultBroadcastChannel: defaultBroadcastChannel,
         telegramBoxOfficeBotUrl: boxOfficeBotUrl,
+        telegramAdminIds,
+        telegramAdminUsernames,
       },
       create: {
         id: "global",
@@ -553,6 +563,8 @@ export async function saveTelegramSettingsAction(formData: FormData) {
         telegramMiniAppUrl: miniAppUrl,
         telegramDefaultBroadcastChannel: defaultBroadcastChannel,
         telegramBoxOfficeBotUrl: boxOfficeBotUrl,
+        telegramAdminIds,
+        telegramAdminUsernames,
       },
     });
   } catch (error) {
@@ -704,6 +716,16 @@ function parseTelegramPartnerBotPayload(formData: FormData) {
   const webhookSecret = String(formData.get("webhookSecret") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
   const isEnabled = String(formData.get("isEnabled") ?? "") === "on";
+  const downloadEnabled =
+    String(formData.get("downloadEnabled") ?? "") === "on";
+  const parsedDownloadDailyLimit = Number.parseInt(
+    String(formData.get("downloadDailyLimit") ?? ""),
+    10,
+  );
+  const downloadDailyLimit =
+    Number.isInteger(parsedDownloadDailyLimit) && parsedDownloadDailyLimit > 0
+      ? Math.min(parsedDownloadDailyLimit, 500)
+      : 0;
 
   return {
     botUsername,
@@ -714,6 +736,8 @@ function parseTelegramPartnerBotPayload(formData: FormData) {
     webhookSecret,
     notes,
     isEnabled,
+    downloadEnabled,
+    downloadDailyLimit,
   };
 }
 
@@ -763,6 +787,8 @@ export async function createTelegramPartnerBotAction(formData: FormData) {
           : null,
         ownerUserId: payload.ownerUserId,
         isEnabled: payload.isEnabled,
+        downloadEnabled: payload.downloadEnabled,
+        downloadDailyLimit: payload.downloadDailyLimit,
         notes: payload.notes,
       },
     });
@@ -829,6 +855,8 @@ export async function updateTelegramPartnerBotAction(formData: FormData) {
           : existing.webhookSecretCiphertext,
         ownerUserId: payload.ownerUserId,
         isEnabled: payload.isEnabled,
+        downloadEnabled: payload.downloadEnabled,
+        downloadDailyLimit: payload.downloadDailyLimit,
         notes: payload.notes,
       },
     });

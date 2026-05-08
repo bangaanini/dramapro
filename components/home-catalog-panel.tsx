@@ -15,6 +15,17 @@ type CatalogHomePayload = {
   };
 };
 
-export function HomeCatalogPanel({ data }: { data: CatalogHomePayload }) {
-  return <HomeCatalogGrid data={data} />;
+type CatalogTag = {
+  value: string;
+  count: number;
+};
+
+export function HomeCatalogPanel({
+  data,
+  tags,
+}: {
+  data: CatalogHomePayload;
+  tags: CatalogTag[];
+}) {
+  return <HomeCatalogGrid data={data} tags={tags} />;
 }

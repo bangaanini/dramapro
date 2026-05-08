@@ -82,6 +82,36 @@ export async function ensureDefaultAdminExists() {
   });
 }
 
+export async function getPrimaryAdminForSession() {
+  await ensureDefaultAdminExists();
+
+  const defaultAdmin = await prisma.adminUser.findUnique({
+    where: {
+      email: getDefaultAdminEmail(),
+    },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+    },
+  });
+
+  if (defaultAdmin) {
+    return defaultAdmin;
+  }
+
+  return prisma.adminUser.findFirstOrThrow({
+    orderBy: {
+      createdAt: "asc",
+    },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+    },
+  });
+}
+
 export async function authenticateAdmin(email: string, password: string) {
   await ensureDefaultAdminExists();
 

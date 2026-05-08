@@ -9,6 +9,8 @@ export async function GET(request: Request) {
   const offset = Number.parseInt(searchParams.get("offset") ?? "0", 10);
   const limit = Number.parseInt(searchParams.get("limit") ?? "18", 10);
   const platform = searchParams.get("platform")?.trim() || null;
+  const tag = searchParams.get("tag")?.trim() || null;
+  const sort = searchParams.get("sort") === "popular" ? "popular" : "latest";
 
   if (!Number.isFinite(offset) || offset < 0) {
     return NextResponse.json(
@@ -24,13 +26,17 @@ export async function GET(request: Request) {
     );
   }
 
-  const payload = await getHomepageFeedPage(offset, limit, platform);
+  const payload = await getHomepageFeedPage(offset, limit, {
+    platformId: platform,
+    tag,
+    sort,
+  });
 
   return NextResponse.json(payload, {
     headers: {
       "Cache-Control":
         "public, max-age=60, s-maxage=300, stale-while-revalidate=86400",
-      "Netlify-Vary": "query=offset|limit|platform",
+      "Netlify-Vary": "query=offset|limit|platform|tag|sort",
     },
   });
 }

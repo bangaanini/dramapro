@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LoaderCircle } from "lucide-react";
-import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { DramaCard } from "@/components/drama-card";
 import { Button } from "@/components/ui/button";
-import type { HomeFeedEntry, HomeProviderTab } from "@/lib/catalog-data";
+import type { HomeFeedEntry } from "@/lib/catalog-data";
+import { isVisibleDisplayTag } from "@/lib/utils";
 
 type FeedState = {
   entries: HomeFeedEntry[];
@@ -26,13 +26,21 @@ type HomeCatalogGridProps = {
       nextOffset: number;
       hasMore: boolean;
     };
-    providerTabs: HomeProviderTab[];
     stats: {
       totalSeries: number;
       totalEpisodes: number;
     };
   };
+  tags: {
+    value: string;
+    count: number;
+  }[];
 };
+
+type CatalogFilter =
+  | { type: "all" }
+  | { type: "popular" }
+  | { type: "tag"; tag: string };
 
 function createInitialFeedState(
   entries: HomeFeedEntry[],
@@ -70,124 +78,77 @@ function appendUniqueFeedEntries(currentEntries: HomeFeedEntry[], nextEntries: H
   return [...currentEntries, ...uniqueNextEntries];
 }
 
-export function HomeCatalogGrid({ data }: HomeCatalogGridProps) {
+function buildFeedUrl(offset: number, filter: CatalogFilter) {
+  const params = new URLSearchParams({
+    limit: "18",
+    offset: String(offset),
+  });
+
+  if (filter.type === "popular") {
+    params.set("sort", "popular");
+  } else if (filter.type === "tag") {
+    params.set("tag", filter.tag);
+  }
+
+  return `/api/catalog/feed?${params.toString()}`;
+}
+
+export function HomeCatalogGrid({ data, tags }: HomeCatalogGridProps) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const providerTabs = useMemo(() => data.providerTabs ?? [], [data.providerTabs]);
-  const requestedProviderId = searchParams.get("provider");
-  const initialProviderId = providerTabs.some(
-    (provider) => provider.id === requestedProviderId,
-  )
-    ? requestedProviderId
-    : null;
-  const [activeProviderId, setActiveProviderId] = useState<string | null>(
-    initialProviderId,
+  const tagFilters = useMemo(
+    () => tags.filter((tag) => isVisibleDisplayTag(tag.value)).slice(0, 18),
+    [tags],
   );
+  const tagValues = useMemo(
+    () => new Set(tagFilters.map((tag) => tag.value)),
+    [tagFilters],
+  );
+  const requestedTag = searchParams.get("tag")?.trim() ?? "";
+  const requestedSort = searchParams.get("sort");
+  const initialFilter = useMemo<CatalogFilter>(
+    () =>
+      requestedTag && tagValues.has(requestedTag)
+        ? { type: "tag", tag: requestedTag }
+        : requestedSort === "popular"
+          ? { type: "popular" }
+          : { type: "all" },
+    [requestedSort, requestedTag, tagValues],
+  );
+  const [activeFilter, setActiveFilter] = useState<CatalogFilter>(initialFilter);
   const [feed, setFeed] = useState<FeedState>(
-    initialProviderId
-      ? {
+    initialFilter.type === "all"
+      ? createInitialFeedState(
+          data.initialFeed.entries,
+          data.initialFeed.total,
+          data.initialFeed.nextOffset,
+          data.initialFeed.hasMore,
+        )
+      : {
           entries: [],
           total: 0,
           nextOffset: 0,
           hasMore: false,
           isLoading: true,
           error: null,
-        }
-      : createInitialFeedState(
-          data.initialFeed.entries,
-          data.initialFeed.total,
-          data.initialFeed.nextOffset,
-          data.initialFeed.hasMore,
-        ),
+        },
   );
-  const initialProviderLoadDoneRef = useRef(!initialProviderId);
   const feedRequestIdRef = useRef(0);
-  const activeProvider = providerTabs.find(
-    (provider) => provider.id === activeProviderId,
-  );
-  const validProviderIds = useMemo(
-    () => new Set(providerTabs.map((provider) => provider.id)),
-    [providerTabs],
-  );
+  const initialLoadDoneRef = useRef(false);
 
-  useEffect(() => {
-    if (!initialProviderId || initialProviderLoadDoneRef.current) {
-      return;
-    }
-
-    initialProviderLoadDoneRef.current = true;
-    const requestId = feedRequestIdRef.current + 1;
-    feedRequestIdRef.current = requestId;
-
-    async function loadInitialProviderFeed() {
-      try {
-        const response = await fetch(buildFeedUrl(0, initialProviderId));
-        const payload = (await response.json()) as Omit<
-          FeedState,
-          "isLoading" | "error"
-        > & {
-          error?: string;
-        };
-
-        if (!response.ok) {
-          throw new Error(payload.error || "Gagal memuat katalog provider.");
-        }
-
-        if (feedRequestIdRef.current !== requestId) {
-          return;
-        }
-
-        setFeed({
-          entries: uniqueFeedEntries(payload.entries),
-          total: payload.total,
-          nextOffset: payload.nextOffset,
-          hasMore: payload.hasMore,
-          isLoading: false,
-          error: null,
-        });
-      } catch (error) {
-        if (feedRequestIdRef.current !== requestId) {
-          return;
-        }
-
-        setFeed({
-          entries: [],
-          total: 0,
-          nextOffset: 0,
-          hasMore: false,
-          isLoading: false,
-          error:
-            error instanceof Error
-              ? error.message
-              : "Gagal memuat katalog provider.",
-        });
-      }
-    }
-
-    void loadInitialProviderFeed();
-  }, [initialProviderId]);
-
-  function buildFeedUrl(offset: number, providerId: string | null) {
-    const params = new URLSearchParams({
-      limit: "18",
-      offset: String(offset),
-    });
-
-    if (providerId) {
-      params.set("platform", providerId);
-    }
-
-    return `/api/catalog/feed?${params.toString()}`;
-  }
-
-  function replaceProviderUrl(providerId: string | null) {
+  const replaceFilterUrl = useCallback((filter: CatalogFilter) => {
     const nextParams = new URLSearchParams(searchParams.toString());
 
-    if (providerId) {
-      nextParams.set("provider", providerId);
-    } else {
-      nextParams.delete("provider");
+    nextParams.delete("provider");
+    nextParams.delete("platform");
+    nextParams.delete("tag");
+    nextParams.delete("sort");
+
+    if (filter.type === "popular") {
+      nextParams.set("sort", "popular");
+    } else if (filter.type === "tag") {
+      nextParams.set("tag", filter.tag);
     }
 
     const query = nextParams.toString();
@@ -195,16 +156,19 @@ export function HomeCatalogGrid({ data }: HomeCatalogGridProps) {
     router.replace(query ? `${pathname}?${query}` : pathname, {
       scroll: false,
     });
-  }
+  }, [pathname, router, searchParams]);
 
-  async function loadFeedForProvider(providerId: string | null) {
-    const safeProviderId =
-      providerId && validProviderIds.has(providerId) ? providerId : null;
+  const loadFeedForFilter = useCallback(async (
+    filter: CatalogFilter,
+    shouldReplaceUrl = true,
+  ) => {
     const requestId = feedRequestIdRef.current + 1;
     feedRequestIdRef.current = requestId;
 
-    setActiveProviderId(safeProviderId);
-    replaceProviderUrl(safeProviderId);
+    setActiveFilter(filter);
+    if (shouldReplaceUrl) {
+      replaceFilterUrl(filter);
+    }
     setFeed({
       entries: [],
       total: 0,
@@ -215,13 +179,13 @@ export function HomeCatalogGrid({ data }: HomeCatalogGridProps) {
     });
 
     try {
-      const response = await fetch(buildFeedUrl(0, safeProviderId));
+      const response = await fetch(buildFeedUrl(0, filter));
       const payload = (await response.json()) as Omit<FeedState, "isLoading" | "error"> & {
         error?: string;
       };
 
       if (!response.ok) {
-        throw new Error(payload.error || "Gagal memuat katalog provider.");
+        throw new Error(payload.error || "Gagal memuat katalog.");
       }
 
       if (feedRequestIdRef.current !== requestId) {
@@ -248,12 +212,22 @@ export function HomeCatalogGrid({ data }: HomeCatalogGridProps) {
         hasMore: false,
         isLoading: false,
         error:
-          error instanceof Error
-            ? error.message
-            : "Gagal memuat katalog provider.",
+          error instanceof Error ? error.message : "Gagal memuat katalog.",
       });
     }
-  }
+  }, [replaceFilterUrl]);
+
+  useEffect(() => {
+    if (initialLoadDoneRef.current) {
+      return;
+    }
+
+    initialLoadDoneRef.current = true;
+
+    if (initialFilter.type !== "all") {
+      void loadFeedForFilter(initialFilter, false);
+    }
+  }, [initialFilter, loadFeedForFilter]);
 
   async function loadMore() {
     if (feed.isLoading || !feed.hasMore) {
@@ -267,7 +241,7 @@ export function HomeCatalogGrid({ data }: HomeCatalogGridProps) {
     }));
 
     try {
-      const response = await fetch(buildFeedUrl(feed.nextOffset, activeProviderId));
+      const response = await fetch(buildFeedUrl(feed.nextOffset, activeFilter));
       const payload = (await response.json()) as Omit<FeedState, "isLoading" | "error"> & {
         error?: string;
       };
@@ -296,67 +270,117 @@ export function HomeCatalogGrid({ data }: HomeCatalogGridProps) {
     }
   }
 
-  const showGlobalEmptyState =
+  const showEmptyState =
     feed.entries.length === 0 &&
     !feed.isLoading &&
-    !feed.error &&
-    !activeProviderId;
-  const showProviderEmptyState =
-    feed.entries.length === 0 &&
-    !feed.isLoading &&
-    !feed.error &&
-    Boolean(activeProviderId);
+    !feed.error;
+  const activeFilterLabel =
+    activeFilter.type === "popular"
+      ? "populer"
+      : activeFilter.type === "tag"
+        ? activeFilter.tag
+        : "";
 
-  if (showGlobalEmptyState) {
+  if (showEmptyState && activeFilter.type === "all") {
     return (
-      <section className="mx-auto mt-5 w-full max-w-7xl px-3 pb-8 sm:mt-6 sm:px-4 lg:px-6">
-        <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] px-6 py-16 text-center text-sm text-[var(--muted)]">
-          Belum ada judul drama di database. Jalankan sinkronisasi katalog dari panel admin.
+      <section className="relative w-full overflow-hidden bg-[linear-gradient(180deg,rgba(8,4,3,0.72)_0%,#090504_8rem,#0b0605_100%)]">
+        <div className="mx-auto mt-5 w-full max-w-[1580px] px-4 pb-8 sm:mt-6 sm:px-6 lg:px-10">
+          <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] px-6 py-16 text-center text-sm text-[var(--muted)]">
+            Belum ada judul drama.
+          </div>
         </div>
       </section>
     );
   }
 
   return (
-    <section className="mx-auto mt-4 w-full max-w-7xl px-3 pb-8 sm:px-4 lg:px-6">
-      <div className="-mx-3 mb-4 overflow-x-auto px-3 pb-2 [scrollbar-width:none] sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6 [&::-webkit-scrollbar]:hidden">
+    <section className="relative w-full overflow-hidden bg-[linear-gradient(180deg,rgba(8,4,3,0.72)_0%,#090504_8rem,#0b0605_100%)]">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[linear-gradient(180deg,rgba(255,255,255,0.018),transparent)]" />
+      <div className="relative mx-auto w-full max-w-[1580px] px-4 pb-14 pt-8 sm:px-6 lg:px-10">
+      <div className="mb-4 px-1">
+        <h2 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">
+          All Series
+        </h2>
+      </div>
+
+      <div className="-mx-4 mb-4 overflow-x-auto px-4 pb-2 [scrollbar-width:none] sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10 [&::-webkit-scrollbar]:hidden">
         <div className="flex min-w-max items-center gap-2">
-          <ProviderTabButton
-            isActive={!activeProviderId}
+          <FilterChip
+            isActive={activeFilter.type === "all"}
             label="Semua"
-            logoUrl="/site-logo.jpg"
             onClick={() => {
-              void loadFeedForProvider(null);
+              void loadFeedForFilter({ type: "all" });
             }}
           />
 
-          {providerTabs.map((provider) => (
-            <ProviderTabButton
-              key={provider.id}
-              isActive={activeProviderId === provider.id}
-              label={provider.name}
-              logoUrl={provider.logoUrl}
+          <FilterChip
+            isActive={activeFilter.type === "popular"}
+            label="Populer"
+            onClick={() => {
+              void loadFeedForFilter({ type: "popular" });
+            }}
+          />
+
+          {tagFilters.map((tag) => (
+            <FilterChip
+              key={tag.value}
+              isActive={
+                activeFilter.type === "tag" && activeFilter.tag === tag.value
+              }
+              label={tag.value}
               onClick={() => {
-                void loadFeedForProvider(provider.id);
+                void loadFeedForFilter({ type: "tag", tag: tag.value });
               }}
             />
           ))}
         </div>
       </div>
 
+      <div className="mb-5 flex flex-wrap items-center gap-2 px-1 text-xs text-white/56">
+        <span className="inline-flex h-8 items-center gap-2 rounded-full border border-white/8 bg-white/[0.04] px-3">
+          Urutkan
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            void loadFeedForFilter({ type: "all" });
+          }}
+          className={
+            activeFilter.type === "all"
+              ? "inline-flex h-8 items-center rounded-full bg-accent px-3 font-semibold text-white"
+              : "inline-flex h-8 items-center rounded-full border border-white/8 bg-white/[0.04] px-3 font-semibold text-white/70"
+          }
+        >
+          Terbaru
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            void loadFeedForFilter({ type: "popular" });
+          }}
+          className={
+            activeFilter.type === "popular"
+              ? "inline-flex h-8 items-center rounded-full bg-accent px-3 font-semibold text-white"
+              : "inline-flex h-8 items-center rounded-full border border-white/8 bg-white/[0.04] px-3 font-semibold text-white/70"
+          }
+        >
+          Populer
+        </button>
+      </div>
+
       {feed.isLoading && feed.entries.length === 0 ? (
         <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] px-6 py-16 text-center text-sm text-[var(--muted)]">
           <span className="inline-flex items-center gap-2">
             <LoaderCircle className="size-4 animate-spin" />
-            Memuat katalog{activeProvider ? ` ${activeProvider.name}` : ""}...
+            Memuat katalog{activeFilterLabel ? ` ${activeFilterLabel}` : ""}...
           </span>
         </div>
-      ) : showProviderEmptyState ? (
+      ) : showEmptyState ? (
         <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] px-6 py-16 text-center text-sm text-[var(--muted)]">
-          Belum ada drama dari provider ini.
+          Belum ada drama untuk filter ini.
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+        <div className="grid grid-cols-3 gap-x-3 gap-y-6 sm:grid-cols-4 lg:grid-cols-6 lg:gap-x-6 lg:gap-y-8">
           {feed.entries.map((entry) => (
             <DramaCard
               key={entry.id}
@@ -368,6 +392,7 @@ export function HomeCatalogGrid({ data }: HomeCatalogGridProps) {
               extraMeta={null}
               hideCta
               compact
+              hideCompactMeta
             />
           ))}
         </div>
@@ -380,7 +405,7 @@ export function HomeCatalogGrid({ data }: HomeCatalogGridProps) {
       ) : null}
 
       {feed.hasMore ? (
-        <div className="mt-5 flex justify-center">
+        <div className="mt-6 flex justify-center">
           <Button
             type="button"
             variant="secondary"
@@ -402,19 +427,18 @@ export function HomeCatalogGrid({ data }: HomeCatalogGridProps) {
           </Button>
         </div>
       ) : null}
+      </div>
     </section>
   );
 }
 
-function ProviderTabButton({
+function FilterChip({
   isActive,
   label,
-  logoUrl,
   onClick,
 }: {
   isActive: boolean;
   label: string;
-  logoUrl?: string | null;
   onClick: () => void;
 }) {
   return (
@@ -423,25 +447,10 @@ function ProviderTabButton({
       onClick={onClick}
       className={
         isActive
-          ? "inline-flex h-12 items-center gap-2 rounded-full border border-accent/50 bg-accent px-3.5 text-sm font-semibold text-white shadow-[0_16px_34px_rgba(255,122,69,0.28)]"
-          : "inline-flex h-12 items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-3.5 text-sm font-semibold text-white/82 transition hover:border-accent/35 hover:bg-white/[0.075]"
+          ? "inline-flex h-10 items-center gap-2 rounded-full border border-accent/50 bg-accent px-3.5 text-xs font-semibold text-white shadow-[0_16px_34px_rgba(255,122,69,0.28)] sm:h-11 sm:text-sm"
+          : "inline-flex h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-3.5 text-xs font-semibold text-white/82 transition hover:border-accent/35 hover:bg-white/[0.075] sm:h-11 sm:text-sm"
       }
     >
-      {logoUrl ? (
-        <span className="flex size-8 items-center justify-center overflow-hidden rounded-full bg-white">
-          <Image
-            src={logoUrl}
-            alt=""
-            width={32}
-            height={32}
-            className="max-h-full max-w-full object-contain"
-          />
-        </span>
-      ) : (
-        <span className="flex size-8 items-center justify-center rounded-full bg-black/25 text-xs uppercase text-white">
-          {label.slice(0, 2)}
-        </span>
-      )}
       <span>{label}</span>
     </button>
   );

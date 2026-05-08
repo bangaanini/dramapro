@@ -85,5 +85,29 @@ module.exports = {
         NODE_ENV: "production",
       },
     },
+    {
+      name: "layardrama-push-notifications",
+      cwd: projectRoot,
+      script: "bash",
+      args: [
+        "-lc",
+        [
+          loadEnvScript,
+          'export DATABASE_URL="${DIRECT_URL:-$DATABASE_URL}"',
+          "exec npm run worker:push-notifications",
+        ].join("; "),
+      ],
+      interpreter: "none",
+      exec_mode: "fork",
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: "250M",
+      time: true,
+      merge_logs: true,
+      env: {
+        NODE_ENV: "production",
+      },
+    },
   ],
 };

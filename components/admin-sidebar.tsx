@@ -5,11 +5,13 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   BadgePercent,
+  BellRing,
   Bot,
   Crown,
   CreditCard,
   Download,
   KeyRound,
+  LayoutDashboard,
   LayoutGrid,
   Megaphone,
   Menu,
@@ -17,6 +19,7 @@ import {
   SlidersHorizontal,
   Settings2,
   ShieldCheck,
+  TrendingUp,
   Users,
   Wallet,
   X,
@@ -26,6 +29,18 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 const adminNavItems = [
+  {
+    href: "/admin/dashboard",
+    label: "Dashboard",
+    description: "Statistik traffic dan engagement",
+    icon: LayoutDashboard,
+  },
+  {
+    href: "/admin/revenue",
+    label: "Revenue",
+    description: "Revenue, transaksi, dan paket VIP",
+    icon: TrendingUp,
+  },
   {
     href: "/admin/users",
     label: "User",
@@ -37,6 +52,12 @@ const adminNavItems = [
     label: "Broadcast Drama",
     description: "Kirim detail drama ke channel",
     icon: Megaphone,
+  },
+  {
+    href: "/admin/notifications",
+    label: "Notifications",
+    description: "Kirim push notification PWA",
+    icon: BellRing,
   },
   {
     href: "/admin/settings",

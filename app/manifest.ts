@@ -4,12 +4,14 @@ import { getAppSettings } from "@/lib/app-settings";
 
 export const dynamic = "force-dynamic";
 
+const PWA_APP_NAME = "Layar Drama";
+
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
   const settings = await getAppSettings();
 
   return {
-    name: settings.site.name,
-    short_name: settings.site.name,
+    name: PWA_APP_NAME,
+    short_name: PWA_APP_NAME,
     description: settings.site.description,
     start_url: "/",
     display: "standalone",
@@ -18,18 +20,20 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     lang: "id-ID",
     icons: [
       {
-        src: "/favicon_io/android-chrome-192x192.png",
+        src: "/pwa-icon-192.png",
         sizes: "192x192",
         type: "image/png",
+        purpose: "maskable",
       },
       {
-        src: "/favicon_io/android-chrome-512x512.png",
+        src: "/pwa-icon-512.png",
         sizes: "512x512",
         type: "image/png",
+        purpose: "any",
       },
       {
-        src: "/favicon_io/apple-touch-icon.png",
-        sizes: "180x180",
+        src: "/pwa-icon-192.png",
+        sizes: "192x192",
         type: "image/png",
       },
     ],

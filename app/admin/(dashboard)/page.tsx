@@ -10,7 +10,7 @@ export default async function AdminDashboardIndexPage() {
     const admin = await getCurrentAdmin();
 
     if (admin) {
-      redirect("/admin/users");
+      redirect("/admin/dashboard");
     }
   } catch (error) {
     if (!isPrismaDatabaseConnectionError(error)) {

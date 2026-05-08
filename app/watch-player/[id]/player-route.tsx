@@ -136,11 +136,13 @@ export async function WatchPlayerRoute(props: WatchPlayerPageProps) {
     boundedRequestedEpisode &&
     isEpisodeVipLocked(boundedRequestedEpisode, vipLockFromEpisode)
   ) {
-    redirect(
-      `/vip?next=${encodeURIComponent(
-        `/watch/${series.id}/play?episode=${boundedRequestedEpisode}`,
-      )}`,
-    );
+    const lockedEpisodeParams = new URLSearchParams({
+      premiumEpisode: String(boundedRequestedEpisode),
+      premiumTitle: series.title,
+      premiumNext: `/watch/${series.id}/play?episode=${boundedRequestedEpisode}`,
+    });
+
+    redirect(`/watch/${series.id}?${lockedEpisodeParams.toString()}`);
   }
 
   const preferredInitialEpisode = clampEpisodeForVipAccess(

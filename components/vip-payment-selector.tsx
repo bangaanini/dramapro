@@ -1,10 +1,12 @@
 "use client";
 
-import { type CSSProperties, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import {
+  ArrowRight,
   Building2,
-  CheckCircle2,
-  ChevronDown,
+  Check,
+  CreditCard,
   Info,
   QrCode,
   X,
@@ -12,8 +14,6 @@ import {
 
 import { createVipCheckoutAction } from "@/app/vip/actions";
 import { FormSubmitButton } from "@/components/form-submit-button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { triggerSelectionHaptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 
@@ -44,6 +44,9 @@ type VipPaymentSelectorProps = {
   channels: PaymentChannelOption[];
 };
 
+const MINIMUM_VA_AMOUNT = 20000;
+const BANK_TRANSFER_FEE = 4000;
+
 export function VipPaymentSelector({
   plans,
   next,
@@ -51,34 +54,38 @@ export function VipPaymentSelector({
   initialPlanId,
   channels,
 }: VipPaymentSelectorProps) {
-  const MINIMUM_VA_AMOUNT = 20000;
   const vaChannels = useMemo(
     () => channels.filter((channel) => channel.group === "va"),
     [channels],
   );
-
+  const qrisChannel =
+    channels.find((channel) => channel.code === "qris") ??
+    channels.find((channel) => channel.group === "qris") ??
+    null;
   const selectedDefaultPlanId =
     initialPlanId && plans.some((plan) => plan.id === initialPlanId)
       ? initialPlanId
       : plans[0]?.id ?? "";
 
   const [selectedPlanId, setSelectedPlanId] = useState(selectedDefaultPlanId);
-  const [selectedChannelCode, setSelectedChannelCode] = useState("qris");
-  const [expandedGroup, setExpandedGroup] = useState<"va" | "qris">("qris");
+  const [selectedChannelCode, setSelectedChannelCode] = useState(
+    qrisChannel?.code ?? vaChannels[0]?.code ?? channels[0]?.code ?? "qris",
+  );
   const [toast, setToast] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const selectedPlan =
     plans.find((plan) => plan.id === selectedPlanId) ?? plans[0] ?? null;
   const isVaAllowed = (selectedPlan?.priceAmount ?? 0) >= MINIMUM_VA_AMOUNT;
-  const effectiveSelectedChannelCode =
-    !isVaAllowed && selectedChannelCode !== "qris"
-      ? "qris"
-      : selectedChannelCode;
+  const requestedChannel =
+    channels.find((channel) => channel.code === selectedChannelCode) ?? null;
   const selectedChannel =
-    channels.find((channel) => channel.code === effectiveSelectedChannelCode) ??
-    channels[0] ??
-    null;
+    requestedChannel && (requestedChannel.group !== "va" || isVaAllowed)
+      ? requestedChannel
+      : qrisChannel ?? (isVaAllowed ? vaChannels[0] : null) ?? channels[0] ?? null;
+  const selectedGroup = selectedChannel?.group === "va" ? "va" : "qris";
+  const transferFee = selectedGroup === "va" ? BANK_TRANSFER_FEE : 0;
+  const totalAmount = (selectedPlan?.priceAmount ?? 0) + transferFee;
 
   useEffect(() => {
     if (!toast) {
@@ -98,413 +105,241 @@ export function VipPaymentSelector({
     return null;
   }
 
-  const submitLabel =
-    selectedChannel.group === "va"
-      ? `Bayar dengan ${selectedChannel.shortName ?? selectedChannel.name}`
-      : "Bayar dengan QRIS";
-  const selectedSummaryStyle = selectedPlan.badgeText
-    ? getSelectedSummaryStyle(getPlanAccentColor(selectedPlan))
-    : undefined;
-
-  function showVaMinimumNotice() {
+  function selectQris() {
     triggerSelectionHaptic();
-    setToast("Minimal pembayaran dengan VA adalah Rp 20.000.");
+    setSelectedChannelCode(qrisChannel?.code ?? selectedChannel.code);
   }
 
+  function selectBankTab() {
+    if (!isVaAllowed || vaChannels.length === 0) {
+      triggerSelectionHaptic();
+      setToast("Minimal pembayaran dengan VA adalah Rp 20.000.");
+      return;
+    }
+
+    triggerSelectionHaptic();
+    setSelectedChannelCode((current) =>
+      vaChannels.some((channel) => channel.code === current)
+        ? current
+        : vaChannels[0]?.code ?? current,
+    );
+  }
+
+  const submitLabel =
+    selectedGroup === "va"
+      ? `Bayar dengan ${selectedChannel.shortName ?? selectedChannel.name}`
+      : "Bayar dengan QRIS";
+
   return (
-    <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(19,13,10,0.96),rgba(10,7,6,0.98))] shadow-[0_22px_70px_rgba(0,0,0,0.22)]">
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-4 sm:px-5">
-        <section className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-        {plans.map((plan) => {
-          const isSelected = plan.id === selectedPlanId;
-          const hasHighlight = Boolean(plan.badgeText);
-          const accentColor = getPlanAccentColor(plan);
-          const highlightStyle = hasHighlight
-            ? getHighlightCardStyle(accentColor, isSelected)
-            : undefined;
-          const badgeStyle = hasHighlight
-            ? getHighlightBadgeStyle(accentColor)
-            : undefined;
-          const accentTextStyle = hasHighlight
-            ? getHighlightTextStyle(accentColor)
-            : undefined;
+    <div className="relative flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden rounded-[1.55rem] border border-white/10 bg-[#050719]/98 text-white shadow-[0_28px_90px_rgba(0,0,0,0.62)] backdrop-blur-2xl sm:rounded-[1.8rem]">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,65,65,0.14),transparent_27%),radial-gradient(circle_at_92%_26%,rgba(78,123,255,0.14),transparent_24%)]" />
 
-          return (
-            <button
-              key={plan.id}
-              type="button"
-              onPointerDown={() => triggerSelectionHaptic()}
-              onClick={() => {
-                setSelectedPlanId(plan.id);
-              }}
-              className={cn(
-                "text-left transition-transform active:scale-[0.99]",
-                isSelected && "translate-y-[-1px]",
-              )}
-            >
-              <Card
-                className={cn(
-                  "h-full overflow-hidden rounded-[1.45rem] border p-0 transition",
-                  isSelected && !hasHighlight
-                    ? "border-amber-400/45 bg-[linear-gradient(180deg,rgba(75,49,11,0.95),rgba(27,19,11,0.98))] shadow-[0_18px_44px_rgba(255,177,21,0.14)]"
-                    : hasHighlight
-                      ? "border-white/10"
-                      : "glass-panel border-white/10",
-                )}
-                style={highlightStyle}
-              >
-                <CardContent className="p-3.5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <p
-                          className="truncate text-[13px] font-semibold leading-5 text-white"
-                          style={accentTextStyle}
-                        >
-                          {plan.name}
-                        </p>
-                        {hasHighlight ? (
-                          <span
-                            className="shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em]"
-                            style={badgeStyle}
-                          >
-                            {plan.badgeText}
-                          </span>
-                        ) : null}
-                      </div>
-                      <p className="mt-0.5 text-[11px] leading-4 text-white/45">
-                        {plan.durationDays} hari
-                      </p>
-                    </div>
+      <div className="relative min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-5 sm:px-6 sm:pb-5 sm:pt-6">
+        <Link
+          href={next}
+          className="absolute left-4 top-4 z-10 inline-flex size-9 items-center justify-center rounded-full border border-white/8 bg-white/[0.025] text-white/48 transition hover:bg-white/8 hover:text-white"
+          aria-label="Tutup halaman VIP"
+        >
+          <X className="size-5" />
+        </Link>
 
-                    <div className="flex shrink-0 items-center gap-2">
-                      <p
-                        className="whitespace-nowrap text-sm font-bold tracking-tight text-white"
-                        style={accentTextStyle}
-                      >
-                        {formatIdr(plan.priceAmount, plan.currency)}
-                      </p>
-                      <span
-                        className={cn(
-                          "inline-flex h-6 w-6 items-center justify-center rounded-full border transition",
-                          isSelected
-                            ? "border-transparent bg-amber-400 text-[#392100]"
-                            : "border-white/12 bg-white/5 text-white/30",
-                        )}
-                        style={
-                          isSelected && hasHighlight
-                            ? getSelectedCheckStyle(accentColor)
-                            : undefined
-                        }
-                      >
-                        <CheckCircle2 className="size-3.5" />
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </button>
-          );
-        })}
-        </section>
-
-        <Card className="glass-panel mt-4 rounded-[2rem] border-white/10">
-          <CardContent className="space-y-5 p-5">
-          <div
-            className="rounded-[1.75rem] border border-amber-400/18 bg-[linear-gradient(180deg,rgba(255,198,74,0.12),rgba(255,122,69,0.08))] p-5"
-            style={selectedSummaryStyle}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs uppercase tracking-[0.24em] text-white/45">
-                  Paket dipilih
-                </p>
-                <h2 className="mt-3 text-3xl font-semibold text-white">
-                  {selectedPlan.name}
-                </h2>
-                <p className="mt-2 text-sm text-white/62">
-                  Durasi {selectedPlan.durationDays} hari
-                </p>
-              </div>
-              <Badge className="rounded-full border-amber-400/20 bg-amber-500/10 px-3 py-1.5 text-amber-200">
-                {formatIdr(selectedPlan.priceAmount, selectedPlan.currency)}
-              </Badge>
-            </div>
-            {selectedPlan.badgeText ? (
-              <div
-                className="mt-4 inline-flex rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]"
-                style={getHighlightBadgeStyle(getPlanAccentColor(selectedPlan))}
-              >
-                {selectedPlan.badgeText}
-              </div>
-            ) : null}
-            <p className="mt-5 text-sm leading-6 text-white/72">
-              Akses semua episode drama
-            </p>
+        <div className="flex flex-col items-center text-center">
+          <div className="flex size-[4.5rem] items-center justify-center rounded-full bg-red-500/12 text-red-300 shadow-[0_0_46px_rgba(255,55,71,0.26)] ring-1 ring-red-400/10">
+            <CreditCard className="size-9" strokeWidth={2.4} />
           </div>
+          <h1 className="mt-5 max-w-sm text-xl font-semibold leading-8 text-white sm:text-2xl">
+            Pilih metode pembayaran yang kamu inginkan
+          </h1>
+          {userHasVip ? (
+            <p className="mt-2 text-xs font-medium text-emerald-200/78">
+              Perpanjang premium dengan paket baru.
+            </p>
+          ) : null}
+        </div>
 
-          <div className="space-y-3">
-            <p className="text-sm font-medium text-white">Pilih metode pembayaran</p>
+        {plans.length > 1 ? (
+          <div className="mt-6 flex gap-2 overflow-x-auto pb-1">
+            {plans.map((plan) => {
+              const isSelected = plan.id === selectedPlan.id;
 
-            {vaChannels.length > 0 ? (
-              <button
-                type="button"
-                onPointerDown={() => {
-                  if (!isVaAllowed) {
-                    return;
-                  }
-
-                  triggerSelectionHaptic();
-                }}
-                onClick={() => {
-                  if (!isVaAllowed) {
-                    showVaMinimumNotice();
-                    return;
-                  }
-
-                  setExpandedGroup((current) => (current === "va" ? "qris" : "va"));
-                  if (expandedGroup !== "va" && vaChannels[0]) {
-                    setSelectedChannelCode((current) =>
-                      current === "qris" ? vaChannels[0].code : current,
-                    );
-                  }
-                }}
-                className={cn(
-                  "w-full rounded-[1.5rem] border px-4 py-4 text-left transition",
-                  expandedGroup === "va" || selectedChannel.group === "va"
-                    ? "border-amber-400/40 bg-amber-500/10"
-                    : "border-white/10 bg-white/5",
-                  !isVaAllowed && "cursor-not-allowed border-white/8 bg-white/4 opacity-60",
-                )}
-                aria-disabled={!isVaAllowed}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex gap-3">
-                    <span className="mt-0.5 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/6 text-white">
-                      <Building2 className="size-5" />
-                    </span>
-                    <div>
-                      <p className="font-medium text-white">Transfer Bank</p>
-                      <p className="text-sm text-white/55">
-                        BNI, BRI, Mandiri, BSI, CIMB, Permata, Danamon, BJB
-                      </p>
-                      {!isVaAllowed ? (
-                        <p className="mt-1 text-xs text-amber-200/90">
-                          Aktif mulai nominal Rp 20.000
-                        </p>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={cn(
-                        "inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px]",
-                        selectedChannel.group === "va"
-                          ? "border-amber-300 bg-amber-300 text-[#392100]"
-                          : "border-white/25 text-transparent",
-                      )}
-                    >
-                      •
-                    </span>
-                    <ChevronDown
-                      className={cn(
-                        "size-4 text-white/50 transition-transform",
-                        expandedGroup === "va" && "rotate-180",
-                      )}
-                    />
-                  </div>
-                </div>
-
-                <div
+              return (
+                <button
+                  key={plan.id}
+                  type="button"
+                  onPointerDown={() => triggerSelectionHaptic()}
+                  onClick={() => setSelectedPlanId(plan.id)}
                   className={cn(
-                    "grid transition-[grid-template-rows,opacity] duration-300",
-                    expandedGroup === "va" ? "mt-4 grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+                    "shrink-0 rounded-full border px-3 py-2 text-xs font-semibold transition",
+                    isSelected
+                      ? "border-red-400/35 bg-red-500/14 text-white"
+                      : "border-white/8 bg-white/[0.035] text-white/45 hover:bg-white/[0.06] hover:text-white/72",
                   )}
                 >
-                  <div className="overflow-hidden">
-                    <div className="space-y-2 border-t border-white/8 pt-3">
-                      {vaChannels.map((channel) => {
-                        const isSelected =
-                          effectiveSelectedChannelCode === channel.code;
+                  {plan.name} · {formatIdr(plan.priceAmount, plan.currency)}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
 
-                        return (
-                          <button
-                            key={channel.code}
-                            type="button"
-                            onPointerDown={() => {
-                              if (!isVaAllowed) {
-                                return;
-                              }
+        <section className="mt-5 rounded-[1.1rem] border border-white/10 bg-[#06091c]/86 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]">
+          <div className="space-y-3 text-sm">
+            <div className="flex items-center justify-between gap-4 text-white/50">
+              <span>Harga paket</span>
+              <span className="font-semibold text-white/86">
+                {formatIdr(selectedPlan.priceAmount, selectedPlan.currency)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-4 text-white/50">
+              <span>Biaya transfer bank</span>
+              <span className="font-semibold text-white/66">
+                {transferFee > 0 ? `+ ${formatIdr(transferFee, selectedPlan.currency)}` : "Rp 0"}
+              </span>
+            </div>
+            <div className="h-px bg-white/8" />
+            <div className="flex items-center justify-between gap-4">
+              <span className="font-semibold text-white">Total</span>
+              <span className="text-lg font-bold text-red-400">
+                {formatIdr(totalAmount, selectedPlan.currency)}
+              </span>
+            </div>
+          </div>
+        </section>
 
-                              triggerSelectionHaptic();
-                            }}
-                            onClick={() => {
-                              if (!isVaAllowed) {
-                                showVaMinimumNotice();
-                                return;
-                              }
+        <div className="mt-5 grid grid-cols-2 gap-2 rounded-[1.05rem] border border-white/8 bg-white/[0.035] p-1.5">
+          <button
+            type="button"
+            onClick={selectQris}
+            className={cn(
+              "inline-flex h-[3.25rem] items-center justify-center gap-2 rounded-[0.9rem] text-sm font-semibold transition",
+              selectedGroup === "qris"
+                ? "bg-red-500 text-white shadow-[0_16px_34px_rgba(255,48,54,0.3)]"
+                : "text-white/42 hover:bg-white/[0.04] hover:text-white/72",
+            )}
+          >
+            <QrCode className="size-4.5" />
+            QRIS
+          </button>
+          <button
+            type="button"
+            onClick={selectBankTab}
+            className={cn(
+              "inline-flex h-[3.25rem] items-center justify-center gap-2 rounded-[0.9rem] text-sm font-semibold transition",
+              selectedGroup === "va"
+                ? "bg-red-500 text-white shadow-[0_16px_34px_rgba(255,48,54,0.3)]"
+                : "text-white/42 hover:bg-white/[0.04] hover:text-white/72",
+              (!isVaAllowed || vaChannels.length === 0) && "opacity-55",
+            )}
+          >
+            <Building2 className="size-4.5" />
+            Bank
+          </button>
+        </div>
 
-                              setSelectedChannelCode(channel.code);
-                              setExpandedGroup("va");
-                            }}
-                            className={cn(
-                              "flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition",
-                              isSelected
-                                ? "border-amber-400/40 bg-white/7 text-white"
-                                : "border-white/8 bg-black/10 text-white/72",
-                              !isVaAllowed && "cursor-not-allowed opacity-60",
-                            )}
-                            aria-disabled={!isVaAllowed}
-                          >
-                            <span className="flex items-center gap-3">
-                              <span
-                                className={cn(
-                                  "inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-[11px] font-semibold",
-                                  getBankBadgeTone(channel.bankName ?? channel.shortName ?? channel.name),
-                                )}
-                              >
-                                {channel.shortName ?? getBankInitials(channel.bankName ?? channel.name)}
-                              </span>
-                              <span className="text-sm font-medium">
-                                Bank {channel.bankName ?? channel.shortName ?? channel.name}
-                              </span>
-                            </span>
-                            <span
-                              className={cn(
-                                "inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px]",
-                                isSelected
-                                  ? "border-amber-300 bg-amber-300 text-[#392100]"
-                                  : "border-white/25 text-transparent",
-                              )}
-                            >
-                              •
-                            </span>
-                          </button>
-                        );
-                      })}
-
-                      <p className="pt-2 text-center text-xs text-white/35">
-                        {isVaAllowed
-                          ? "Bank tidak tersedia? Gunakan QRIS"
-                          : "Nominal di bawah Rp 20.000, gunakan QRIS"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </button>
-            ) : null}
-
+        <div className="mt-5 space-y-3">
+          {selectedGroup === "qris" ? (
             <button
               type="button"
-              onPointerDown={() => triggerSelectionHaptic()}
-              onClick={() => {
-                setSelectedChannelCode("qris");
-                setExpandedGroup("qris");
-              }}
-              className={cn(
-                "flex w-full items-start justify-between gap-3 rounded-[1.5rem] border px-4 py-4 text-left transition",
-                effectiveSelectedChannelCode === "qris"
-                  ? "border-amber-400/40 bg-amber-500/10"
-                  : "border-white/10 bg-white/5",
-              )}
+              onClick={selectQris}
+              className="group flex w-full items-center gap-4 rounded-[1.1rem] border border-cyan-300/12 bg-[#071023]/84 p-3.5 text-left transition hover:border-cyan-300/26 hover:bg-[#0a142b]"
             >
-              <div className="flex gap-3">
-                <span className="mt-0.5 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/6 text-white">
-                  <QrCode className="size-5" />
-                </span>
-                <div>
-                  <p className="font-medium text-white">QRIS</p>
-                  <p className="text-sm text-white/55">
-                    Scan dengan aplikasi bank / e-wallet apapun
-                  </p>
-                </div>
-              </div>
-              <span
-                className={cn(
-                  "inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px]",
-                  effectiveSelectedChannelCode === "qris"
-                    ? "border-amber-300 bg-amber-300 text-[#392100]"
-                    : "border-white/25 text-transparent",
-                )}
-              >
-                •
+              <span className="flex size-[3.25rem] shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(180deg,#5b8cff,#3867f4)] text-white shadow-[0_12px_26px_rgba(65,111,255,0.25)]">
+                <QrCode className="size-6" />
               </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-base font-semibold text-white">QRIS</span>
+                <span className="mt-1 block text-xs font-medium text-white/42">
+                  Scan dengan aplikasi bank atau e-wallet
+                </span>
+              </span>
+              <ArrowRight className="size-5 shrink-0 text-cyan-200/70 transition group-hover:translate-x-0.5" />
             </button>
-          </div>
+          ) : (
+            vaChannels.map((channel) => {
+              const isSelected = selectedChannelCode === channel.code;
+              const bankName = channel.bankName ?? channel.shortName ?? channel.name;
 
-          <p className="text-center text-xs leading-6 text-white/38">
-            Dengan melanjutkan, Anda menyetujui syarat dan ketentuan kami.
-          </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <form
-        action={createVipCheckoutAction}
-        className="shrink-0 border-t border-white/10 bg-[rgba(9,7,6,0.96)] px-4 pb-[calc(env(safe-area-inset-bottom)+0.9rem)] pt-3 backdrop-blur-xl sm:px-5 sm:pb-5"
-        onSubmit={() => {
-          setIsSubmitting(true);
-        }}
-      >
-        <input type="hidden" name="planId" value={selectedPlan.id} />
-        <input
-          type="hidden"
-          name="channelCode"
-          value={effectiveSelectedChannelCode}
-        />
-        <input type="hidden" name="next" value={next} />
-
-        <div className="mx-auto flex w-full items-center gap-3 rounded-[1.7rem] border border-amber-400/12 bg-[linear-gradient(180deg,rgba(255,186,64,0.06),rgba(255,122,69,0.04))] p-3">
-          <div className="hidden min-w-0 flex-1 sm:block">
-              <p className="text-sm text-white/55">
-                {userHasVip ? "Perpanjang VIP dengan" : "Metode dipilih"}
-              </p>
-              <p className="truncate text-base font-medium text-white">
-                {selectedChannel.group === "va"
-                  ? `${selectedChannel.shortName ?? selectedChannel.bankName ?? selectedChannel.name} Virtual Account`
-                  : "QRIS"}
-              </p>
-          </div>
-
-          <FormSubmitButton
-            type="submit"
-            size="lg"
-            pendingLabel="Menyiapkan pembayaran..."
-            idleLabel={submitLabel}
-            className="h-14 w-full rounded-2xl bg-[linear-gradient(180deg,#ffd05a,#f4ae16)] text-[#392100] hover:brightness-105 sm:w-auto sm:min-w-[280px]"
-          />
+              return (
+                <button
+                  key={channel.code}
+                  type="button"
+                  onPointerDown={() => triggerSelectionHaptic()}
+                  onClick={() => setSelectedChannelCode(channel.code)}
+                  className={cn(
+                    "group flex w-full items-center gap-4 rounded-[1.1rem] border bg-[#071023]/84 p-3.5 text-left transition hover:border-cyan-300/26 hover:bg-[#0a142b]",
+                    isSelected ? "border-cyan-300/28" : "border-cyan-300/12",
+                  )}
+                >
+                  <span className="flex size-[3.25rem] shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(180deg,#5b8cff,#3867f4)] text-white shadow-[0_12px_26px_rgba(65,111,255,0.25)]">
+                    <Building2 className="size-6" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-2 text-base font-semibold text-white">
+                      {bankName}
+                      {isSelected ? (
+                        <Check className="size-4 text-cyan-200" />
+                      ) : null}
+                    </span>
+                    <span className="mt-1 block text-xs font-medium text-white/42">
+                      Transfer Virtual Account
+                    </span>
+                    <span className="mt-1 block text-xs font-bold text-amber-300/86">
+                      +{formatIdr(BANK_TRANSFER_FEE, selectedPlan.currency)} biaya transfer
+                    </span>
+                  </span>
+                  <ArrowRight className="size-5 shrink-0 text-cyan-200/70 transition group-hover:translate-x-0.5" />
+                </button>
+              );
+            })
+          )}
         </div>
-      </form>
 
-      {toast ? (
-        <div className="pointer-events-none fixed inset-x-0 bottom-28 z-[95] flex justify-center px-4 sm:bottom-8">
-          <div className="pointer-events-auto flex w-full max-w-sm items-center gap-3 rounded-[1.35rem] border border-amber-400/20 bg-[rgba(39,21,7,0.94)] px-4 py-3 text-sm text-amber-50 shadow-[0_18px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-200">
-              <Info className="size-4" />
-            </span>
-            <span className="flex-1 leading-6">{toast}</span>
+        {selectedGroup === "va" && !isVaAllowed ? (
+          <p className="mt-4 rounded-xl border border-amber-400/16 bg-amber-500/8 px-3 py-2 text-center text-xs leading-5 text-amber-100/80">
+            Transfer bank tersedia untuk nominal minimal Rp 20.000.
+          </p>
+        ) : null}
+
+        {toast ? (
+          <div className="mt-4 flex items-start gap-3 rounded-[1rem] border border-amber-400/18 bg-amber-500/10 px-3 py-3 text-xs leading-5 text-amber-50">
+            <Info className="mt-0.5 size-4 shrink-0 text-amber-200" />
+            <span className="flex-1">{toast}</span>
             <button
               type="button"
               onClick={() => setToast(null)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-amber-50/70 transition hover:bg-white/5 hover:text-white"
+              className="shrink-0 text-amber-50/70 transition hover:text-white"
               aria-label="Tutup notifikasi"
             >
               <X className="size-4" />
             </button>
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
+
+      <form
+        action={createVipCheckoutAction}
+        className="relative shrink-0 border-t border-white/8 bg-[#040617]/96 px-4 pb-[calc(env(safe-area-inset-bottom)+0.9rem)] pt-3 backdrop-blur-xl sm:px-6 sm:pb-5"
+        onSubmit={() => setIsSubmitting(true)}
+      >
+        <input type="hidden" name="planId" value={selectedPlan.id} />
+        <input type="hidden" name="channelCode" value={selectedChannel.code} />
+        <input type="hidden" name="next" value={next} />
+
+        <FormSubmitButton
+          type="submit"
+          size="lg"
+          pendingLabel="Menyiapkan pembayaran..."
+          idleLabel={submitLabel}
+          className="h-[3.25rem] w-full rounded-[1rem] bg-red-500 text-base font-semibold text-white shadow-[0_18px_42px_rgba(255,48,54,0.3)] hover:bg-red-400 sm:h-14"
+        />
+      </form>
 
       {isSubmitting ? (
-        <div className="pointer-events-none fixed inset-0 z-[96] flex items-center justify-center bg-black/38 px-4 backdrop-blur-md">
-          <div className="w-full max-w-sm rounded-[2rem] border border-amber-400/16 bg-[linear-gradient(180deg,rgba(29,19,12,0.97),rgba(15,10,8,0.98))] p-5 text-center shadow-[0_24px_60px_rgba(0,0,0,0.38)]">
-            <div className="mx-auto h-11 w-11 animate-spin rounded-full border-2 border-amber-300/20 border-t-amber-300" />
-            <p className="mt-4 text-base font-semibold text-white">
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/46 px-4 backdrop-blur-sm">
+          <div className="rounded-[1.4rem] border border-white/10 bg-[#06091c]/96 px-5 py-5 text-center shadow-[0_24px_70px_rgba(0,0,0,0.42)]">
+            <div className="mx-auto h-11 w-11 animate-spin rounded-full border-2 border-red-300/20 border-t-red-300" />
+            <p className="mt-4 text-sm font-semibold text-white">
               Menyiapkan pembayaran
-            </p>
-            <p className="mt-2 text-sm leading-6 text-white/62">
-              Kami sedang membuat transaksi dan menampilkan detail pembayaranmu.
             </p>
           </div>
         </div>
@@ -519,111 +354,4 @@ function formatIdr(amount: number, currency: string) {
     currency,
     maximumFractionDigits: 0,
   }).format(amount);
-}
-
-function getPlanAccentColor(plan: Pick<VipPlanOption, "badgeColor">) {
-  return /^#[0-9a-fA-F]{6}$/.test(plan.badgeColor) ? plan.badgeColor : "#f59e0b";
-}
-
-function hexToRgba(hexColor: string, alpha: number) {
-  const hex = hexColor.replace("#", "");
-  const red = Number.parseInt(hex.slice(0, 2), 16);
-  const green = Number.parseInt(hex.slice(2, 4), 16);
-  const blue = Number.parseInt(hex.slice(4, 6), 16);
-
-  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
-}
-
-function getHighlightCardStyle(
-  accentColor: string,
-  isSelected: boolean,
-): CSSProperties {
-  return {
-    background: `linear-gradient(180deg, ${hexToRgba(accentColor, isSelected ? 0.28 : 0.18)} 0%, ${hexToRgba(accentColor, isSelected ? 0.12 : 0.07)} 42%, rgba(16, 11, 8, 0.98) 100%)`,
-    borderColor: hexToRgba(accentColor, isSelected ? 0.72 : 0.35),
-    boxShadow: isSelected
-      ? `0 28px 80px ${hexToRgba(accentColor, 0.22)}, inset 0 1px 0 ${hexToRgba(accentColor, 0.28)}`
-      : `inset 0 1px 0 ${hexToRgba(accentColor, 0.14)}`,
-  };
-}
-
-function getHighlightBadgeStyle(accentColor: string): CSSProperties {
-  return {
-    backgroundColor: hexToRgba(accentColor, 0.18),
-    borderColor: hexToRgba(accentColor, 0.36),
-    color: "#fff7ed",
-    boxShadow: `0 0 28px ${hexToRgba(accentColor, 0.16)}`,
-  };
-}
-
-function getHighlightTextStyle(accentColor: string): CSSProperties {
-  return {
-    color: accentColor,
-    textShadow: `0 0 22px ${hexToRgba(accentColor, 0.18)}`,
-  };
-}
-
-function getSelectedCheckStyle(accentColor: string): CSSProperties {
-  return {
-    backgroundColor: accentColor,
-    color: "#1f1308",
-    boxShadow: `0 0 24px ${hexToRgba(accentColor, 0.28)}`,
-  };
-}
-
-function getSelectedSummaryStyle(accentColor: string): CSSProperties {
-  return {
-    background: `linear-gradient(180deg, ${hexToRgba(accentColor, 0.18)}, rgba(255, 122, 69, 0.07))`,
-    borderColor: hexToRgba(accentColor, 0.28),
-    boxShadow: `inset 0 1px 0 ${hexToRgba(accentColor, 0.12)}`,
-  };
-}
-
-function getBankInitials(bankName: string) {
-  const normalized = bankName
-    .split(/\s+/)
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 4)
-    .toUpperCase();
-
-  return normalized || "BANK";
-}
-
-function getBankBadgeTone(bankName: string) {
-  const normalized = bankName.toUpperCase();
-
-  if (normalized.includes("BNI")) {
-    return "bg-orange-500/20 text-orange-100 border border-orange-400/25";
-  }
-
-  if (normalized.includes("BRI")) {
-    return "bg-sky-500/20 text-sky-100 border border-sky-400/25";
-  }
-
-  if (normalized.includes("MANDIRI")) {
-    return "bg-yellow-500/20 text-yellow-100 border border-yellow-400/25";
-  }
-
-  if (normalized.includes("BSI")) {
-    return "bg-emerald-500/20 text-emerald-100 border border-emerald-400/25";
-  }
-
-  if (normalized.includes("CIMB")) {
-    return "bg-red-500/20 text-red-100 border border-red-400/25";
-  }
-
-  if (normalized.includes("PERMATA")) {
-    return "bg-violet-500/20 text-violet-100 border border-violet-400/25";
-  }
-
-  if (normalized.includes("DANAMON")) {
-    return "bg-amber-500/20 text-amber-100 border border-amber-400/25";
-  }
-
-  if (normalized.includes("BJB")) {
-    return "bg-blue-500/20 text-blue-100 border border-blue-400/25";
-  }
-
-  return "bg-white/10 text-white border border-white/12";
 }

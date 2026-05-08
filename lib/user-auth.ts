@@ -55,6 +55,7 @@ export type PublicUser = {
   telegramFirstName: string | null;
   telegramLastName: string | null;
   telegramLanguageCode: string | null;
+  referredByPartnerBotId?: string | null;
   createdAt?: Date;
   vipExpiresAt?: Date | null;
   vipStartedAt?: Date | null;
@@ -72,6 +73,7 @@ function mapPublicUser(user: {
   telegramFirstName: string | null;
   telegramLastName: string | null;
   telegramLanguageCode: string | null;
+  referredByPartnerBotId?: string | null;
   createdAt?: Date;
   vipExpiresAt?: Date | null;
   vipStartedAt?: Date | null;
@@ -88,6 +90,7 @@ function mapPublicUser(user: {
     telegramFirstName: user.telegramFirstName,
     telegramLastName: user.telegramLastName,
     telegramLanguageCode: user.telegramLanguageCode,
+    referredByPartnerBotId: user.referredByPartnerBotId ?? null,
     createdAt: user.createdAt,
     vipExpiresAt: user.vipExpiresAt ?? null,
     vipStartedAt: user.vipStartedAt ?? null,
@@ -164,6 +167,7 @@ export async function registerUser(input: {
       telegramFirstName: true,
       telegramLastName: true,
       telegramLanguageCode: true,
+      referredByPartnerBotId: true,
       createdAt: true,
       vipExpiresAt: true,
       vipStartedAt: true,
@@ -227,6 +231,7 @@ export async function authenticateUser(email: string, password: string) {
       telegramFirstName: true,
       telegramLastName: true,
       telegramLanguageCode: true,
+      referredByPartnerBotId: true,
       createdAt: true,
       vipExpiresAt: true,
       vipStartedAt: true,
@@ -374,6 +379,7 @@ async function validateSessionToken(token: string) {
           telegramFirstName: true,
           telegramLastName: true,
           telegramLanguageCode: true,
+          referredByPartnerBotId: true,
           createdAt: true,
           vipExpiresAt: true,
           vipStartedAt: true,

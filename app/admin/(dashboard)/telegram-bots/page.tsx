@@ -71,8 +71,8 @@ export default async function AdminTelegramBotsPage(
             value={String(partnerBots.filter((bot) => bot.isEnabled).length)}
           />
           <StatTile
-            label="Owner tersedia"
-            value={String(owners.length)}
+            label="Download aktif"
+            value={String(partnerBots.filter((bot) => bot.downloadEnabled).length)}
           />
         </div>
       </section>
@@ -106,6 +106,8 @@ export default async function AdminTelegramBotsPage(
           </div>
 
           <form action={createTelegramPartnerBotAction} className="grid gap-4">
+            <DownloadSettingsFields />
+
             <div className="grid gap-4 md:grid-cols-2">
               <Field
                 label="Bot username"
@@ -209,6 +211,12 @@ export default async function AdminTelegramBotsPage(
                         {bot.notes}
                       </p>
                     ) : null}
+                    <div className="mt-3 inline-flex rounded-full border border-accent/25 bg-accent-soft px-3 py-1.5 text-xs font-semibold text-accent">
+                      Download partner:{" "}
+                      {bot.downloadEnabled
+                        ? `${bot.downloadDailyLimit} episode/hari`
+                        : "nonaktif"}
+                    </div>
                   </div>
 
                   <form action={deleteTelegramPartnerBotAction}>
@@ -268,6 +276,11 @@ export default async function AdminTelegramBotsPage(
                   className="grid gap-4 rounded-[1.7rem] border border-white/10 bg-black/20 p-4"
                 >
                   <input type="hidden" name="id" value={bot.id} />
+                  <DownloadSettingsFields
+                    defaultEnabled={bot.downloadEnabled}
+                    defaultLimit={bot.downloadDailyLimit}
+                  />
+
                   <div className="grid gap-4 md:grid-cols-2">
                     <Field
                       label="Bot username"
@@ -370,6 +383,42 @@ function StatTile({ label, value }: { label: string; value: string }) {
         {label}
       </p>
       <p className="mt-2 text-2xl font-semibold text-white">{value}</p>
+    </div>
+  );
+}
+
+function DownloadSettingsFields({
+  defaultEnabled = false,
+  defaultLimit = 5,
+}: {
+  defaultEnabled?: boolean;
+  defaultLimit?: number;
+}) {
+  return (
+    <div className="grid gap-4 rounded-[1.5rem] border border-accent/25 bg-accent-soft/50 p-4 md:grid-cols-[minmax(0,1fr)_190px] md:items-center">
+      <label className="flex items-start gap-3 text-sm text-white">
+        <input
+          type="checkbox"
+          name="downloadEnabled"
+          defaultChecked={defaultEnabled}
+          className="mt-1 size-4 accent-[var(--accent)]"
+        />
+        <span>
+          <span className="block font-semibold">Aktifkan download partner</span>
+          <span className="mt-1 block text-xs leading-5 text-[var(--muted)]">
+            Owner bot bisa download episode dari detail dan dashboard partner,
+            mengikuti limit harian di samping.
+          </span>
+        </span>
+      </label>
+
+      <Field
+        label="Limit episode/hari"
+        name="downloadDailyLimit"
+        type="number"
+        defaultValue={String(defaultLimit || 0)}
+        placeholder="5"
+      />
     </div>
   );
 }

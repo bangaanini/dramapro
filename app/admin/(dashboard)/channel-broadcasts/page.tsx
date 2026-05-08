@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 
 import { publishAdminDramaChannelBroadcastAction } from "@/app/admin/actions";
+import { ChannelBroadcastTargetSelector } from "@/components/admin/channel-broadcast-target-selector";
 import { DramaChannelBroadcastComposer } from "@/components/admin/drama-channel-broadcast-composer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -160,65 +161,17 @@ export default async function AdminChannelBroadcastsPage({
             title: drama.title,
           }))}
           extraFields={
-            <div className="space-y-4">
-              <div className="rounded-[1.6rem] border border-white/10 bg-white/5 p-4">
-                <p className="text-sm font-semibold text-white">Target broadcast</p>
-                <p className="mt-2 text-xs leading-6 text-[var(--muted)]">
-                  Bot utama bisa kirim ke channel yang kamu isi di form. Partner
-                  bot akan otomatis kirim ke channel default masing-masing.
-                </p>
-
-                <div className="mt-4 space-y-3">
-                  <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white">
-                    <input
-                      type="checkbox"
-                      name="includeMainBot"
-                      defaultChecked
-                      className="mt-0.5 size-4 accent-[var(--accent)]"
-                    />
-                    <span className="space-y-1">
-                      <span className="block font-medium">Bot utama</span>
-                      <span className="block text-xs leading-5 text-[var(--muted)]">
-                        @{settings.telegram.botUsername || "belum-diatur"}
-                      </span>
-                    </span>
-                  </label>
-
-                  {partnerBots
-                    .filter((bot) => bot.isEnabled)
-                    .map((bot) => {
-                      const disabled = !bot.defaultChannelUsername?.trim();
-
-                      return (
-                        <label
-                          key={bot.id}
-                          className={`flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${
-                            disabled
-                              ? "border-white/5 bg-white/[0.03] text-[var(--muted)]"
-                              : "border-white/10 bg-black/20 text-white"
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            name="partnerBotIds"
-                            value={bot.id}
-                            disabled={disabled}
-                            className="mt-0.5 size-4 accent-[var(--accent)]"
-                          />
-                          <span className="space-y-1">
-                            <span className="block font-medium">@{bot.botUsername}</span>
-                            <span className="block text-xs leading-5 text-[var(--muted)]">
-                              {bot.defaultChannelUsername?.trim()
-                                ? `Channel: ${bot.defaultChannelUsername}`
-                                : "Belum punya channel default"}
-                            </span>
-                          </span>
-                        </label>
-                      );
-                    })}
-                </div>
-              </div>
-            </div>
+            <ChannelBroadcastTargetSelector
+              mainBotUsername={settings.telegram.botUsername || "belum-diatur"}
+              partnerBots={partnerBots
+                .filter((bot) => bot.isEnabled)
+                .map((bot) => ({
+                  botUsername: bot.botUsername,
+                  defaultChannelUsername: bot.defaultChannelUsername,
+                  id: bot.id,
+                  isEnabled: bot.isEnabled,
+                }))}
+            />
           }
         />
       ) : (

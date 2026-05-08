@@ -18,6 +18,17 @@ import { logoutUserAction } from "@/app/auth/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { PushNotificationButton } from "@/components/push-notification-button";
+import {
+  clearStoredPwaInstallPrompt,
+  getStoredPwaInstallPrompt,
+  isStandaloneDisplayMode,
+  markPwaInstalled,
+  PWA_INSTALL_PROMPT_READY_EVENT,
+  requestPwaInstallModal,
+  storePwaInstallPrompt,
+  type BeforeInstallPromptEvent,
+} from "@/lib/pwa-install";
 import { safeSessionStorage } from "@/lib/safe-session-storage";
 import type {
   TelegramHomeScreenEventPayload,
@@ -61,14 +72,6 @@ type ProfileResponse = {
   historyCount: number;
 };
 
-type BeforeInstallPromptEvent = Event & {
-  prompt: () => Promise<void>;
-  userChoice?: Promise<{
-    outcome: "accepted" | "dismissed";
-    platform: string;
-  }>;
-};
-
 const profileMenuItems = [
   {
     href: "/profile/password",
@@ -90,24 +93,6 @@ function normalizeTelegramHomeScreenStatus(
   }
 
   return payload.status ?? null;
-}
-
-function isStandaloneDisplayMode() {
-  if (typeof window === "undefined") {
-    return false;
-  }
-
-  const standaloneNavigator = navigator as Navigator & {
-    standalone?: boolean;
-  };
-  const isStandaloneMedia =
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(display-mode: standalone)").matches;
-  const isNavigatorStandalone =
-    typeof standaloneNavigator.standalone === "boolean" &&
-    standaloneNavigator.standalone;
-
-  return isStandaloneMedia || isNavigatorStandalone;
 }
 
 export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
@@ -165,15 +150,35 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
   }, [user.id]);
 
   useEffect(() => {
+    const syncStoredInstallPrompt = () => {
+      const storedPrompt = getStoredPwaInstallPrompt();
+
+      if (storedPrompt) {
+        setInstallPromptEvent(storedPrompt);
+        setHasInstallSurface(true);
+      }
+    };
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
-      setInstallPromptEvent(event as BeforeInstallPromptEvent);
+      const promptEvent = event as BeforeInstallPromptEvent;
+
+      storePwaInstallPrompt(promptEvent);
+      setInstallPromptEvent(promptEvent);
       setHasInstallSurface(true);
     };
 
+    syncStoredInstallPrompt();
+    window.addEventListener(
+      PWA_INSTALL_PROMPT_READY_EVENT,
+      syncStoredInstallPrompt,
+    );
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
 
     return () => {
+      window.removeEventListener(
+        PWA_INSTALL_PROMPT_READY_EVENT,
+        syncStoredInstallPrompt,
+      );
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     };
   }, []);
@@ -212,6 +217,7 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
 
     const handleHomeScreenAdded = () => {
       setHomeScreenStatus("added");
+      markPwaInstalled();
       setActionMessage("Shortcut Layar Drama sudah ada di layar utama.");
     };
 
@@ -336,13 +342,16 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
         return;
       }
 
-      if (installPromptEvent) {
-        await installPromptEvent.prompt();
-        const choice = await installPromptEvent.userChoice;
+      const promptEvent = installPromptEvent ?? getStoredPwaInstallPrompt();
+
+      if (promptEvent) {
+        await promptEvent.prompt();
+        const choice = await promptEvent.userChoice;
         const accepted = choice?.outcome === "accepted";
 
         if (accepted || isStandaloneDisplayMode()) {
           setHomeScreenStatus("added");
+          markPwaInstalled();
         }
 
         setActionMessage(
@@ -350,6 +359,7 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
             ? "Layar Drama ditambahkan ke layar utama."
             : "Permintaan add to homescreen dibatalkan.",
         );
+        clearStoredPwaInstallPrompt();
         setInstallPromptEvent(null);
         return;
       }
@@ -357,6 +367,7 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
       setActionMessage(
         "Buka menu browser lalu pilih 'Add to Home screen' untuk menambahkan shortcut.",
       );
+      requestPwaInstallModal();
     } finally {
       setIsInstalling(false);
     }
@@ -473,7 +484,7 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
             ) : null}
 
             <Link
-              href="/vip?next=/profile"
+              href="?premium=1"
               className="mt-4 inline-flex w-full items-center justify-center rounded-2xl bg-[linear-gradient(180deg,#ffc62d,#f2a501)] px-4 py-3 text-sm font-semibold text-[#2d1800] shadow-[0_18px_40px_rgba(255,198,45,0.22)] transition hover:brightness-105"
             >
               {hasActiveVip ? "Perpanjang VIP" : "Aktifkan VIP"}
@@ -535,11 +546,11 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
                     )}
                   </div>
                   <div>
-                    <p className="font-medium text-white">Add to Homescreen</p>
+                    <p className="font-medium text-white">Download App</p>
                     <p className="text-sm text-[var(--muted-foreground)]">
                       {homeScreenStatus === "added"
                         ? "Shortcut Layar Drama sudah terpasang di layar utama."
-                        : "Tambahkan shortcut Layar Drama ke layar utama seperti aplikasi."}
+                        : "Download Layar Drama ke layar utama seperti aplikasi."}
                     </p>
                   </div>
                 </div>
@@ -547,6 +558,8 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
               </CardContent>
             </Card>
           </button>
+
+          <PushNotificationButton variant="card" />
 
           <button
             type="button"

@@ -12,8 +12,18 @@ const UNOPTIMIZED_IMAGE_HOSTS = new Set([
   "volcengine-forward.shorttv.live",
 ]);
 
+const HIDDEN_DISPLAY_TAG_NAMES = new Set(["free", "gratis"]);
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+export function isVisibleDisplayTag(tag: string) {
+  return !HIDDEN_DISPLAY_TAG_NAMES.has(tag.trim().toLowerCase());
+}
+
+export function filterVisibleDisplayTags(tags: string[]) {
+  return tags.filter(isVisibleDisplayTag);
 }
 
 export function normalizeDisplayImageUrl(imageUrl: string) {
