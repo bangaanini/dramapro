@@ -2,18 +2,17 @@ import type { Metadata } from "next";
 import { cache } from "react";
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { Bell, MessageCircle, Send, Zap } from "lucide-react";
 
 import { DramaDetailShareButton } from "@/components/drama-detail-share-button";
 import { DramaDetailAdminDownloadPanel } from "@/components/drama-detail-admin-download-panel";
 import { EpisodeGridLink } from "@/components/episode-grid-link";
-import { FavoriteDramaButton } from "@/components/favorite-drama-button";
 import { PartnerBotDownloadPanel } from "@/components/partner-bot-download-panel";
 import { PlayDramaButton } from "@/components/play-drama-button";
 import { DramaCard } from "@/components/drama-card";
 import { SaveEpisodeButton } from "@/components/save-episode-button";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { TelegramOpenBanner } from "@/components/telegram-open-banner";
 import { getCurrentAdmin } from "@/lib/admin-auth";
 import { getAppSettings } from "@/lib/app-settings";
 import { ensureSeriesHydrated, ensureSeriesPlayableFresh } from "@/lib/catalog";
@@ -102,7 +101,6 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
   const [
     series,
     watchHistory,
-    favorite,
     vipSettings,
     settings,
     hasAdminUserBypass,
@@ -123,17 +121,6 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
               episodeIndex: true,
               lastPositionSeconds: true,
             },
-          })
-        : Promise.resolve(null),
-      user
-        ? prisma.favoriteDrama.findUnique({
-            where: {
-              userId_seriesId: {
-                userId: user.id,
-                seriesId: id,
-              },
-            },
-            select: { id: true },
           })
         : Promise.resolve(null),
       prisma.vipSettings.findUnique({
@@ -225,7 +212,7 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
       : null;
 
   return (
-    <main className="route-transition-shell min-h-screen w-full overflow-hidden bg-[#050407] text-white">
+    <main className="route-transition-shell min-h-screen w-full bg-[#050407] text-white">
       <SiteHeader current="watch" />
 
       <section className="relative px-3 pb-5 pt-5 sm:px-4 lg:px-8 lg:pb-6 lg:pt-8">
@@ -301,18 +288,6 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
                   label="Tonton Sekarang"
                   className="h-12 min-w-[190px] rounded-xl bg-accent px-5 text-sm font-semibold text-white shadow-[0_18px_42px_rgba(255,122,69,0.34)] hover:bg-[var(--accent-strong)] sm:h-14 sm:min-w-[220px] sm:text-base"
                 />
-                <FavoriteDramaButton
-                  dramaId={series.id}
-                  redirectTo={detailHref}
-                  isFavorite={Boolean(favorite)}
-                  size="lg"
-                  iconOnly
-                  className={`h-12 w-12 rounded-xl px-0 sm:h-14 sm:w-14 ${
-                    favorite
-                      ? "border-accent/45 bg-accent-soft text-white"
-                      : "border-white/12 bg-white/[0.045] text-white/84 hover:border-white/22 hover:bg-white/9"
-                  }`}
-                />
                 <SaveEpisodeButton
                   dramaId={series.id}
                   episodeIndex={preferredInitialEpisode}
@@ -362,49 +337,7 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
         </section>
       ) : null}
 
-      <section className="mx-auto w-full max-w-7xl px-3 pb-2 sm:px-4 lg:px-8">
-        <div className="relative overflow-hidden rounded-[1.15rem] border border-cyan-300/10 bg-[#061021]/92 px-4 py-4 shadow-[0_20px_70px_rgba(0,0,0,0.34)] sm:px-6 lg:px-7">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_13%_45%,rgba(24,173,255,0.18),transparent_27%),linear-gradient(90deg,rgba(255,255,255,0.04),transparent_45%)]" />
-          <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex min-w-0 items-start gap-3">
-              <span className="mt-0.5 inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-cyan-400/15 text-cyan-300 ring-1 ring-cyan-300/20">
-                <Send className="size-5" />
-              </span>
-              <div className="min-w-0">
-                <h2 className="text-sm font-semibold text-white">
-                  Lebih Seru di Telegram!
-                </h2>
-                <p className="mt-1 text-xs text-white/52">
-                  Pengalaman nonton terbaik langsung dari chat dan Mini App.
-                </p>
-                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-[11px] text-white/45">
-                  <span className="inline-flex items-center gap-1.5">
-                    <Zap className="size-3.5 text-cyan-300/80" />
-                    Lebih cepat & ringan
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <Bell className="size-3.5 text-cyan-300/80" />
-                    Notifikasi episode baru
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <MessageCircle className="size-3.5 text-cyan-300/80" />
-                    Langsung dari chat
-                  </span>
-                </div>
-              </div>
-            </div>
-            <a
-              href={telegramOpenUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-cyan-400 px-5 text-sm font-semibold text-[#03111a] shadow-[0_16px_34px_rgba(34,211,238,0.22)] transition hover:brightness-110"
-            >
-              <Send className="size-4" />
-              Buka di Telegram
-            </a>
-          </div>
-        </div>
-      </section>
+      <TelegramOpenBanner href={telegramOpenUrl} />
 
       <section className="mx-auto w-full max-w-7xl px-3 pb-8 pt-4 sm:px-4 lg:px-8 lg:pb-10">
         <div className="rounded-[1.1rem] border border-white/8 bg-[#211827] px-4 py-5 shadow-[0_18px_60px_rgba(0,0,0,0.28)] sm:px-5 lg:px-6">

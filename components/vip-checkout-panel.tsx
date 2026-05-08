@@ -784,7 +784,7 @@ export function VipCheckoutPanel({
             "pointer-events-auto checkout-sheet-enter flex h-[100dvh] w-full flex-col overflow-hidden rounded-t-[2.4rem] border border-white/10 bg-[linear-gradient(180deg,rgba(28,18,12,0.98),rgba(14,10,8,0.99))] shadow-[0_-28px_80px_rgba(0,0,0,0.45)] will-change-transform sm:mx-auto sm:h-[92dvh] sm:max-w-2xl",
           )}
         >
-          <div className="relative shrink-0 px-4 pb-3 pt-3">
+          <div className="relative shrink-0 px-4 pb-3 pt-[calc(0.75rem_+_env(safe-area-inset-top))] sm:pt-3">
             <div className="relative flex items-center justify-between gap-3">
               <span className="mx-auto h-1.5 w-16 rounded-full bg-white/18" />
               <Link

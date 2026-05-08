@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { Eye, EyeOff, Lock, Mail, User, X } from "lucide-react";
 
 import { signInUserAction, signUpUserAction } from "@/app/auth/actions";
-import logoImage from "@/public/site-logo.png";
+import logoImage from "@/2.png";
 import { cn } from "@/lib/utils";
 
 type AuthMode = "sign-in" | "sign-up";
@@ -60,8 +60,10 @@ export function AuthCard({
   return (
     <section
       className={cn(
-        "relative w-full overflow-hidden rounded-[1.65rem] border border-white/10 bg-[#050719]/96 p-5 text-white shadow-[0_28px_90px_rgba(0,0,0,0.62)] backdrop-blur-2xl sm:rounded-[1.9rem] sm:p-7",
-        modal ? "max-w-[560px]" : "max-w-[580px]",
+        "relative w-full rounded-[1.65rem] border border-white/10 bg-[#050719]/96 p-5 text-white shadow-[0_28px_90px_rgba(0,0,0,0.62)] backdrop-blur-2xl sm:rounded-[1.9rem] sm:p-7",
+        modal
+          ? "max-h-[calc(100dvh_-_5.75rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))] max-w-[560px] overflow-x-hidden overflow-y-auto sm:max-h-[calc(100dvh_-_3rem)]"
+          : "max-w-[580px] overflow-hidden",
       )}
     >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,122,69,0.16),transparent_29%),radial-gradient(circle_at_92%_42%,rgba(255,255,255,0.06),transparent_22%)]" />

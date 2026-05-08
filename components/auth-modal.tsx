@@ -96,7 +96,7 @@ export function AuthModal() {
   }
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center overflow-y-auto bg-black/76 px-4 py-6 backdrop-blur-xl sm:px-6">
+    <div className="fixed inset-0 z-[120] flex items-start justify-center overflow-hidden bg-black/76 px-3 pb-[calc(0.8rem_+_env(safe-area-inset-bottom))] pt-[calc(4.75rem_+_env(safe-area-inset-top))] backdrop-blur-xl sm:items-center sm:px-6 sm:py-6">
       <button
         type="button"
         className="absolute inset-0 cursor-default"

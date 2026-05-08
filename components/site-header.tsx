@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { type ReactNode } from "react";
 import {
   CircleHelp,
@@ -19,8 +20,8 @@ import { logoutUserAction } from "@/app/auth/actions";
 import { HeaderSearchForm } from "@/components/header-search-form";
 import { HeaderInstallAppButton } from "@/components/header-install-app-button";
 import { PushNotificationButton } from "@/components/push-notification-button";
+import mobileHeaderLogo from "@/2.png";
 import { getAppSettings } from "@/lib/app-settings";
-import { getTelegramSupportUrl } from "@/lib/telegram-bot";
 import { getCurrentUser } from "@/lib/user-auth";
 import {
   getUserAvatarUrl,
@@ -35,10 +36,9 @@ type SiteHeaderProps = {
 
 export async function SiteHeader({ current }: SiteHeaderProps) {
   void current;
-  const [user, settings, supportUrl] = await Promise.all([
+  const [user, settings] = await Promise.all([
     getCurrentUser(),
     getAppSettings(),
-    getTelegramSupportUrl().catch(() => ""),
   ]);
   const avatarUrl = user ? getUserAvatarUrl(user) : null;
   const initials = user ? getUserInitials(user.name) : "LD";
@@ -46,26 +46,37 @@ export async function SiteHeader({ current }: SiteHeaderProps) {
   const brandLogoUrl = settings.site.customLogoUrl;
   const brandName = settings.site.name;
   const hasActiveVip = isVipActive(user?.vipExpiresAt);
-  const telegramHref = supportUrl || "/profile";
+  const telegramBotUsername = settings.telegram.botUsername?.trim().replace(/^@/, "");
+  const telegramHref = telegramBotUsername
+    ? `https://t.me/${telegramBotUsername}`
+    : settings.telegram.supportUrl || "/profile";
+  const supportHref = settings.telegram.supportUrl || telegramHref;
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/8 bg-[#080504]/92 backdrop-blur-2xl">
       <div className="mx-auto flex h-20 w-full max-w-[1580px] items-center gap-3 px-4 sm:px-6 lg:px-10">
         <Link href="/" className="group flex min-w-0 shrink-0 items-center gap-3">
+          <Image
+            src={mobileHeaderLogo}
+            alt={brandName}
+            priority
+            className="h-12 w-auto max-w-[150px] object-contain transition group-hover:scale-[1.02] sm:hidden"
+            sizes="150px"
+          />
           {brandLogoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={brandLogoUrl}
               alt={brandName}
-              className="h-20 w-auto max-w-[170px] object-contain transition group-hover:scale-[1.02] sm:h-18 sm:max-w-[220px]"
+              className="hidden h-20 w-auto max-w-[170px] object-contain transition group-hover:scale-[1.02] sm:block sm:h-18 sm:max-w-[220px]"
             />
           ) : (
             <>
-              <div className="relative flex size-11 items-center justify-center rounded-2xl border border-accent/20 bg-accent-soft text-accent shadow-[0_14px_30px_rgba(255,122,69,0.18)] transition group-hover:scale-[1.03]">
+              <div className="relative hidden size-11 items-center justify-center rounded-2xl border border-accent/20 bg-accent-soft text-accent shadow-[0_14px_30px_rgba(255,122,69,0.18)] transition group-hover:scale-[1.03] sm:flex">
                 <span className="absolute inset-1 rounded-[1rem] bg-[radial-gradient(circle,rgba(255,255,255,0.12),transparent_70%)]" />
                 <Clapperboard className="size-5" />
               </div>
-              <p className="truncate text-base font-semibold tracking-tight text-white sm:text-lg">
+              <p className="hidden truncate text-base font-semibold tracking-tight text-white sm:block sm:text-lg">
                 {brandName}
               </p>
             </>
@@ -170,7 +181,7 @@ export async function SiteHeader({ current }: SiteHeaderProps) {
                       <KeyRound className="size-4.5" />
                     </HeaderMenuLink>
                   ) : null}
-                  <HeaderMenuLink href={telegramHref} label="Bantuan" external>
+                  <HeaderMenuLink href={supportHref} label="Bantuan" external>
                     <CircleHelp className="size-4.5" />
                   </HeaderMenuLink>
                   <form action={logoutUserAction}>
@@ -196,7 +207,7 @@ export async function SiteHeader({ current }: SiteHeaderProps) {
                   </HeaderMenuLink>
                   <HeaderInstallAppButton />
                   <PushNotificationButton />
-                  <HeaderMenuLink href={telegramHref} label="Bantuan" external>
+                  <HeaderMenuLink href={supportHref} label="Bantuan" external>
                     <CircleHelp className="size-4.5" />
                   </HeaderMenuLink>
                 </>

@@ -379,26 +379,28 @@ export function PremiumModal() {
   const cheapestPlan = payload ? getCheapestPlan(payload.plans) : null;
 
   return (
-    <div className="fixed inset-0 z-[118] flex items-center justify-center overflow-y-auto bg-black/76 px-4 py-6 backdrop-blur-xl sm:px-6">
+    <div className="fixed inset-0 z-[118] flex items-start justify-center overflow-hidden bg-black/76 px-3 pb-[calc(0.8rem_+_env(safe-area-inset-bottom))] pt-[calc(4.75rem_+_env(safe-area-inset-top))] backdrop-blur-xl sm:items-center sm:px-6 sm:py-6">
       <button
         type="button"
         className="absolute inset-0 cursor-default"
         aria-label="Tutup premium"
         onClick={closeModal}
       />
-      <section className="relative z-10 w-full max-w-[560px] overflow-hidden rounded-[1.45rem] border border-white/10 bg-[#050719]/96 p-5 text-white shadow-[0_28px_90px_rgba(0,0,0,0.62)] backdrop-blur-2xl sm:rounded-[1.75rem] sm:p-6">
+      <section className="relative z-10 flex max-h-[calc(100dvh_-_5.75rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))] w-full max-w-[560px] flex-col overflow-hidden rounded-[1.45rem] border border-white/10 bg-[#050719]/96 text-white shadow-[0_28px_90px_rgba(0,0,0,0.62)] backdrop-blur-2xl sm:max-h-[calc(100dvh_-_3rem)] sm:rounded-[1.75rem]">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,184,56,0.18),transparent_27%),radial-gradient(circle_at_96%_34%,rgba(34,211,238,0.1),transparent_23%)]" />
         <div className="absolute inset-px rounded-[1.35rem] border border-white/[0.035] sm:rounded-[1.65rem]" />
-        <button
-          type="button"
-          onClick={closeModal}
-          className="absolute right-4 top-4 z-10 inline-flex size-10 items-center justify-center rounded-full border border-white/8 bg-white/[0.025] text-white/46 transition hover:bg-white/8 hover:text-white"
-          aria-label="Tutup"
-        >
-          <X className="size-5" />
-        </button>
+        <div className="relative z-20 flex shrink-0 justify-end px-3 pb-1 pt-3">
+          <button
+            type="button"
+            onClick={closeModal}
+            className="inline-flex size-11 items-center justify-center rounded-full border border-white/10 bg-[#0b1024]/92 text-white/78 shadow-[0_12px_34px_rgba(0,0,0,0.42)] transition hover:bg-white/10 hover:text-white"
+            aria-label="Tutup"
+          >
+            <X className="size-5" />
+          </button>
+        </div>
 
-        <div className="relative">
+        <div className="relative min-h-0 flex-1 overflow-y-auto px-5 pb-[calc(1rem_+_env(safe-area-inset-bottom))] pt-1 sm:px-6 sm:pb-6">
           <div className="flex flex-col items-center text-center">
             <div className="flex size-[4.5rem] items-center justify-center rounded-full bg-[linear-gradient(180deg,#ffca48,#ff9f24)] text-[#221100] shadow-[0_18px_48px_rgba(255,180,41,0.28)]">
               <Crown className="size-9" strokeWidth={2.4} />

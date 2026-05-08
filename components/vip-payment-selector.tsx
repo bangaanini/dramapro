@@ -131,18 +131,20 @@ export function VipPaymentSelector({
       : "Bayar dengan QRIS";
 
   return (
-    <div className="relative flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden rounded-[1.55rem] border border-white/10 bg-[#050719]/98 text-white shadow-[0_28px_90px_rgba(0,0,0,0.62)] backdrop-blur-2xl sm:rounded-[1.8rem]">
+    <div className="relative flex max-h-[calc(100dvh_-_1.5rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))] w-full flex-col overflow-hidden rounded-[1.55rem] border border-white/10 bg-[#050719]/98 text-white shadow-[0_28px_90px_rgba(0,0,0,0.62)] backdrop-blur-2xl sm:max-h-[calc(100dvh_-_1.5rem)] sm:rounded-[1.8rem]">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,65,65,0.14),transparent_27%),radial-gradient(circle_at_92%_26%,rgba(78,123,255,0.14),transparent_24%)]" />
 
-      <div className="relative min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-5 sm:px-6 sm:pb-5 sm:pt-6">
+      <div className="relative z-20 flex shrink-0 justify-start px-4 pb-1 pt-4 sm:px-6">
         <Link
           href={next}
-          className="absolute left-4 top-4 z-10 inline-flex size-9 items-center justify-center rounded-full border border-white/8 bg-white/[0.025] text-white/48 transition hover:bg-white/8 hover:text-white"
+          className="inline-flex size-11 items-center justify-center rounded-full border border-white/10 bg-[#0b1024]/92 text-white/78 shadow-[0_12px_34px_rgba(0,0,0,0.42)] transition hover:bg-white/10 hover:text-white"
           aria-label="Tutup halaman VIP"
         >
           <X className="size-5" />
         </Link>
+      </div>
 
+      <div className="relative min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-1 sm:px-6 sm:pb-5">
         <div className="flex flex-col items-center text-center">
           <div className="flex size-[4.5rem] items-center justify-center rounded-full bg-red-500/12 text-red-300 shadow-[0_0_46px_rgba(255,55,71,0.26)] ring-1 ring-red-400/10">
             <CreditCard className="size-9" strokeWidth={2.4} />

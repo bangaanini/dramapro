@@ -13,6 +13,7 @@ import {
   deleteTelegramPartnerBotAction,
   updateTelegramPartnerBotAction,
 } from "@/app/admin/actions";
+import { OwnerAffiliateCombobox } from "@/components/admin/owner-affiliate-combobox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -36,7 +37,7 @@ export default async function AdminTelegramBotsPage(
       orderBy: {
         createdAt: "desc",
       },
-      take: 250,
+      take: 1000,
       select: {
         id: true,
         name: true,
@@ -488,24 +489,7 @@ function OwnerSelect({
   }>;
   defaultValue?: string;
 }) {
-  return (
-    <label className="grid gap-2 text-sm font-medium text-white">
-      Owner affiliate
-      <select
-        name="ownerUserId"
-        defaultValue={defaultValue ?? ""}
-        className="h-12 rounded-2xl border border-white/10 bg-[rgb(31,21,20)] px-4 text-sm text-white outline-none transition focus:border-accent/50"
-      >
-        <option value="">Pilih owner referral</option>
-        {owners.map((owner) => (
-          <option key={owner.id} value={owner.id}>
-            {owner.name} · {owner.affiliateCode ?? "tanpa kode"} ·{" "}
-            {owner.email ?? (owner.telegramUsername ? `@${owner.telegramUsername}` : "telegram")}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
+  return <OwnerAffiliateCombobox owners={owners} defaultValue={defaultValue} />;
 }
 
 function InfoBox({
