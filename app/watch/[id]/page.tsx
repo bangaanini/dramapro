@@ -26,6 +26,7 @@ import {
   buildDramaShareStartParam,
   buildTelegramMiniAppStartAppLink,
 } from "@/lib/telegram-bot";
+import { buildTelegramPublicHref } from "@/lib/telegram-links";
 import { getPartnerDownloadBotsForOwner } from "@/lib/partner-downloads";
 import { getCurrentUser, userHasAdminVideoBypass } from "@/lib/user-auth";
 import {
@@ -175,9 +176,14 @@ export default async function WatchDetailPage(props: PageProps<"/watch/[id]">) {
       ])
     : [null];
   const detailHref = `/watch/${series.id}`;
-  const telegramOpenUrl = settings.telegram.botUsername
-    ? `https://t.me/${settings.telegram.botUsername}`
-    : settings.telegram.supportUrl || settings.site.url;
+  const telegramBotUsername = settings.telegram.botUsername
+    ?.trim()
+    .replace(/^@/, "");
+  const telegramOpenUrl =
+    buildTelegramPublicHref(settings.telegram.defaultBroadcastChannel) ??
+    (telegramBotUsername
+      ? `https://t.me/${telegramBotUsername}`
+      : settings.telegram.supportUrl || settings.site.url);
 
   const relatedSeries = await prisma.catalogSeries.findMany({
     where: {
