@@ -199,6 +199,25 @@ function formatVipDate(value: string | null) {
   }).format(date);
 }
 
+function normalizeBadgeColor(value: string | null | undefined) {
+  const color = value?.trim();
+
+  if (!color || !/^#[0-9a-fA-F]{6}$/.test(color)) {
+    return "";
+  }
+
+  return color;
+}
+
+function hexToRgba(hexColor: string, alpha: number) {
+  const normalized = hexColor.replace(/^#/, "");
+  const red = Number.parseInt(normalized.slice(0, 2), 16);
+  const green = Number.parseInt(normalized.slice(2, 4), 16);
+  const blue = Number.parseInt(normalized.slice(4, 6), 16);
+
+  return `rgba(${red},${green},${blue},${alpha})`;
+}
+
 export function PremiumModal() {
   const pathname = usePathname();
   const router = useRouter();
@@ -377,6 +396,19 @@ export function PremiumModal() {
   const isSignedIn = Boolean(payload?.user.isSignedIn);
   const vipDate = formatVipDate(payload?.user.vipExpiresAt ?? null);
   const cheapestPlan = payload ? getCheapestPlan(payload.plans) : null;
+  const startingPrice = cheapestPlan
+    ? formatIdr(cheapestPlan.priceAmount, cheapestPlan.currency)
+    : "harga terjangkau";
+  const modalTitle = payload?.user.hasActiveVip
+    ? "Premium kamu aktif"
+    : manualOpen
+      ? "Upgrade ke Premium Sekarang"
+      : "Selamat Datang di Layar Drama!";
+  const modalDescription = payload?.user.hasActiveVip
+    ? "Semua episode premium sudah terbuka dan masa aktif VIP kamu masih berjalan."
+    : manualOpen
+      ? `Pilih paket VIP mulai ${startingPrice} untuk membuka semua episode premium.`
+      : "Nikmati akses tak terbatas ke semua episode premium dengan harga terjangkau.";
 
   return (
     <div className="fixed inset-0 z-[118] flex items-start justify-center overflow-hidden bg-black/76 px-3 pb-[calc(0.8rem_+_env(safe-area-inset-bottom))] pt-[calc(4.75rem_+_env(safe-area-inset-top))] backdrop-blur-xl sm:items-center sm:px-6 sm:py-6">
@@ -406,13 +438,10 @@ export function PremiumModal() {
               <Crown className="size-9" strokeWidth={2.4} />
             </div>
             <h2 className="mt-6 text-2xl font-semibold tracking-tight text-white sm:text-[1.7rem]">
-              {payload?.user.hasActiveVip
-                ? "Premium kamu aktif"
-                : "Selamat Datang di Layar Drama!"}
+              {modalTitle}
             </h2>
             <p className="mt-3 max-w-[420px] text-sm font-semibold leading-7 text-white/58 sm:text-base">
-              Nikmati akses tak terbatas ke semua episode premium dengan harga
-              terjangkau.
+              {modalDescription}
             </p>
             {payload?.user.hasActiveVip && vipDate ? (
               <p className="mt-2 rounded-full border border-emerald-300/12 bg-emerald-400/8 px-3 py-1 text-xs font-medium text-emerald-100/80">
@@ -569,6 +598,24 @@ function PremiumPlanRow({
   const href = isSignedIn
     ? vipHref
     : `?auth=sign-in&next=${encodeURIComponent(vipHref)}`;
+  const badgeText = plan.badgeText.trim();
+  const badgeColor = normalizeBadgeColor(plan.badgeColor);
+  const badgeStyle = badgeColor
+    ? {
+        backgroundColor: hexToRgba(badgeColor, 0.16),
+        borderColor: hexToRgba(badgeColor, 0.46),
+        color: badgeColor,
+      }
+    : undefined;
+  const iconStyle = badgeColor
+    ? {
+        background: `linear-gradient(180deg,${hexToRgba(
+          badgeColor,
+          0.92,
+        )},${hexToRgba(badgeColor, 0.68)})`,
+        boxShadow: `0 12px 26px ${hexToRgba(badgeColor, 0.25)}`,
+      }
+    : undefined;
 
   return (
     <Link
@@ -579,15 +626,28 @@ function PremiumPlanRow({
         !isSignedIn && "opacity-55",
       )}
     >
-      <span className="flex size-[3.25rem] shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(180deg,#5b8cff,#3867f4)] text-white shadow-[0_12px_26px_rgba(65,111,255,0.25)]">
+      <span
+        className="flex size-[3.25rem] shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(180deg,#5b8cff,#3867f4)] text-white shadow-[0_12px_26px_rgba(65,111,255,0.25)]"
+        style={iconStyle}
+      >
         <Zap className="size-6" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold text-white sm:text-base">
-          {formatIdr(plan.priceAmount, plan.currency)}
-          <span className="ml-1 text-xs font-semibold text-white/45">
-            / {formatDurationLabel(plan.durationDays)}
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="text-sm font-semibold text-white sm:text-base">
+            {formatIdr(plan.priceAmount, plan.currency)}
+            <span className="ml-1 text-xs font-semibold text-white/45">
+              / {formatDurationLabel(plan.durationDays)}
+            </span>
           </span>
+          {badgeText ? (
+            <span
+              className="inline-flex max-w-full shrink-0 rounded-full border border-amber-300/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold uppercase leading-4 text-amber-100"
+              style={badgeStyle}
+            >
+              {badgeText}
+            </span>
+          ) : null}
         </span>
         <span className="mt-1 block truncate text-xs font-medium text-white/42">
           {formatPlanDescription(plan)}

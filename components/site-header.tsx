@@ -12,8 +12,6 @@ import {
   Megaphone,
   MessageCircle,
   Search,
-  UserPlus,
-  UserRound,
 } from "lucide-react";
 
 import { logoutUserAction } from "@/app/auth/actions";
@@ -22,6 +20,7 @@ import { HeaderInstallAppButton } from "@/components/header-install-app-button";
 import { PushNotificationButton } from "@/components/push-notification-button";
 import mobileHeaderLogo from "@/2.png";
 import { getAppSettings } from "@/lib/app-settings";
+import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/user-auth";
 import {
   getUserAvatarUrl,
@@ -33,6 +32,115 @@ import { isVipActive } from "@/lib/vip";
 type SiteHeaderProps = {
   current?: "home" | "library" | "account" | "watch";
 };
+
+function getVipRemainingLabel(vipExpiresAt: Date | null | undefined) {
+  if (!vipExpiresAt) {
+    return null;
+  }
+
+  const remainingDays = Math.max(
+    1,
+    Math.ceil((vipExpiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
+  );
+
+  return `Sisa ${remainingDays} hari Premium`;
+}
+
+function buildTelegramPublicHref(value: string | null | undefined) {
+  const raw = value?.trim();
+
+  if (!raw) {
+    return null;
+  }
+
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      const url = new URL(raw);
+      const host = url.hostname.toLowerCase();
+
+      if (host === "t.me" || host === "www.t.me" || host === "telegram.me") {
+        return url.toString();
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  if (/^(t\.me|telegram\.me)\//i.test(raw)) {
+    try {
+      const url = new URL(`https://${raw}`);
+      const host = url.hostname.toLowerCase();
+
+      if (host === "t.me" || host === "telegram.me") {
+        return url.toString();
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  const username = raw.replace(/^@/, "");
+
+  if (!/^[a-zA-Z0-9_]{4,64}$/.test(username)) {
+    return null;
+  }
+
+  return `https://t.me/${username}`;
+}
+
+async function getPartnerTelegramChannelHref(user: {
+  id: string;
+  referredByPartnerBotId?: string | null;
+}) {
+  if (user.referredByPartnerBotId) {
+    const referredBot = await prisma.telegramPartnerBot.findFirst({
+      where: {
+        id: user.referredByPartnerBotId,
+        isEnabled: true,
+      },
+      select: {
+        defaultChannelUsername: true,
+      },
+    });
+
+    const referredChannelHref = buildTelegramPublicHref(
+      referredBot?.defaultChannelUsername,
+    );
+
+    if (referredChannelHref) {
+      return referredChannelHref;
+    }
+  }
+
+  const ownedBots = await prisma.telegramPartnerBot.findMany({
+    where: {
+      ownerUserId: user.id,
+      isEnabled: true,
+      defaultChannelUsername: {
+        not: "",
+      },
+    },
+    orderBy: {
+      updatedAt: "desc",
+    },
+    select: {
+      defaultChannelUsername: true,
+    },
+    take: 5,
+  });
+
+  for (const partnerBot of ownedBots) {
+    const channelHref = buildTelegramPublicHref(
+      partnerBot.defaultChannelUsername,
+    );
+
+    if (channelHref) {
+      return channelHref;
+    }
+  }
+
+  return null;
+}
 
 export async function SiteHeader({ current }: SiteHeaderProps) {
   void current;
@@ -46,11 +154,20 @@ export async function SiteHeader({ current }: SiteHeaderProps) {
   const brandLogoUrl = settings.site.customLogoUrl;
   const brandName = settings.site.name;
   const hasActiveVip = isVipActive(user?.vipExpiresAt);
+  const vipRemainingLabel = hasActiveVip
+    ? getVipRemainingLabel(user?.vipExpiresAt)
+    : null;
   const telegramBotUsername = settings.telegram.botUsername?.trim().replace(/^@/, "");
-  const telegramHref = telegramBotUsername
-    ? `https://t.me/${telegramBotUsername}`
-    : settings.telegram.supportUrl || "/profile";
-  const supportHref = settings.telegram.supportUrl || telegramHref;
+  const mainTelegramHref =
+    buildTelegramPublicHref(settings.telegram.defaultBroadcastChannel) ??
+    (telegramBotUsername
+      ? `https://t.me/${telegramBotUsername}`
+      : settings.telegram.supportUrl || "/profile");
+  const partnerTelegramHref = user
+    ? await getPartnerTelegramChannelHref(user)
+    : null;
+  const telegramHref = partnerTelegramHref ?? mainTelegramHref;
+  const supportHref = settings.telegram.supportUrl || mainTelegramHref;
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/8 bg-[#080504]/92 backdrop-blur-2xl">
@@ -95,7 +212,7 @@ export async function SiteHeader({ current }: SiteHeaderProps) {
             <Search className="size-5" />
           </Link>
 
-          {!hasActiveVip ? (
+          {user && !hasActiveVip ? (
             <Link
               href="?premium=1"
               prefetch
@@ -106,113 +223,115 @@ export async function SiteHeader({ current }: SiteHeaderProps) {
             </Link>
           ) : null}
 
-          <details className="group relative">
-            <summary
-              className="flex size-12 cursor-pointer list-none items-center justify-center overflow-hidden rounded-full border border-white/12 bg-white/8 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(0,0,0,0.2)] transition hover:border-accent/35 hover:bg-white/12 focus:outline-none focus-visible:border-accent/45 [&::-webkit-details-marker]:hidden"
-              aria-label="Buka menu profil"
-            >
-              {avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={avatarUrl}
-                  alt={user?.name ?? "Profil"}
-                  className="size-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              ) : user ? (
-                initials
-              ) : (
-                <UserRound className="size-6" />
-              )}
-            </summary>
+          {user ? (
+            <details className="group relative">
+              <summary
+                className="flex size-12 cursor-pointer list-none items-center justify-center overflow-hidden rounded-full border border-white/12 bg-white/8 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(0,0,0,0.2)] transition hover:border-accent/35 hover:bg-white/12 focus:outline-none focus-visible:border-accent/45 [&::-webkit-details-marker]:hidden"
+                aria-label="Buka menu profil"
+              >
+                {avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={avatarUrl}
+                    alt={user.name}
+                    className="size-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  initials
+                )}
+              </summary>
 
-            <div className="invisible absolute right-0 top-full z-50 mt-3 w-[min(86vw,320px)] translate-y-2 rounded-2xl border border-white/10 bg-[#0b0808]/96 p-2 opacity-0 shadow-[0_26px_80px_rgba(0,0,0,0.58)] backdrop-blur-2xl transition duration-180 group-open:visible group-open:translate-y-0 group-open:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
-              <div className="mb-1 rounded-xl border border-white/8 bg-white/[0.045] p-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex size-12 items-center justify-center overflow-hidden rounded-full bg-accent text-sm font-bold text-white">
-                    {avatarUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={avatarUrl}
-                        alt={user?.name ?? "Profil"}
-                        className="size-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : user ? (
-                      initials
-                    ) : (
-                      <UserRound className="size-6" />
-                    )}
+              <div className="invisible absolute right-0 top-full z-50 mt-3 w-[min(86vw,320px)] translate-y-2 rounded-2xl border border-white/10 bg-[#0b0808]/96 p-2 opacity-0 shadow-[0_26px_80px_rgba(0,0,0,0.58)] backdrop-blur-2xl transition duration-180 group-open:visible group-open:translate-y-0 group-open:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
+                <div className="mb-1 rounded-xl border border-white/8 bg-white/[0.045] p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-12 items-center justify-center overflow-hidden rounded-full bg-accent text-sm font-bold text-white">
+                      {avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={avatarUrl}
+                          alt={user.name}
+                          className="size-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        initials
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-base font-semibold text-white">
+                        {user.name}
+                      </p>
+                      <p className="truncate text-sm text-white/58">
+                        {secondaryLabel}
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-base font-semibold text-white">
-                      {user?.name ?? "Guest"}
-                    </p>
-                    <p className="truncate text-sm text-white/58">
-                      {user ? secondaryLabel : "Masuk untuk menyimpan koleksi"}
-                    </p>
-                  </div>
+                  {vipRemainingLabel ? (
+                    <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-amber-300/18 bg-amber-300/10 px-3 py-1.5 text-xs font-semibold text-amber-100">
+                      <Crown className="size-3.5" />
+                      <span>{vipRemainingLabel}</span>
+                    </div>
+                  ) : null}
                 </div>
-              </div>
 
-              {user ? (
-                <>
-                  <HeaderMenuLink href="/library" label="Koleksiku">
-                    <LibraryBig className="size-4.5" />
-                  </HeaderMenuLink>
+                <HeaderMenuLink href="/library" label="Koleksiku">
+                  <LibraryBig className="size-4.5" />
+                </HeaderMenuLink>
+                {hasActiveVip ? (
                   <HeaderMenuLink
                     href="?premium=1"
-                    label={hasActiveVip ? "Perpanjang Premium" : "Upgrade ke Premium"}
-                    emphasized={!hasActiveVip}
+                    label="Perpanjang Premium"
+                    emphasized
                   >
                     <Crown className="size-4.5" />
                   </HeaderMenuLink>
-                  <HeaderMenuLink href="/affiliate" label="Program Affiliate">
-                    <Megaphone className="size-4.5" />
-                  </HeaderMenuLink>
-                  <HeaderInstallAppButton />
-                  <PushNotificationButton />
-                  <HeaderMenuLink href={telegramHref} label="Buka di Telegram" external>
-                    <MessageCircle className="size-4.5" />
-                  </HeaderMenuLink>
-                  {user.authProvider === "local" ? (
-                    <HeaderMenuLink href="/profile/password" label="Ganti Password">
-                      <KeyRound className="size-4.5" />
-                    </HeaderMenuLink>
-                  ) : null}
-                  <HeaderMenuLink href={supportHref} label="Bantuan" external>
-                    <CircleHelp className="size-4.5" />
-                  </HeaderMenuLink>
-                  <form action={logoutUserAction}>
-                    <button
-                      type="submit"
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-white/72 transition hover:bg-white/8 hover:text-white"
-                    >
-                      <LogOut className="size-4.5" />
-                      <span>Keluar</span>
-                    </button>
-                  </form>
-                </>
-              ) : (
-                <>
-                  <HeaderMenuLink href="?auth=sign-in" label="Masuk">
-                    <LogIn className="size-4.5" />
-                  </HeaderMenuLink>
-                  <HeaderMenuLink href="?auth=sign-up" label="Daftar akun">
-                    <UserPlus className="size-4.5" />
-                  </HeaderMenuLink>
-                  <HeaderMenuLink href="?premium=1" label="Upgrade ke Premium" emphasized>
+                ) : (
+                  <HeaderMenuLink
+                    href="?premium=1"
+                    label="Upgrade ke Premium"
+                    emphasized
+                  >
                     <Crown className="size-4.5" />
                   </HeaderMenuLink>
-                  <HeaderInstallAppButton />
-                  <PushNotificationButton />
-                  <HeaderMenuLink href={supportHref} label="Bantuan" external>
-                    <CircleHelp className="size-4.5" />
+                )}
+                <HeaderMenuLink href="/affiliate" label="Program Affiliate">
+                  <Megaphone className="size-4.5" />
+                </HeaderMenuLink>
+                <HeaderInstallAppButton />
+                <PushNotificationButton />
+                <HeaderMenuLink href={telegramHref} label="Buka di Telegram" external>
+                  <MessageCircle className="size-4.5" />
+                </HeaderMenuLink>
+                {user.authProvider === "local" ? (
+                  <HeaderMenuLink href="/profile/password" label="Ganti Password">
+                    <KeyRound className="size-4.5" />
                   </HeaderMenuLink>
-                </>
-              )}
-            </div>
-          </details>
+                ) : null}
+                <HeaderMenuLink href={supportHref} label="Bantuan" external>
+                  <CircleHelp className="size-4.5" />
+                </HeaderMenuLink>
+                <form action={logoutUserAction}>
+                  <button
+                    type="submit"
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-white/72 transition hover:bg-white/8 hover:text-white"
+                  >
+                    <LogOut className="size-4.5" />
+                    <span>Keluar</span>
+                  </button>
+                </form>
+              </div>
+            </details>
+          ) : (
+            <Link
+              href="?auth=sign-in"
+              prefetch
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[linear-gradient(135deg,var(--accent),var(--accent-strong))] px-4 text-sm font-semibold text-white shadow-[0_16px_36px_rgba(255,122,69,0.34)] transition hover:brightness-110 active:scale-[0.985] sm:h-12 sm:px-5"
+            >
+              <LogIn className="size-4.5" />
+              <span>Masuk</span>
+            </Link>
+          )}
         </div>
       </div>
     </header>
