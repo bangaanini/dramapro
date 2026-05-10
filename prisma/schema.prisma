@@ -28,6 +28,7 @@ enum VipPaymentStatus {
 
 enum PaymentGatewayProvider {
   paymenku
+  duitku
   xendit
   midtrans
   tripay

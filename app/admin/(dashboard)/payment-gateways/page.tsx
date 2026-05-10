@@ -7,6 +7,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  DUITKU_PRIMARY_CHANNELS,
+  resolveDuitkuEnabledChannelCodes,
+} from "@/lib/duitku";
 import { listPaymentGatewayConfigs } from "@/lib/payment-gateways";
 import {
   PAYMENKU_PRIMARY_CHANNELS,
@@ -88,7 +92,15 @@ export default async function AdminPaymentGatewaysPage(
           const enabledChannelCodes =
             gateway.provider === "paymenku"
               ? resolvePaymenkuEnabledChannelCodes(gateway.configJson)
+              : gateway.provider === "duitku"
+                ? resolveDuitkuEnabledChannelCodes(gateway.configJson)
               : [];
+          const gatewayChannels =
+            gateway.provider === "paymenku"
+              ? PAYMENKU_PRIMARY_CHANNELS
+              : gateway.provider === "duitku"
+                ? DUITKU_PRIMARY_CHANNELS
+                : [];
 
           return (
             <Card key={gateway.provider} className="glass-panel rounded-[2rem] border-white/10">
@@ -170,7 +182,7 @@ export default async function AdminPaymentGatewaysPage(
                         label="Default channel"
                         name="defaultChannelCode"
                         defaultValue={gateway.defaultChannelCode}
-                        placeholder="qris"
+                        placeholder={gateway.provider === "duitku" ? "NQ" : "qris"}
                       />
                     </div>
 
@@ -179,7 +191,11 @@ export default async function AdminPaymentGatewaysPage(
                         label="Merchant ID"
                         name="merchantId"
                         defaultValue={gateway.merchantId}
-                        placeholder="Opsional"
+                        placeholder={
+                          gateway.provider === "duitku"
+                            ? "Merchant Code Duitku"
+                            : "Opsional"
+                        }
                       />
                       <Field
                         label="Client/Public key"
@@ -214,7 +230,7 @@ export default async function AdminPaymentGatewaysPage(
                       />
                     </label>
 
-                    {gateway.provider === "paymenku" ? (
+                    {gatewayChannels.length > 0 ? (
                       <div className="space-y-3 rounded-[1.4rem] border border-white/10 bg-black/20 p-4">
                         <div>
                           <p className="text-sm font-medium text-white">
@@ -226,7 +242,7 @@ export default async function AdminPaymentGatewaysPage(
                         </div>
 
                         <div className="grid gap-3 sm:grid-cols-2">
-                          {PAYMENKU_PRIMARY_CHANNELS.map((channel) => (
+                          {gatewayChannels.map((channel) => (
                             <label
                               key={channel.code}
                               className="flex items-start gap-3 rounded-[1.1rem] border border-white/10 bg-white/5 px-4 py-3"
@@ -272,6 +288,8 @@ export default async function AdminPaymentGatewaysPage(
                     <div className="rounded-[1.2rem] border border-white/10 bg-white/5 px-4 py-4 text-sm text-[var(--muted)]">
                       {gateway.provider === "paymenku"
                         ? "Mode Paymenku mengikuti API key yang dipakai: sk_test untuk simulator dan sk_live untuk production. Config JSON mode tidak dipakai oleh adapter Paymenku."
+                        : gateway.provider === "duitku"
+                          ? 'Duitku memakai Merchant ID sebagai merchantCode, Secret sebagai API key, dan Config JSON mode "sandbox" atau "production". Callback URL: /api/payment/duitku/callback.'
                         : gateway.capability.implemented
                           ? "Gateway ini sudah siap dipakai checkout VIP setelah credential valid disimpan."
                           : "Gateway ini baru disiapkan untuk konfigurasi awal. Adapter API akan ditambahkan di fase berikutnya."}

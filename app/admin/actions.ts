@@ -16,6 +16,10 @@ import {
   getAppSettings,
   type TelegramInlineButtonConfig,
 } from "@/lib/app-settings";
+import {
+  normalizeDuitkuChannelCode,
+  resolveDuitkuEnabledChannelCodes,
+} from "@/lib/duitku";
 import { publishDramaChannelBroadcast } from "@/lib/drama-channel-broadcasts";
 import { decryptPaymentSecret, encryptPaymentSecret } from "@/lib/payment-crypto";
 import {
@@ -1119,16 +1123,19 @@ export async function savePaymentGatewayConfigAction(formData: FormData) {
   const displayName =
     String(formData.get("displayName") ?? "").trim() || definition.displayName;
   const isEnabled = String(formData.get("isEnabled") ?? "") === "on";
+  const rawDefaultChannelCode =
+    String(formData.get("defaultChannelCode") ?? "qris").trim() || "qris";
   const defaultChannelCode =
-    String(formData.get("defaultChannelCode") ?? "qris").trim().toLowerCase() ||
-    "qris";
+    provider === "duitku"
+      ? normalizeDuitkuChannelCode(rawDefaultChannelCode) || "NQ"
+      : rawDefaultChannelCode.toLowerCase();
   const merchantId = String(formData.get("merchantId") ?? "").trim();
   const clientKey = String(formData.get("clientKey") ?? "").trim();
   const secret = String(formData.get("secret") ?? "").trim();
   const configJsonRaw = String(formData.get("configJson") ?? "").trim();
   const enabledChannels = formData
     .getAll("enabledChannels")
-    .map((value) => String(value).trim().toLowerCase())
+    .map((value) => String(value).trim())
     .filter(Boolean);
 
   let configJson: Prisma.InputJsonValue | typeof Prisma.DbNull = Prisma.DbNull;
@@ -1150,6 +1157,21 @@ export async function savePaymentGatewayConfigAction(formData: FormData) {
     configJson = {
       ...baseConfig,
       enabledChannels: resolvePaymenkuEnabledChannelCodes({
+        enabledChannels: enabledChannels.map((channel) => channel.toLowerCase()),
+      }),
+    } satisfies Prisma.InputJsonValue;
+  }
+
+  if (provider === "duitku") {
+    const baseConfig =
+      configJson !== Prisma.DbNull && configJson && typeof configJson === "object"
+        ? { ...(configJson as Record<string, unknown>) }
+        : {};
+
+    configJson = {
+      ...baseConfig,
+      mode: baseConfig.mode === "production" ? "production" : "sandbox",
+      enabledChannels: resolveDuitkuEnabledChannelCodes({
         enabledChannels,
       }),
     } satisfies Prisma.InputJsonValue;
@@ -1227,11 +1249,21 @@ export async function setActivePaymentGatewayAction(formData: FormData) {
     where: { provider },
     select: {
       isEnabled: true,
+      merchantId: true,
+      secretCiphertext: true,
     },
   });
 
   if (!config?.isEnabled && !(provider === "paymenku" && process.env.PAYMENKU_API_KEY)) {
     redirect("/admin/payment-gateways?error=Aktifkan%20dan%20isi%20credential%20gateway%20terlebih%20dahulu");
+  }
+
+  if (provider === "duitku" && !config?.merchantId.trim()) {
+    redirect("/admin/payment-gateways?error=Merchant%20ID%20Duitku%20wajib%20diisi");
+  }
+
+  if (!config?.secretCiphertext && !(provider === "paymenku" && process.env.PAYMENKU_API_KEY)) {
+    redirect("/admin/payment-gateways?error=Secret%20atau%20API%20key%20gateway%20wajib%20diisi");
   }
 
   await prisma.paymentGatewaySettings.upsert({

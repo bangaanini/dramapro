@@ -3,6 +3,7 @@ import { decryptPaymentSecret } from "@/lib/payment-crypto";
 
 export const PAYMENT_GATEWAY_PROVIDERS = [
   "paymenku",
+  "duitku",
   "xendit",
   "midtrans",
   "tripay",
@@ -32,6 +33,7 @@ export type CreatePaymentTransactionInput = {
   customerEmail: string;
   customerPhone?: string;
   returnUrl: string;
+  callbackUrl?: string;
   channelCode: string;
 };
 
@@ -91,6 +93,17 @@ export const PAYMENT_GATEWAY_DEFINITIONS: Array<{
       supportsInlineQr: true,
       supportsRedirectCheckout: true,
       supportsWebhook: false,
+      supportsStatusPolling: true,
+      implemented: true,
+    },
+  },
+  {
+    provider: "duitku",
+    displayName: "Duitku",
+    capability: {
+      supportsInlineQr: true,
+      supportsRedirectCheckout: true,
+      supportsWebhook: true,
       supportsStatusPolling: true,
       implemented: true,
     },
@@ -176,7 +189,9 @@ export async function listPaymentGatewayConfigs() {
       provider: definition.provider,
       displayName: row?.displayName || definition.displayName,
       isEnabled: row?.isEnabled ?? false,
-      defaultChannelCode: row?.defaultChannelCode ?? "qris",
+      defaultChannelCode:
+        row?.defaultChannelCode ??
+        (definition.provider === "duitku" ? "NQ" : "qris"),
       merchantId: row?.merchantId ?? "",
       clientKey: row?.clientKey ?? "",
       secret,
@@ -223,6 +238,10 @@ export async function getActivePaymentGateway() {
 
   if (!config.secret) {
     throw new Error(`${config.displayName} belum memiliki credential yang valid.`);
+  }
+
+  if (config.provider === "duitku" && !config.merchantId.trim()) {
+    throw new Error("Duitku belum memiliki Merchant ID.");
   }
 
   return config;

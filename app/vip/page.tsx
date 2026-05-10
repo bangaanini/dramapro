@@ -5,11 +5,12 @@ import { redirect } from "next/navigation";
 
 import { VipCheckoutPanel } from "@/components/vip-checkout-panel";
 import { VipPaymentSelector } from "@/components/vip-payment-selector";
+import { getDuitkuCheckoutChannels } from "@/lib/duitku";
 import {
-  extractPaymenkuPaymentDetailsFromPayloads,
   getPaymenkuCheckoutChannels,
   PAYMENKU_PRIMARY_CHANNELS,
 } from "@/lib/paymenku";
+import { extractGatewayPaymentDetailsFromPayloads } from "@/lib/payment-gateway-details";
 import { getActivePaymentGateway } from "@/lib/payment-gateways";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, resolveSafeRedirectPath } from "@/lib/user-auth";
@@ -37,6 +38,8 @@ export default async function VipPage(props: PageProps<"/vip">) {
   const availableChannels =
     activeGateway?.provider === "paymenku"
       ? getPaymenkuCheckoutChannels(activeGateway.configJson)
+      : activeGateway?.provider === "duitku"
+        ? getDuitkuCheckoutChannels(activeGateway.configJson)
       : PAYMENKU_PRIMARY_CHANNELS;
   const checkoutPayment =
     checkoutReferenceId && user
@@ -50,10 +53,11 @@ export default async function VipPage(props: PageProps<"/vip">) {
     checkoutPayment && user && checkoutPayment.userId === user.id
       ? checkoutPayment
       : null;
-  const paymenkuDetails = resolvedCheckoutPayment
-    ? extractPaymenkuPaymentDetailsFromPayloads(
-        resolvedCheckoutPayment.statusPayload as Parameters<typeof extractPaymenkuPaymentDetailsFromPayloads>[0],
-        resolvedCheckoutPayment.providerPayload as Parameters<typeof extractPaymenkuPaymentDetailsFromPayloads>[1],
+  const paymentDetails = resolvedCheckoutPayment
+    ? extractGatewayPaymentDetailsFromPayloads(
+        resolvedCheckoutPayment.gatewayProvider,
+        resolvedCheckoutPayment.statusPayload,
+        resolvedCheckoutPayment.providerPayload,
         resolvedCheckoutPayment.channelCode,
       )
     : null;
@@ -130,7 +134,7 @@ export default async function VipPage(props: PageProps<"/vip">) {
         </div>
       </section>
 
-      {resolvedCheckoutPayment && paymenkuDetails ? (
+      {resolvedCheckoutPayment && paymentDetails ? (
         <VipCheckoutPanel
           presentation="sheet"
           closeHref={`/vip?next=${encodeURIComponent(next)}`}
@@ -149,10 +153,10 @@ export default async function VipPage(props: PageProps<"/vip">) {
             planName: resolvedCheckoutPayment.plan.name,
             channelCode: resolvedCheckoutPayment.channelCode,
             channelName:
-              resolvedCheckoutPayment.channelName || paymenkuDetails.channelName,
-            channelGroup: paymenkuDetails.group,
-            bankName: paymenkuDetails.bankName,
-            vaNumber: paymenkuDetails.vaNumber,
+              resolvedCheckoutPayment.channelName || paymentDetails.channelName,
+            channelGroup: paymentDetails.group,
+            bankName: paymentDetails.bankName,
+            vaNumber: paymentDetails.vaNumber,
           }}
         />
       ) : null}

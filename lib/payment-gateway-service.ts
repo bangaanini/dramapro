@@ -1,4 +1,12 @@
 import {
+  checkDuitkuTransactionStatus,
+  createDuitkuTransaction,
+  extractDuitkuPaymentDetails,
+  normalizeDuitkuStatus,
+  parseDuitkuAmount,
+  resolveDuitkuExpiryPeriod,
+} from "@/lib/duitku";
+import {
   checkPaymenkuTransactionStatus,
   createPaymenkuTransaction,
   extractPaymenkuPaymentDetails,
@@ -82,6 +90,85 @@ async function checkPaymenkuCheckoutStatus(
   };
 }
 
+async function createDuitkuCheckout(
+  gateway: PaymentGatewayRuntimeConfig,
+  input: CreatePaymentTransactionInput,
+): Promise<CreatePaymentTransactionResult> {
+  const expiryPeriod = resolveDuitkuExpiryPeriod(
+    gateway.configJson,
+    input.channelCode,
+  );
+  const payload = await createDuitkuTransaction({
+    merchantCode: gateway.merchantId,
+    apiKey: gateway.secret!,
+    paymentAmount: input.amount,
+    paymentMethod: input.channelCode,
+    merchantOrderId: input.referenceId,
+    productDetails: "Paket VIP Layar Drama",
+    customerName: input.customerName,
+    email: input.customerEmail,
+    phoneNumber: input.customerPhone,
+    callbackUrl: input.callbackUrl ?? input.returnUrl,
+    returnUrl: input.returnUrl,
+    expiryPeriod,
+    configJson: gateway.configJson,
+  });
+
+  if (payload.statusCode !== "00") {
+    throw new Error(payload.statusMessage || payload.Message || "Duitku menolak transaksi.");
+  }
+
+  if (!payload.paymentUrl) {
+    throw new Error(payload.statusMessage || "Duitku tidak mengembalikan paymentUrl.");
+  }
+
+  const paymentDetails = extractDuitkuPaymentDetails(payload, input.channelCode);
+
+  return {
+    providerTransactionId: payload.reference ?? input.referenceId,
+    referenceId: input.referenceId,
+    amount: parseDuitkuAmount(payload.amount),
+    status: normalizeDuitkuStatus(payload.statusCode, true),
+    payUrl: payload.paymentUrl,
+    qrUrl: paymentDetails.qrUrl,
+    qrString: paymentDetails.qrString,
+    expiresAt: new Date(Date.now() + expiryPeriod * 60_000),
+    providerPayload: payload as unknown as object,
+    channelCode: input.channelCode,
+    channelName: paymentDetails.channelName,
+    channelGroup: paymentDetails.group,
+    bankName: paymentDetails.bankName,
+    vaNumber: paymentDetails.vaNumber,
+  };
+}
+
+async function checkDuitkuCheckoutStatus(
+  gateway: PaymentGatewayRuntimeConfig,
+  merchantOrderId: string,
+): Promise<CheckPaymentStatusResult> {
+  const payload = await checkDuitkuTransactionStatus({
+    merchantCode: gateway.merchantId,
+    apiKey: gateway.secret!,
+    merchantOrderId,
+    configJson: gateway.configJson,
+  });
+  const paymentDetails = extractDuitkuPaymentDetails(payload);
+
+  return {
+    providerTransactionId: payload.reference ?? null,
+    amount: parseDuitkuAmount(payload.amount),
+    status: normalizeDuitkuStatus(payload.statusCode),
+    payUrl: null,
+    qrUrl: paymentDetails.qrUrl,
+    qrString: paymentDetails.qrString,
+    expiresAt: paymentDetails.expiresAt,
+    providerPayload: payload as unknown as object,
+    channelGroup: paymentDetails.group,
+    bankName: paymentDetails.bankName,
+    vaNumber: paymentDetails.vaNumber,
+  };
+}
+
 export async function createActiveGatewayTransaction(
   input: CreatePaymentTransactionInput,
 ) {
@@ -92,6 +179,11 @@ export async function createActiveGatewayTransaction(
       return {
         gateway,
         result: await createPaymenkuCheckout(gateway, input),
+      };
+    case "duitku":
+      return {
+        gateway,
+        result: await createDuitkuCheckout(gateway, input),
       };
     default:
       throw new Error(`${gateway.displayName} belum tersedia untuk checkout.`);
@@ -113,12 +205,18 @@ export async function checkGatewayTransactionStatus(
             throw new Error("Gateway pembayaran tidak siap dipakai.");
           }
 
+          if (provider === "duitku" && !config.merchantId.trim()) {
+            throw new Error("Duitku belum memiliki Merchant ID.");
+          }
+
           return config;
         });
 
   switch (provider) {
     case "paymenku":
       return checkPaymenkuCheckoutStatus(gateway, providerTransactionIdOrReferenceId);
+    case "duitku":
+      return checkDuitkuCheckoutStatus(gateway, providerTransactionIdOrReferenceId);
     default:
       throw new Error(`${provider} belum tersedia untuk sinkronisasi status.`);
   }

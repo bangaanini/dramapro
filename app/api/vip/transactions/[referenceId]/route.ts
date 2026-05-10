@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { extractPaymenkuPaymentDetailsFromPayloads } from "@/lib/paymenku";
+import { extractGatewayPaymentDetailsFromPayloads } from "@/lib/payment-gateway-details";
 import { prisma } from "@/lib/prisma";
 import { getUserFromRequest } from "@/lib/user-auth";
 import { syncVipPaymentStatus } from "@/lib/vip-payments";
@@ -33,9 +33,10 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const paymenkuDetails = extractPaymenkuPaymentDetailsFromPayloads(
-    payment.statusPayload as Parameters<typeof extractPaymenkuPaymentDetailsFromPayloads>[0],
-    payment.providerPayload as Parameters<typeof extractPaymenkuPaymentDetailsFromPayloads>[1],
+  const paymentDetails = extractGatewayPaymentDetailsFromPayloads(
+    payment.gatewayProvider,
+    payment.statusPayload,
+    payment.providerPayload,
     payment.channelCode,
   );
 
@@ -51,9 +52,9 @@ export async function GET(
     currency: payment.currency,
     planName: payment.plan.name,
     channelCode: payment.channelCode,
-    channelName: payment.channelName || paymenkuDetails.channelName,
-    channelGroup: paymenkuDetails.group,
-    bankName: paymenkuDetails.bankName,
-    vaNumber: paymenkuDetails.vaNumber,
+    channelName: payment.channelName || paymentDetails.channelName,
+    channelGroup: paymentDetails.group,
+    bankName: paymentDetails.bankName,
+    vaNumber: paymentDetails.vaNumber,
   });
 }

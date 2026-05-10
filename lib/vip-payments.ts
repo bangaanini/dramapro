@@ -5,6 +5,10 @@ import { redirect } from "next/navigation";
 
 import { DEFAULT_AFFILIATE_SETTINGS, getAffiliateTier } from "@/lib/affiliate";
 import {
+  normalizeDuitkuChannelCode,
+  resolveDuitkuEnabledChannelCodes,
+} from "@/lib/duitku";
+import {
   getPaymenkuChannelGroup,
   resolvePaymenkuEnabledChannelCodes,
 } from "@/lib/paymenku";
@@ -12,7 +16,11 @@ import {
   checkGatewayTransactionStatus,
   createActiveGatewayTransaction,
 } from "@/lib/payment-gateway-service";
-import { getActivePaymentGateway } from "@/lib/payment-gateways";
+import {
+  getActivePaymentGateway,
+  type CheckPaymentStatusResult,
+  type PaymentGatewayProvider,
+} from "@/lib/payment-gateways";
 import { notifyPartnerBotCommissionForPayment } from "@/lib/partner-bot-notifications";
 import { prisma } from "@/lib/prisma";
 import {
@@ -23,6 +31,7 @@ import {
 
 const PAYMENKU_MINIMUM_QRIS_AMOUNT = 1000;
 const PAYMENKU_MINIMUM_VA_AMOUNT = 20000;
+const DUITKU_MINIMUM_AMOUNT = 10000;
 
 function buildReferenceId() {
   return `VIP-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`;
@@ -133,8 +142,11 @@ export async function createVipPaymentSession(input: {
 }) {
   const safeNext = resolveSafeRedirectPath(input.next);
   const user = await requireSignedInVipUser(`/vip?next=${safeNext}`);
-  const channelCode = String(input.channelCode).trim().toLowerCase();
   const activeGateway = await getActivePaymentGateway();
+  const channelCode =
+    activeGateway.provider === "duitku"
+      ? normalizeDuitkuChannelCode(input.channelCode)
+      : String(input.channelCode).trim().toLowerCase();
 
   const plan = await prisma.vipPricePlan.findFirst({
     where: {
@@ -150,6 +162,8 @@ export async function createVipPaymentSession(input: {
   const enabledChannelCodes =
     activeGateway.provider === "paymenku"
       ? resolvePaymenkuEnabledChannelCodes(activeGateway.configJson)
+      : activeGateway.provider === "duitku"
+        ? resolveDuitkuEnabledChannelCodes(activeGateway.configJson)
       : [activeGateway.defaultChannelCode];
 
   if (!enabledChannelCodes.includes(channelCode)) {
@@ -158,7 +172,10 @@ export async function createVipPaymentSession(input: {
     );
   }
 
-  if (plan.priceAmount < PAYMENKU_MINIMUM_QRIS_AMOUNT) {
+  if (
+    activeGateway.provider === "paymenku" &&
+    plan.priceAmount < PAYMENKU_MINIMUM_QRIS_AMOUNT
+  ) {
     redirect(
       `/vip?error=${encodeURIComponent(
         "Nominal paket terlalu kecil untuk checkout Paymenku. Minimum transaksi adalah Rp 1.000.",
@@ -166,7 +183,16 @@ export async function createVipPaymentSession(input: {
     );
   }
 
+  if (activeGateway.provider === "duitku" && plan.priceAmount < DUITKU_MINIMUM_AMOUNT) {
+    redirect(
+      `/vip?error=${encodeURIComponent(
+        "Nominal paket terlalu kecil untuk checkout Duitku. Minimum transaksi adalah Rp 10.000.",
+      )}&next=${encodeURIComponent(safeNext)}`,
+    );
+  }
+
   if (
+    activeGateway.provider === "paymenku" &&
     getPaymenkuChannelGroup(channelCode) === "va" &&
     plan.priceAmount < PAYMENKU_MINIMUM_VA_AMOUNT
   ) {
@@ -180,6 +206,7 @@ export async function createVipPaymentSession(input: {
   const referenceId = buildReferenceId();
   const baseUrl = await getBaseUrl();
   const returnUrl = `${baseUrl}/vip/checkout/${referenceId}?next=${encodeURIComponent(safeNext)}`;
+  const callbackUrl = `${baseUrl}/api/payment/duitku/callback`;
 
   const { gateway, result } = await createActiveGatewayTransaction({
     referenceId,
@@ -188,6 +215,7 @@ export async function createVipPaymentSession(input: {
     customerEmail: resolveUserPaymentContactEmail(user),
     channelCode,
     returnUrl,
+    callbackUrl,
   });
 
   if (!result.payUrl) {
@@ -244,18 +272,22 @@ export async function syncVipPaymentStatus(referenceId: string, userId: string) 
   }
 
   const payload = await checkGatewayTransactionStatus(
-    payment.gatewayProvider as
-      | "paymenku"
-      | "xendit"
-      | "midtrans"
-      | "tripay"
-      | "doku",
-    payment.providerTransactionId || payment.referenceId,
+    payment.gatewayProvider as PaymentGatewayProvider,
+    payment.gatewayProvider === "duitku"
+      ? payment.referenceId
+      : payment.providerTransactionId || payment.referenceId,
   );
 
+  return applyVipPaymentGatewayResult(payment.id, payload);
+}
+
+export async function applyVipPaymentGatewayResult(
+  paymentId: string,
+  payload: CheckPaymentStatusResult,
+) {
   const syncedPayment = await prisma.$transaction(async (tx) => {
     const latestPayment = await tx.vipPayment.findUnique({
-      where: { id: payment.id },
+      where: { id: paymentId },
       include: {
         user: {
           select: {
@@ -326,7 +358,7 @@ export async function syncVipPaymentStatus(referenceId: string, userId: string) 
   });
 
   if (syncedPayment?.status === "paid") {
-    await notifyPartnerBotCommissionForPayment(payment.id);
+    await notifyPartnerBotCommissionForPayment(paymentId);
   }
 
   return syncedPayment;
