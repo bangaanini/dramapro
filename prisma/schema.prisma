@@ -365,6 +365,7 @@ model User {
   telegramFirstName               String?
   telegramLastName                String?
   telegramLanguageCode            String?
+  telegramMiniAppWelcomeSeenAt    DateTime?
   vipStartedAt                    DateTime?
   vipExpiresAt                    DateTime?
   affiliateCode                   String?                 @unique

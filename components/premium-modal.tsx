@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
+import { isTelegramMiniAppRuntime } from "@/lib/telegram-web-app";
 import { cn } from "@/lib/utils";
 
 type PremiumPlan = {
@@ -33,9 +34,11 @@ type PremiumModalPayload = {
   user: {
     id?: string;
     name?: string;
+    authProvider?: "local" | "telegram" | null;
     isSignedIn: boolean;
     hasActiveVip: boolean;
     vipExpiresAt: string | null;
+    telegramMiniAppWelcomeSeenAt: string | null;
   };
   plans: PremiumPlan[];
 };
@@ -110,6 +113,24 @@ async function fetchPremiumModalPayload() {
   return payload as PremiumModalPayload;
 }
 
+async function rememberTelegramMiniAppWelcomeSeen() {
+  const response = await fetch("/api/vip/mini-app-welcome", {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+
+  if (!response.ok) {
+    throw new Error("Welcome Mini App belum bisa disimpan.");
+  }
+
+  const payload = (await response.json()) as {
+    telegramMiniAppWelcomeSeenAt?: string;
+  };
+
+  return payload.telegramMiniAppWelcomeSeenAt ?? new Date().toISOString();
+}
+
 function getWelcomeStorageKey(payload: PremiumModalPayload) {
   const userKey = payload.user.id ?? payload.user.name ?? "signed-in";
   const vipKey = payload.user.vipExpiresAt ?? "free";
@@ -120,7 +141,18 @@ function getWelcomeStorageKey(payload: PremiumModalPayload) {
   return `${WELCOME_STORAGE_PREFIX}:${userKey}:${vipKey}:${planKey}`;
 }
 
-function hasDismissedWelcome(payload: PremiumModalPayload) {
+function hasDismissedWelcome(
+  payload: PremiumModalPayload,
+  isTelegramMiniApp: boolean,
+  miniAppSeenInCurrentSession: boolean,
+) {
+  if (isTelegramMiniApp) {
+    return Boolean(
+      payload.user.telegramMiniAppWelcomeSeenAt ||
+        miniAppSeenInCurrentSession,
+    );
+  }
+
   try {
     return window.sessionStorage.getItem(getWelcomeStorageKey(payload)) === "1";
   } catch {
@@ -225,9 +257,13 @@ export function PremiumModal() {
   const manualOpen = shouldShowPremiumModal(searchParams);
   const hasAuthModal = searchParams.has("auth");
   const hasPremiumEpisodeModal = searchParams.has("premiumEpisode");
+  const [isTelegramMiniApp, setIsTelegramMiniApp] = useState(false);
+  const [isTelegramRuntimeReady, setIsTelegramRuntimeReady] = useState(false);
   const [autoOpen, setAutoOpen] = useState(false);
-  const isOpen = manualOpen || autoOpen;
+  const autoWelcomeOpen = autoOpen && canAutoShowWelcome(pathname);
+  const isOpen = manualOpen || autoWelcomeOpen;
   const hasRequestedCurrentOpenRef = useRef(false);
+  const miniAppWelcomeSeenInCurrentSessionRef = useRef(false);
   const [state, setState] = useState<PremiumModalState>({
     status: "idle",
     payload: null,
@@ -241,6 +277,17 @@ export function PremiumModal() {
     const query = params.toString();
     return query ? `${pathname}?${query}` : pathname || "/";
   }, [pathname, searchParams]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setIsTelegramMiniApp(isTelegramMiniAppRuntime(window.Telegram?.WebApp));
+      setIsTelegramRuntimeReady(true);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isOpen) {
@@ -296,6 +343,7 @@ export function PremiumModal() {
 
   useEffect(() => {
     if (
+      !isTelegramRuntimeReady ||
       manualOpen ||
       autoOpen ||
       hasAuthModal ||
@@ -326,7 +374,13 @@ export function PremiumModal() {
             error: "",
           });
 
-          if (!hasDismissedWelcome(payload)) {
+          if (
+            !hasDismissedWelcome(
+              payload,
+              isTelegramMiniApp,
+              miniAppWelcomeSeenInCurrentSessionRef.current,
+            )
+          ) {
             setAutoOpen(true);
           }
 
@@ -353,7 +407,74 @@ export function PremiumModal() {
         window.clearTimeout(timeoutId);
       }
     };
-  }, [autoOpen, hasAuthModal, hasPremiumEpisodeModal, manualOpen, pathname]);
+  }, [
+    autoOpen,
+    hasAuthModal,
+    hasPremiumEpisodeModal,
+    isTelegramMiniApp,
+    isTelegramRuntimeReady,
+    manualOpen,
+    pathname,
+  ]);
+
+  useEffect(() => {
+    if (
+      !autoWelcomeOpen ||
+      !isTelegramMiniApp ||
+      state.status !== "ready" ||
+      !state.payload.user.isSignedIn ||
+      hasDismissedWelcome(
+        state.payload,
+        true,
+        miniAppWelcomeSeenInCurrentSessionRef.current,
+      )
+    ) {
+      return;
+    }
+
+    miniAppWelcomeSeenInCurrentSessionRef.current = true;
+    const activeUserId = state.payload.user.id;
+    let isCancelled = false;
+
+    async function markMiniAppWelcomeSeen() {
+      try {
+        const seenAt = await rememberTelegramMiniAppWelcomeSeen();
+
+        if (isCancelled) {
+          return;
+        }
+
+        setState((current) => {
+          if (
+            current.status !== "ready" ||
+            current.payload.user.id !== activeUserId
+          ) {
+            return current;
+          }
+
+          return {
+            status: "ready",
+            payload: {
+              ...current.payload,
+              user: {
+                ...current.payload.user,
+                telegramMiniAppWelcomeSeenAt: seenAt,
+              },
+            },
+            error: "",
+          };
+        });
+      } catch {
+        // Keep this non-blocking; storage can retry on a later Mini App open.
+      }
+    }
+
+    void markMiniAppWelcomeSeen();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [autoWelcomeOpen, isTelegramMiniApp, state]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -372,12 +493,25 @@ export function PremiumModal() {
     return null;
   }
 
-  function closeModal() {
+  const payload = state.status === "ready" ? state.payload : null;
+
+  function dismissCurrentModal() {
     if (payload?.user.isSignedIn) {
-      rememberWelcomeDismissal(payload);
+      if (isTelegramMiniApp) {
+        if (autoWelcomeOpen) {
+          miniAppWelcomeSeenInCurrentSessionRef.current = true;
+          void rememberTelegramMiniAppWelcomeSeen();
+        }
+      } else {
+        rememberWelcomeDismissal(payload);
+      }
     }
 
     setAutoOpen(false);
+  }
+
+  function closeModal() {
+    dismissCurrentModal();
 
     if (!manualOpen) {
       return;
@@ -392,7 +526,6 @@ export function PremiumModal() {
     });
   }
 
-  const payload = state.status === "ready" ? state.payload : null;
   const isSignedIn = Boolean(payload?.user.isSignedIn);
   const vipDate = formatVipDate(payload?.user.vipExpiresAt ?? null);
   const cheapestPlan = payload ? getCheapestPlan(payload.plans) : null;
@@ -457,6 +590,7 @@ export function PremiumModal() {
               <button
                 type="button"
                 onClick={() => {
+                  dismissCurrentModal();
                   const params = new URLSearchParams(window.location.search);
                   cleanPremiumParams(params);
                   params.set("auth", "sign-in");
@@ -500,6 +634,7 @@ export function PremiumModal() {
                 plan={plan}
                 isSignedIn={isSignedIn}
                 next={next}
+                onNavigate={dismissCurrentModal}
               />
             ))}
 
@@ -589,10 +724,12 @@ function PremiumPlanRow({
   plan,
   isSignedIn,
   next,
+  onNavigate,
 }: {
   plan: PremiumPlan;
   isSignedIn: boolean;
   next: string;
+  onNavigate: () => void;
 }) {
   const vipHref = `/vip?plan=${encodeURIComponent(plan.id)}&next=${encodeURIComponent(next)}`;
   const href = isSignedIn
@@ -621,6 +758,7 @@ function PremiumPlanRow({
     <Link
       href={href}
       prefetch
+      onNavigate={onNavigate}
       className={cn(
         "group flex w-full items-center gap-4 rounded-[1.05rem] border border-cyan-300/14 bg-[#071023]/78 p-3.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] transition hover:border-cyan-300/30 hover:bg-[#0a142b]",
         !isSignedIn && "opacity-55",

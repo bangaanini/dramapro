@@ -36,14 +36,19 @@ export async function GET(request: NextRequest) {
       ? {
           id: user.id,
           name: user.name,
+          authProvider: user.authProvider,
           isSignedIn: true,
           hasActiveVip: isVipActive(user.vipExpiresAt),
           vipExpiresAt: user.vipExpiresAt?.toISOString() ?? null,
+          telegramMiniAppWelcomeSeenAt:
+            user.telegramMiniAppWelcomeSeenAt?.toISOString() ?? null,
         }
       : {
+          authProvider: null,
           isSignedIn: false,
           hasActiveVip: false,
           vipExpiresAt: null,
+          telegramMiniAppWelcomeSeenAt: null,
         },
     plans,
   });
