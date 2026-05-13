@@ -1,12 +1,14 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LoaderCircle } from "lucide-react";
+import { LayoutGrid, LoaderCircle } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { DramaCard } from "@/components/drama-card";
+import { ProviderFilterModal } from "@/components/provider-filter-modal";
 import { Button } from "@/components/ui/button";
-import type { HomeFeedEntry } from "@/lib/catalog-data";
+import type { HomeFeedEntry, HomeProviderTab } from "@/lib/catalog-data";
 import { isVisibleDisplayTag } from "@/lib/utils";
 
 type FeedState = {
@@ -35,12 +37,14 @@ type HomeCatalogGridProps = {
     value: string;
     count: number;
   }[];
+  providers: HomeProviderTab[];
 };
 
 type CatalogFilter =
   | { type: "all" }
   | { type: "popular" }
-  | { type: "tag"; tag: string };
+  | { type: "tag"; tag: string }
+  | { type: "platform"; platformId: string };
 
 function createInitialFeedState(
   entries: HomeFeedEntry[],
@@ -88,12 +92,14 @@ function buildFeedUrl(offset: number, filter: CatalogFilter) {
     params.set("sort", "popular");
   } else if (filter.type === "tag") {
     params.set("tag", filter.tag);
+  } else if (filter.type === "platform") {
+    params.set("platform", filter.platformId);
   }
 
   return `/api/catalog/feed?${params.toString()}`;
 }
 
-export function HomeCatalogGrid({ data, tags }: HomeCatalogGridProps) {
+export function HomeCatalogGrid({ data, tags, providers }: HomeCatalogGridProps) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -105,18 +111,26 @@ export function HomeCatalogGrid({ data, tags }: HomeCatalogGridProps) {
     () => new Set(tagFilters.map((tag) => tag.value)),
     [tagFilters],
   );
+  const providerById = useMemo(
+    () => new Map(providers.map((provider) => [provider.id, provider])),
+    [providers],
+  );
   const requestedTag = searchParams.get("tag")?.trim() ?? "";
   const requestedSort = searchParams.get("sort");
+  const requestedPlatform = searchParams.get("platform")?.trim() ?? "";
   const initialFilter = useMemo<CatalogFilter>(
     () =>
-      requestedTag && tagValues.has(requestedTag)
-        ? { type: "tag", tag: requestedTag }
-        : requestedSort === "popular"
-          ? { type: "popular" }
-          : { type: "all" },
-    [requestedSort, requestedTag, tagValues],
+      requestedPlatform && providerById.has(requestedPlatform)
+        ? { type: "platform", platformId: requestedPlatform }
+        : requestedTag && tagValues.has(requestedTag)
+          ? { type: "tag", tag: requestedTag }
+          : requestedSort === "popular"
+            ? { type: "popular" }
+            : { type: "all" },
+    [providerById, requestedPlatform, requestedSort, requestedTag, tagValues],
   );
   const [activeFilter, setActiveFilter] = useState<CatalogFilter>(initialFilter);
+  const [isProviderModalOpen, setIsProviderModalOpen] = useState(false);
   const [feed, setFeed] = useState<FeedState>(
     initialFilter.type === "all"
       ? createInitialFeedState(
@@ -149,6 +163,8 @@ export function HomeCatalogGrid({ data, tags }: HomeCatalogGridProps) {
       nextParams.set("sort", "popular");
     } else if (filter.type === "tag") {
       nextParams.set("tag", filter.tag);
+    } else if (filter.type === "platform") {
+      nextParams.set("platform", filter.platformId);
     }
 
     const query = nextParams.toString();
@@ -274,12 +290,18 @@ export function HomeCatalogGrid({ data, tags }: HomeCatalogGridProps) {
     feed.entries.length === 0 &&
     !feed.isLoading &&
     !feed.error;
+  const activeProvider =
+    activeFilter.type === "platform"
+      ? providerById.get(activeFilter.platformId) ?? null
+      : null;
   const activeFilterLabel =
     activeFilter.type === "popular"
       ? "populer"
       : activeFilter.type === "tag"
         ? activeFilter.tag
-        : "";
+        : activeFilter.type === "platform"
+          ? activeProvider?.name ?? "provider"
+          : "";
 
   if (showEmptyState && activeFilter.type === "all") {
     return (
@@ -305,6 +327,11 @@ export function HomeCatalogGrid({ data, tags }: HomeCatalogGridProps) {
 
       <div className="-mx-4 mb-4 overflow-x-auto px-4 pb-2 [scrollbar-width:none] sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10 [&::-webkit-scrollbar]:hidden">
         <div className="flex min-w-max items-center gap-2">
+          <ProviderFilterChip
+            activeProvider={activeProvider}
+            onClick={() => setIsProviderModalOpen(true)}
+          />
+
           <FilterChip
             isActive={activeFilter.type === "all"}
             label="Semua"
@@ -428,7 +455,59 @@ export function HomeCatalogGrid({ data, tags }: HomeCatalogGridProps) {
         </div>
       ) : null}
       </div>
+
+      <ProviderFilterModal
+        open={isProviderModalOpen}
+        providers={providers}
+        activePlatformId={
+          activeFilter.type === "platform" ? activeFilter.platformId : null
+        }
+        onSelect={(platformId) => {
+          if (platformId) {
+            void loadFeedForFilter({ type: "platform", platformId });
+          } else if (activeFilter.type === "platform") {
+            void loadFeedForFilter({ type: "all" });
+          }
+        }}
+        onClose={() => setIsProviderModalOpen(false)}
+      />
     </section>
+  );
+}
+
+function ProviderFilterChip({
+  activeProvider,
+  onClick,
+}: {
+  activeProvider: HomeProviderTab | null;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-haspopup="dialog"
+      className={
+        activeProvider
+          ? "inline-flex h-10 items-center gap-2 rounded-full border border-accent/50 bg-accent/15 px-3 text-xs font-semibold text-white sm:h-11 sm:text-sm"
+          : "inline-flex h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-3 text-xs font-semibold text-white/82 transition hover:border-accent/35 hover:bg-white/[0.075] sm:h-11 sm:text-sm"
+      }
+    >
+      {activeProvider?.logoUrl ? (
+        <span className="inline-flex size-5 items-center justify-center overflow-hidden rounded-md bg-white/10">
+          <Image
+            src={activeProvider.logoUrl}
+            alt=""
+            width={20}
+            height={20}
+            className="size-5 object-contain"
+          />
+        </span>
+      ) : (
+        <LayoutGrid className="size-4" aria-hidden />
+      )}
+      <span>{activeProvider ? activeProvider.name : "Provider"}</span>
+    </button>
   );
 }
 

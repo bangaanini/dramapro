@@ -1,5 +1,7 @@
 export const PROVIDERS = [
   "cashdrama",
+  "bilitv",
+  "cubetv",
   "dotdrama",
   "dramabite",
   "dramadash",
@@ -17,11 +19,26 @@ export const PROVIDERS = [
   "meloshort",
   "microdrama",
   "minutedrama",
+  "moboreels",
   "netshort",
   "rapidtv",
+  "radreels",
   "reelala",
   "reelife",
-  "reelshort"
+  "reelshort",
+  "sarostv",
+  "shortbox",
+  "shorten",
+  "shortmax",
+  "shortsky",
+  "shortwave",
+  "shotshort",
+  "snackshort",
+  "sodareels",
+  "stardusttv",
+  "starshort",
+  "velolo",
+  "vigloo"
 ] as const;
 
 export type ProviderCode = (typeof PROVIDERS)[number];
@@ -103,6 +120,7 @@ export interface PlaybackSource {
   mimeType: string;
   codec: string | null;
   expiresAt: string | null;
+  hlsKey?: string | null;
 }
 
 export interface PlaybackSubtitle {

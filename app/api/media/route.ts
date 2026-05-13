@@ -14,6 +14,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const sourceUrl = request.nextUrl.searchParams.get("url");
+  const hlsKey = request.nextUrl.searchParams.get("hlsKey")?.trim() || null;
   const shouldDownload = request.nextUrl.searchParams.get("download") === "1";
   const requestedFilename = request.nextUrl.searchParams.get("filename");
 
@@ -33,11 +34,10 @@ export async function GET(request: NextRequest) {
     return Response.json({ error: "Unsupported media protocol." }, { status: 400 });
   }
 
-  const rangeHeader = request.headers.get("range");
-  const upstreamHeaders = {
-    ...MEDIA_HEADERS,
-    ...(rangeHeader ? { Range: rangeHeader } : {}),
-  };
+  const upstreamHeaders = buildUpstreamHeaders(
+    upstreamUrl,
+    request.headers.get("range"),
+  );
   const upstreamResponse = await fetchUpstreamMedia(upstreamUrl, upstreamHeaders);
 
   if (!upstreamResponse.ok) {
@@ -67,6 +67,7 @@ export async function GET(request: NextRequest) {
   const isSubtitle =
     normalizedPathname.endsWith(".vtt") ||
     normalizedPathname.endsWith(".srt") ||
+    normalizedPathname.endsWith(".cmft") ||
     normalizedPathname.includes("/subtitle") ||
     hasTextMimeQuery ||
     contentType.includes("text/vtt") ||
@@ -75,7 +76,8 @@ export async function GET(request: NextRequest) {
 
   if (isPlaylist) {
     const playlist = await upstreamResponse.text();
-    const rewritten = rewritePlaylist(playlist, responseUrl);
+    const parentCookie = upstreamUrl.searchParams.get("__cookie");
+    const rewritten = rewritePlaylist(playlist, responseUrl, hlsKey, parentCookie);
 
     return new Response(rewritten, {
       status: upstreamResponse.status,
@@ -149,6 +151,31 @@ type UpstreamMediaResponse = {
   body: ReadableStream<Uint8Array> | null;
   text: () => Promise<string>;
 };
+
+function buildUpstreamHeaders(upstreamUrl: URL, rangeHeader: string | null) {
+  const headers: Record<string, string> = {
+    ...MEDIA_HEADERS,
+    ...(rangeHeader ? { Range: rangeHeader } : {}),
+  };
+  const hostname = upstreamUrl.hostname.toLowerCase();
+  const signedCookie = upstreamUrl.searchParams.get("__cookie");
+
+  if (signedCookie?.trim()) {
+    headers.Cookie = signedCookie;
+  }
+
+  if (hostname === "foshort.com" || hostname.endsWith(".foshort.com")) {
+    headers.Referer = "https://www.bilitv.com/";
+    headers.Origin = "https://www.bilitv.com";
+  }
+
+  if (hostname === "cdreader.com" || hostname.endsWith(".cdreader.com")) {
+    headers.Referer = "https://www.cdreader.com/";
+    headers.Origin = "https://www.cdreader.com";
+  }
+
+  return headers;
+}
 
 async function fetchUpstreamMedia(
   upstreamUrl: URL,
@@ -272,14 +299,14 @@ async function readIncomingMessageText(response: IncomingMessage) {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-function rewritePlaylist(playlist: string, baseUrl: URL) {
+function rewritePlaylist(playlist: string, baseUrl: URL, hlsKey: string | null, parentCookie: string | null) {
   return playlist
     .split(/\r?\n/)
-    .map((line) => rewritePlaylistLine(line, baseUrl))
+    .map((line) => rewritePlaylistLine(line, baseUrl, hlsKey, parentCookie))
     .join("\n");
 }
 
-function rewritePlaylistLine(line: string, baseUrl: URL) {
+function rewritePlaylistLine(line: string, baseUrl: URL, hlsKey: string | null, parentCookie: string | null) {
   const trimmed = line.trim();
 
   if (!trimmed) {
@@ -293,22 +320,33 @@ function rewritePlaylistLine(line: string, baseUrl: URL) {
     return "";
   }
 
+  if (trimmed.startsWith("#EXT-X-KEY:") && hlsKey) {
+    return line.replace(/URI="([^"]+)"/g, () => {
+      return `URI="/api/media/key?value=${encodeURIComponent(hlsKey)}"`;
+    });
+  }
+
   if (!trimmed.startsWith("#")) {
-    return buildProxyLine(trimmed, baseUrl);
+    return buildProxyLine(trimmed, baseUrl, parentCookie);
   }
 
   if (trimmed.includes('URI="')) {
     return trimmed.replace(/URI="([^"]+)"/g, (_match, uri: string) => {
-      return `URI="${buildProxyLine(uri, baseUrl)}"`;
+      return `URI="${buildProxyLine(uri, baseUrl, parentCookie)}"`;
     });
   }
 
   return line;
 }
 
-function buildProxyLine(target: string, baseUrl: URL) {
-  const resolved = new URL(target, baseUrl).toString();
-  return `/api/media?url=${encodeURIComponent(resolved)}`;
+function buildProxyLine(target: string, baseUrl: URL, parentCookie: string | null) {
+  const resolved = new URL(target, baseUrl);
+
+  if (parentCookie && !resolved.searchParams.has("__cookie")) {
+    resolved.searchParams.set("__cookie", parentCookie);
+  }
+
+  return `/api/media?url=${encodeURIComponent(resolved.toString())}`;
 }
 
 function normalizeSubtitleToVtt(input: string) {

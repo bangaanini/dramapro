@@ -27,16 +27,17 @@ export function findIndonesianSubtitle<T extends SubtitleCandidate>(
 
 export function normalizeSubtitleToVtt(input: string) {
   const normalized = input.replace(/^\uFEFF/u, "").replace(/\r+/g, "");
+  const cleaned = removeSubtitleDisplayMetadata(normalized);
 
-  if (normalized.trimStart().startsWith("WEBVTT")) {
-    return normalized;
+  if (cleaned.trimStart().startsWith("WEBVTT")) {
+    return cleaned;
   }
 
-  if (!looksLikeSrtSubtitle(normalized)) {
+  if (!looksLikeSrtSubtitle(cleaned)) {
     return null;
   }
 
-  const body = normalized.replace(
+  const body = cleaned.replace(
     /(\d{2}:\d{2}:\d{2}),(\d{3})/g,
     "$1.$2",
   );
@@ -48,4 +49,16 @@ function looksLikeSrtSubtitle(input: string) {
   return /\d{2}:\d{2}:\d{2},\d{3}\s+-->\s+\d{2}:\d{2}:\d{2},\d{3}/.test(
     input,
   );
+}
+
+function removeSubtitleDisplayMetadata(input: string) {
+  return input
+    .replace(
+      /\[\s*region\s*=\s*-?\d+(?:\.\d+)?(?:\s*,\s*-?\d+(?:\.\d+)?){3}\s*\][^\S\n]*/gi,
+      "",
+    )
+    .replace(
+      /(^|\n)([^\S\n]*)\([^)\n]{1,160}\s[-–—]\s[^)\n]{1,200}\)[^\S\n]*/g,
+      "$1$2",
+    );
 }

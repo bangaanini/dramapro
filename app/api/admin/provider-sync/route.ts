@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 import { hasValidInternalSecret } from "@/lib/internal-route-auth";
 import { prisma } from "@/lib/prisma";
@@ -6,7 +7,9 @@ import {
   enqueueProviderEndpointSync,
   getProviderSyncDashboard,
   initializeStreamApiCatalog,
+  isStreamApiProviderCode,
   logProviderWorker,
+  setProviderHomepageVisibility,
   validateProviderEndpointInput,
 } from "@/lib/provider-sync";
 import { getProvider } from "@/lib/streamapi/registry";
@@ -65,6 +68,37 @@ export async function POST(request: NextRequest) {
 
       return Response.json({
         ok: true,
+        dashboard: await getProviderSyncDashboard(),
+      });
+    }
+
+    if (mode === "homepage-visibility") {
+      const provider = String(body.provider ?? "").trim();
+
+      if (!isStreamApiProviderCode(provider)) {
+        return Response.json({ error: "Provider tidak valid." }, { status: 400 });
+      }
+
+      if (typeof body.isHomepageVisible !== "boolean") {
+        return Response.json(
+          { error: "Status tampil homepage tidak valid." },
+          { status: 400 },
+        );
+      }
+
+      const visibility = await setProviderHomepageVisibility(
+        provider,
+        body.isHomepageVisible,
+      );
+
+      revalidateTag("catalog-home", "max");
+      revalidateTag("catalog-shortcuts", "max");
+      revalidatePath("/");
+      revalidatePath("/search");
+
+      return Response.json({
+        ok: true,
+        visibility,
         dashboard: await getProviderSyncDashboard(),
       });
     }

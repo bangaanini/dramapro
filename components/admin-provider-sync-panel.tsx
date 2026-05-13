@@ -13,7 +13,7 @@ type AdminProviderSyncPanelProps = {
   initialDashboard: ProviderSyncDashboard;
 };
 
-type RequestMode = "init" | "health" | "enqueue";
+type RequestMode = "init" | "health" | "enqueue" | "homepage-visibility";
 
 type HealthPreviewItem = {
   externalId: string;
@@ -204,6 +204,54 @@ export function AdminProviderSyncPanel({
     }
   }
 
+  async function updateProviderHomepageVisibility(isHomepageVisible: boolean) {
+    if (!provider) return;
+
+    const selectedProvider = provider;
+    setIsLoading("homepage-visibility");
+    setNotice("");
+    setError("");
+    setHealthPreview(null);
+
+    try {
+      const response = await fetch("/api/admin/provider-sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          mode: "homepage-visibility",
+          provider: selectedProvider.code,
+          isHomepageVisible,
+        }),
+      });
+      const data = await response.json() as {
+        error?: string;
+        dashboard?: ProviderSyncDashboard;
+      };
+
+      if (!response.ok) {
+        throw new Error(data.error || "Gagal menyimpan status homepage.");
+      }
+
+      if (data.dashboard) {
+        setDashboard(data.dashboard);
+      }
+
+      setNotice(
+        `${selectedProvider.name} sekarang ${isHomepageVisible ? "ditampilkan di" : "disembunyikan dari"} homepage.`,
+      );
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Gagal menyimpan status homepage.",
+      );
+    } finally {
+      setIsLoading(null);
+    }
+  }
+
   const requestParams = {
     ...toJsonRecord(params, section),
     ...(section?.supportsPage ? { page } : {}),
@@ -294,6 +342,37 @@ export function AdminProviderSyncPanel({
                   </select>
                 </label>
               </div>
+
+              <label className="flex items-start justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm text-white">
+                <span className="flex min-w-0 items-start gap-3">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 size-4 shrink-0 accent-[var(--accent)]"
+                    checked={provider?.isHomepageVisible ?? true}
+                    disabled={!provider || isLoading !== null}
+                    onChange={(event) => {
+                      void updateProviderHomepageVisibility(event.target.checked);
+                    }}
+                  />
+                  <span className="min-w-0">
+                    <span className="block font-semibold">
+                      Tampilkan provider di homepage
+                    </span>
+                    <span className="mt-1 block text-xs leading-5 text-[var(--muted)]">
+                      Sync tetap berjalan walaupun provider disembunyikan.
+                    </span>
+                  </span>
+                </span>
+                <Badge
+                  className={
+                    provider?.isHomepageVisible ?? true
+                      ? "shrink-0 border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
+                      : "shrink-0 border-white/10 bg-white/5 text-[var(--muted)]"
+                  }
+                >
+                  {provider?.isHomepageVisible ?? true ? "Tampil" : "Sembunyi"}
+                </Badge>
+              </label>
 
               {section ? (
                 <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
@@ -400,6 +479,10 @@ export function AdminProviderSyncPanel({
                 </p>
                 <dl className="mt-3 space-y-2 text-sm">
                   <SummaryRow label="Provider" value={provider?.name ?? "-"} />
+                  <SummaryRow
+                    label="Homepage"
+                    value={provider?.isHomepageVisible ?? true ? "Tampil" : "Sembunyi"}
+                  />
                   <SummaryRow label="Endpoint" value={section?.pathLabel ?? "-"} />
                   <SummaryRow
                     label="Parameter"

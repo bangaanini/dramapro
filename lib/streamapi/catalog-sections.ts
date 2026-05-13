@@ -10,7 +10,7 @@ const pageParam = (defaultValue: number, min = 1): CatalogParamDefinition => ({
   help: "Halaman upstream yang ingin diambil."
 });
 
-const pageSizeParam = (name: "limit" | "pageSize" | "size" | "page_size", defaultValue: number): CatalogParamDefinition => ({
+const pageSizeParam = (name: "count" | "limit" | "pageSize" | "perPage" | "size" | "page_size", defaultValue: number): CatalogParamDefinition => ({
   name,
   label: name,
   type: "number",
@@ -113,6 +113,60 @@ export const providerCatalogSections: Record<ProviderCode, CatalogSectionDefinit
       supportsPage: true,
       defaultPage: 1,
       paramsBefore: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis.")]
+    })
+  ],
+  bilitv: [
+    endpoint({
+      value: "home",
+      label: "Home",
+      description: "Mengambil feed home BiliTV.",
+      pathLabel: "GET /api/v1/home",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis."), pageParam(1), pageSizeParam("limit", 20)]
+    }),
+    endpoint({
+      value: "recommend",
+      label: "Recommend",
+      description: "Mengambil rekomendasi BiliTV.",
+      pathLabel: "GET /api/v1/recommend",
+      supportsPage: false,
+      defaultPage: 1,
+      params: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis.")]
+    }),
+    endpoint({
+      value: "dramas",
+      label: "Drama List",
+      description: "Mengambil daftar drama BiliTV.",
+      pathLabel: "GET /api/v1/dramas",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis."), pageParam(1), pageSizeParam("size", 20)]
+    }),
+    searchEndpoint({
+      providerName: "BiliTV",
+      pathLabel: "GET /api/v1/search?q=:query",
+      paramsBefore: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis.")]
+    })
+  ],
+  cubetv: [
+    endpoint({
+      value: "shows",
+      label: "Shows",
+      description: "Mengambil katalog drama CubeTV.",
+      pathLabel: "GET /shows",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis."), pageParam(1)]
+    }),
+    endpoint({
+      value: "search",
+      label: "Browse/Search",
+      description: "Mengambil daftar drama CubeTV dari endpoint search.",
+      pathLabel: "GET /search",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis."), pageParam(1), pageSizeParam("pageSize", 20)]
     })
   ],
   dotdrama: [
@@ -533,6 +587,44 @@ export const providerCatalogSections: Record<ProviderCode, CatalogSectionDefinit
       params: [pageParam(1), pageSizeParam("size", 20), fixedParam("source", 1001, "Source default untuk detail video MinuteDrama.")]
     })
   ],
+  moboreels: [
+    endpoint({
+      value: "trending",
+      label: "Trending",
+      description: "Mengambil daftar hot/trending MoboReels.",
+      pathLabel: "GET /api/hotList?listId=10",
+      supportsPage: false,
+      defaultPage: 1,
+      params: [
+        fixedParam("langId", 11, "Bahasa Indonesia untuk MoboReels."),
+        numberParam("listId", "List ID", 10, "10 = Trending.", 1)
+      ]
+    }),
+    endpoint({
+      value: "latest",
+      label: "Latest",
+      description: "Mengambil daftar terbaru MoboReels.",
+      pathLabel: "GET /api/hotList?listId=11",
+      supportsPage: false,
+      defaultPage: 1,
+      params: [
+        fixedParam("langId", 11, "Bahasa Indonesia untuk MoboReels."),
+        numberParam("listId", "List ID", 11, "11 = Latest.", 1)
+      ]
+    }),
+    endpoint({
+      value: "channel-detail",
+      label: "Channel Detail",
+      description: "Mengambil daftar series dari channel MoboReels tertentu.",
+      pathLabel: "GET /api/channelDetail",
+      supportsPage: false,
+      defaultPage: 1,
+      params: [
+        fixedParam("langId", 11, "Bahasa Indonesia untuk MoboReels."),
+        numberParam("channelId", "Channel ID", 1, "ID channel dari endpoint /api/channelList.", 1)
+      ]
+    })
+  ],
   netshort: [
     ...["feed", "explore", "new", "dubbing", "vip"].map((route) =>
       endpoint({
@@ -612,6 +704,49 @@ export const providerCatalogSections: Record<ProviderCode, CatalogSectionDefinit
       supportsPage: true,
       defaultPage: 1,
       params: [fixedParam("lang", "in", "Bahasa Indonesia dikirim otomatis."), pageParam(1), pageSizeParam("size", 20)]
+    })
+  ],
+  radreels: [
+    endpoint({
+      value: "ranking",
+      label: "Ranking",
+      description: "Mengambil daftar ranking RadReels.",
+      pathLabel: "GET /api/v1/ranking",
+      supportsPage: false,
+      defaultPage: 1,
+      params: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis.")]
+    }),
+    endpoint({
+      value: "foryou",
+      label: "For You",
+      description: "Mengambil feed For You RadReels.",
+      pathLabel: "GET /api/v1/foryou",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis."), pageParam(1)]
+    }),
+    endpoint({
+      value: "home",
+      label: "Home",
+      description: "Mengambil homepage RadReels.",
+      pathLabel: "GET /api/v1/home",
+      supportsPage: false,
+      defaultPage: 1,
+      params: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis.")]
+    }),
+    endpoint({
+      value: "tab",
+      label: "Tab",
+      description: "Mengambil konten RadReels berdasarkan tab ID.",
+      pathLabel: "GET /api/v1/tab/:id",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [
+        fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis."),
+        numberParam("tabId", "Tab ID", 1, "ID tab RadReels.", 1),
+        pageParam(1),
+        pageSizeParam("size", 20)
+      ]
     })
   ],
   reelala: [
@@ -730,6 +865,474 @@ export const providerCatalogSections: Record<ProviderCode, CatalogSectionDefinit
       defaultPage: 1,
       paramsBefore: [fixedParam("lang", "in", "Bahasa Indonesia dikirim otomatis.")]
     })
+  ],
+  sarostv: [
+    endpoint({
+      value: "recommend",
+      label: "Recommend",
+      description: "Mengambil rekomendasi SarosTV.",
+      pathLabel: "GET /api/recommend",
+      supportsPage: false,
+      defaultPage: 1,
+      params: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis.")]
+    }),
+    endpoint({
+      value: "theater",
+      label: "Theater",
+      description: "Mengambil homepage theater/feed SarosTV.",
+      pathLabel: "GET /api/theater",
+      supportsPage: false,
+      defaultPage: 1,
+      params: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis.")]
+    }),
+    searchEndpoint({
+      providerName: "SarosTV",
+      pathLabel: "GET /api/series/search?q=:query"
+    })
+  ],
+  shortbox: [
+    endpoint({
+      value: "list",
+      label: "Drama List",
+      description: "Mengambil daftar drama ShortBox.",
+      pathLabel: "GET /api/list",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [
+        fixedParam("languages", "id", "Bahasa Indonesia dikirim otomatis."),
+        pageParam(1),
+        pageSizeParam("page_size", 20),
+        numberParam("sort_type", "Sort Type", 1, "Sort type ShortBox.", 0)
+      ]
+    }),
+    endpoint({
+      value: "new-list",
+      label: "New/Trending",
+      description: "Mengambil daftar baru/trending ShortBox.",
+      pathLabel: "GET /api/new-list",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [
+        fixedParam("languages", "id", "Bahasa Indonesia dikirim otomatis."),
+        pageParam(1),
+        pageSizeParam("page_size", 20)
+      ]
+    }),
+    endpoint({
+      value: "search",
+      label: "Search Judul",
+      description: "Mencari judul ShortBox dari upstream, lalu hasilnya bisa di-sync ke katalog.",
+      pathLabel: "GET /api/search?q=:query",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [
+        fixedParam("languages", "id", "Bahasa Indonesia dikirim otomatis."),
+        textParam("query", "Judul", "cinta", "Kata kunci judul ShortBox."),
+        pageParam(1),
+        pageSizeParam("page_size", 20),
+        numberParam("is_fuzzy", "Fuzzy Search", 1, "1 untuk pencarian fuzzy.", 0)
+      ]
+    })
+  ],
+  shorten: [
+    ...[
+      ["editors", "Editor's Pick"],
+      ["exclusive", "Exclusive"],
+      ["dubbed", "Dubbed"],
+      ["releases", "New Releases"]
+    ].map(([value, label]) =>
+      endpoint({
+        value: String(value),
+        label: String(label),
+        description: `Mengambil feed Shorten ${label}.`,
+        pathLabel: `GET /api/v1/${value}`,
+        supportsPage: true,
+        defaultPage: 1,
+        params: [pageParam(1), pageSizeParam("perPage", 20)]
+      })
+    ),
+    endpoint({
+      value: "explore",
+      label: "Explore",
+      description: "Mengambil feed explore Shorten.",
+      pathLabel: "GET /api/v1/explore",
+      supportsPage: false,
+      defaultPage: 1,
+      params: []
+    })
+  ],
+  shortmax: [
+    endpoint({
+      value: "home",
+      label: "Home",
+      description: "Mengambil homepage ShortMax.",
+      pathLabel: "GET /api/v1/home",
+      supportsPage: false,
+      defaultPage: 1,
+      params: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis."), textParam("tab", "Tab", "recommend", "Tab homepage ShortMax.")]
+    }),
+    ...["recommend", "vip", "new", "ranked", "war", "epic", "romance"].map((route) =>
+      endpoint({
+        value: route,
+        label: route,
+        description: `Mengambil feed ShortMax ${route}.`,
+        pathLabel: `GET /api/v1/feed/${route}`,
+        supportsPage: false,
+        defaultPage: 1,
+        params: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis.")]
+      })
+    ),
+    endpoint({
+      value: "foryou",
+      label: "For You",
+      description: "Mengambil feed For You ShortMax.",
+      pathLabel: "GET /api/v1/foryou",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis."), pageParam(1)]
+    }),
+    searchEndpoint({
+      providerName: "ShortMax",
+      pathLabel: "GET /api/v1/search?q=:query",
+      supportsPage: true,
+      defaultPage: 1,
+      paramsBefore: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis.")]
+    })
+  ],
+  shortsky: [
+    endpoint({
+      value: "home",
+      label: "Home",
+      description: "Mengambil homepage ShortSky.",
+      pathLabel: "GET /api/home",
+      supportsPage: false,
+      defaultPage: 1,
+      params: [fixedParam("lang", "id_id", "Bahasa Indonesia dikirim otomatis.")]
+    }),
+    endpoint({
+      value: "recommend",
+      label: "Recommend",
+      description: "Mengambil rekomendasi ShortSky.",
+      pathLabel: "GET /api/recommend",
+      supportsPage: false,
+      defaultPage: 1,
+      params: [fixedParam("lang", "id_id", "Bahasa Indonesia dikirim otomatis.")]
+    }),
+    searchEndpoint({
+      providerName: "ShortSky",
+      pathLabel: "GET /api/search?q=:query",
+      paramsBefore: [fixedParam("lang", "id_id", "Bahasa Indonesia dikirim otomatis.")]
+    })
+  ],
+  shortwave: [
+    ...["top", "all", "rankings"].map((route) =>
+      endpoint({
+        value: route,
+        label: route,
+        description: `Mengambil ShortWave endpoint ${route}.`,
+        pathLabel: `GET /api/${route}`,
+        supportsPage: false,
+        defaultPage: 1,
+        params: [fixedParam("lang", "in", "Bahasa Indonesia dikirim otomatis.")]
+      })
+    ),
+    endpoint({
+      value: "more",
+      label: "More",
+      description: "Mengambil daftar ShortWave dengan pagination.",
+      pathLabel: "GET /api/more",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [fixedParam("lang", "in", "Bahasa Indonesia dikirim otomatis."), pageParam(1), pageSizeParam("page_size", 20)]
+    }),
+    searchEndpoint({
+      providerName: "ShortWave",
+      pathLabel: "GET /api/search/:query",
+      paramsBefore: [fixedParam("lang", "in", "Bahasa Indonesia dikirim otomatis.")]
+    })
+  ],
+  shotshort: [
+    endpoint({
+      value: "popular",
+      label: "Popular",
+      description: "Mengambil drama populer ShotShort.",
+      pathLabel: "GET /api/popular",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis."), pageParam(1), pageSizeParam("limit", 20)]
+    }),
+    searchEndpoint({
+      providerName: "ShotShort",
+      pathLabel: "GET /api/search?q=:query",
+      supportsPage: true,
+      defaultPage: 1,
+      paramsBefore: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis.")],
+      paramsAfter: [pageSizeParam("limit", 20)]
+    }),
+    endpoint({
+      value: "category",
+      label: "Category",
+      description: "Mengambil drama ShotShort berdasarkan kategori.",
+      pathLabel: "GET /api/category",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [
+        fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis."),
+        selectParam(
+          "category",
+          "Category",
+          "Romance",
+          "Kategori ShotShort, case-sensitive.",
+          [
+            { value: "Romance", label: "Percintaan" },
+            { value: "Realistic", label: "Realistis" },
+            { value: "Mafia", label: "Mafia" },
+            { value: "Urban", label: "Perkotaan" },
+            { value: "Billionaire", label: "Miliarder" },
+            { value: "Family", label: "Keluarga" },
+            { value: "Rebirth", label: "Kelahiran Kembali" },
+            { value: "Vampire", label: "Vampir" },
+            { value: "Paranormal", label: "Paranormal" },
+            { value: "Strong FL", label: "Pemeran Utama Wanita Kuat" },
+            { value: "Baby", label: "Bayi" },
+            { value: "Period Drama", label: "Drama Periode" },
+            { value: "Fantasy", label: "Fantasi" },
+            { value: "Action", label: "Aksi" },
+            { value: "Campus", label: "Kampus" },
+            { value: "Dark Romance", label: "Asmara Gelap" },
+            { value: "Suspense/Thriller", label: "Ketegangan/Cerita Seru" },
+            { value: "War", label: "Perang" },
+            { value: "Werewolf", label: "Manusia Serigala" },
+            { value: "History", label: "Riwayat" }
+          ]
+        ),
+        pageParam(1),
+        pageSizeParam("limit", 20)
+      ]
+    })
+  ],
+  snackshort: [
+    endpoint({
+      value: "home",
+      label: "Home",
+      description: "Mengambil homepage SnackShort.",
+      pathLabel: "GET /api/v1/home",
+      supportsPage: false,
+      defaultPage: 1,
+      params: [fixedParam("lang", "Indonesian", "Bahasa Indonesia dikirim otomatis.")]
+    }),
+    endpoint({
+      value: "browsing",
+      label: "Browsing",
+      description: "Mengambil daftar browsing SnackShort.",
+      pathLabel: "GET /api/v1/browsing",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [fixedParam("lang", "Indonesian", "Bahasa Indonesia dikirim otomatis."), pageParam(1), pageSizeParam("pageSize", 20)]
+    }),
+    searchEndpoint({
+      providerName: "SnackShort",
+      pathLabel: "GET /api/v1/search?q=:query",
+      supportsPage: true,
+      defaultPage: 1,
+      paramsBefore: [fixedParam("lang", "Indonesian", "Bahasa Indonesia dikirim otomatis.")],
+      paramsAfter: [pageSizeParam("limit", 20)]
+    })
+  ],
+  sodareels: [
+    endpoint({
+      value: "home",
+      label: "Home",
+      description: "Mengambil homepage SodaReels.",
+      pathLabel: "GET /api/v1/home",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis."), pageParam(1), pageSizeParam("count", 20)]
+    }),
+    searchEndpoint({
+      providerName: "SodaReels",
+      pathLabel: "GET /api/v1/search?q=:query",
+      paramsBefore: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis.")]
+    }),
+    endpoint({
+      value: "category",
+      label: "Category",
+      description: "Mengambil SodaReels berdasarkan kategori.",
+      pathLabel: "GET /api/v1/category",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [
+        fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis."),
+        textParam("cat", "Category", "UNLIMIT", "Kategori SodaReels."),
+        pageParam(1),
+        pageSizeParam("count", 20)
+      ]
+    })
+  ],
+  stardusttv: [
+    endpoint({
+      value: "homepage",
+      label: "Homepage",
+      description: "Mengambil homepage StardustTV.",
+      pathLabel: "GET /api/v1/homepage",
+      supportsPage: false,
+      defaultPage: 1,
+      params: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis.")]
+    }),
+    endpoint({
+      value: "category",
+      label: "Category",
+      description: "Mengambil StardustTV berdasarkan kategori.",
+      pathLabel: "GET /api/v1/category/:id",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [
+        fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis."),
+        selectParam(
+          "categoryId",
+          "Category",
+          "0",
+          "Kategori StardustTV.",
+          [
+            { value: "0", label: "SEMUA" },
+            { value: "1", label: "Cinta Modern" },
+            { value: "2", label: "Fantasi Romansa" },
+            { value: "4", label: "Fantasi" },
+            { value: "5", label: "Misteri/Thriller" },
+            { value: "6", label: "Sci-Fi" },
+            { value: "8", label: "Bayi/Ayah" },
+            { value: "9", label: "Romansa Kuno" },
+            { value: "10", label: "Romansa Era" },
+            { value: "11", label: "Etika Keluarga" },
+            { value: "13", label: "Lainnya" },
+            { value: "14", label: "Urban Fantasi" },
+            { value: "15", label: "Politik Kuno" }
+          ]
+        ),
+        pageParam(1),
+        pageSizeParam("page_size", 20)
+      ]
+    }),
+    searchEndpoint({
+      providerName: "StardustTV",
+      pathLabel: "GET /api/v1/search?q=:query",
+      supportsPage: true,
+      defaultPage: 1,
+      paramsBefore: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis.")]
+    })
+  ],
+  starshort: [
+    endpoint({
+      value: "dramas",
+      label: "Drama List",
+      description: "Mengambil daftar drama StarShort.",
+      pathLabel: "GET /api/v1/dramas",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [fixedParam("lang", 4, "Bahasa Indonesia untuk StarShort."), pageParam(1), pageSizeParam("limit", 20)]
+    }),
+    endpoint({
+      value: "new",
+      label: "New",
+      description: "Mengambil drama terbaru StarShort.",
+      pathLabel: "GET /api/v1/dramas/new",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [fixedParam("lang", 4, "Bahasa Indonesia untuk StarShort."), pageParam(1), pageSizeParam("limit", 20)]
+    }),
+    searchEndpoint({
+      providerName: "StarShort",
+      pathLabel: "GET /api/v1/dramas/search?q=:query",
+      supportsPage: true,
+      defaultPage: 1,
+      paramsBefore: [fixedParam("lang", 4, "Bahasa Indonesia untuk StarShort.")],
+      paramsAfter: [pageSizeParam("limit", 20)]
+    })
+  ],
+  velolo: [
+    endpoint({
+      value: "hot",
+      label: "Hot",
+      description: "Mengambil drama populer Velolo.",
+      pathLabel: "GET /hot",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis."), pageParam(1), pageSizeParam("limit", 20)]
+    }),
+    endpoint({
+      value: "new",
+      label: "New",
+      description: "Mengambil drama terbaru Velolo.",
+      pathLabel: "GET /new",
+      supportsPage: true,
+      defaultPage: 1,
+      params: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis."), pageParam(1), pageSizeParam("limit", 20)]
+    }),
+    searchEndpoint({
+      providerName: "Velolo",
+      pathLabel: "GET /dramas?q=:query",
+      supportsPage: true,
+      defaultPage: 1,
+      paramsBefore: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis.")],
+      paramsAfter: [pageSizeParam("limit", 20)]
+    })
+  ],
+  vigloo: [
+    endpoint({
+      value: "browse",
+      label: "Browse",
+      description: "Mengambil katalog browse Vigloo.",
+      pathLabel: "GET /api/v1/browse",
+      supportsPage: false,
+      defaultPage: 1,
+      params: [
+        fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis."),
+        selectParam(
+          "sort",
+          "Sort",
+          "POPULAR",
+          "Urutan drama yang diambil.",
+          [
+            { value: "POPULAR", label: "Populer" },
+            { value: "LATEST", label: "Terbaru" },
+            { value: "RANKING", label: "Ranking" }
+          ]
+        ),
+        textParam("genre", "Genre (opsional)", "", "Filter genre (ID numerik dari /api/v1/genres). Kosongkan untuk semua."),
+        textParam("country", "Country (opsional)", "", "Filter negara. Kosongkan untuk semua."),
+        pageSizeParam("limit", 30)
+      ]
+    }),
+    endpoint({
+      value: "tab",
+      label: "Tab",
+      description: "Mengambil konten tab Vigloo.",
+      pathLabel: "GET /api/v1/tabs/:id",
+      supportsPage: false,
+      defaultPage: 1,
+      params: [
+        fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis."),
+        textParam("tabId", "Tab ID", "15000101", "Tab ID dari /api/v1/tabs."),
+        textParam("offset", "Offset (opsional)", "", "Offset pagination cursor-based. Kosongkan untuk halaman pertama."),
+        pageSizeParam("limit", 20)
+      ]
+    }),
+    endpoint({
+      value: "rank",
+      label: "Rank",
+      description: "Mengambil ranking Vigloo.",
+      pathLabel: "GET /api/v1/rank",
+      supportsPage: false,
+      defaultPage: 1,
+      params: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis.")]
+    }),
+    searchEndpoint({
+      providerName: "Vigloo",
+      pathLabel: "GET /api/v1/search?q=:query",
+      defaultQuery: "love",
+      paramsBefore: [fixedParam("lang", "id", "Bahasa Indonesia dikirim otomatis.")],
+      paramsAfter: [pageSizeParam("limit", 20)]
+    })
   ]
 };
 
@@ -747,7 +1350,7 @@ export function sectionValues(provider: ProviderCode) {
 
 export function catalogStorageSection(section: string, params?: JsonRecord) {
   const identityParams = Object.entries(params ?? {})
-    .filter(([key, value]) => !["page", "limit", "pageSize", "size", "page_size"].includes(key) && value !== "" && value !== null && value !== undefined)
+    .filter(([key, value]) => !["count", "page", "limit", "pageSize", "perPage", "size", "page_size"].includes(key) && value !== "" && value !== null && value !== undefined)
     .sort(([left], [right]) => left.localeCompare(right));
 
   if (!identityParams.length) return section;

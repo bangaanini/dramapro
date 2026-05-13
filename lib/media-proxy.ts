@@ -1,7 +1,16 @@
 const MEDIA_PROXY_PATH = "/api/media";
 
-export function buildMediaProxyUrl(url: string) {
-  return `${MEDIA_PROXY_PATH}?url=${encodeURIComponent(url)}`;
+export function buildMediaProxyUrl(
+  url: string,
+  options: { hlsKey?: string | null } = {},
+) {
+  const searchParams = new URLSearchParams({ url });
+
+  if (options.hlsKey) {
+    searchParams.set("hlsKey", options.hlsKey);
+  }
+
+  return `${MEDIA_PROXY_PATH}?${searchParams.toString()}`;
 }
 
 export function shouldProxyMediaUrl(url: string) {
@@ -21,6 +30,7 @@ export function shouldProxyMediaUrl(url: string) {
     const isSubtitleUrl =
       pathname.endsWith(".srt") ||
       pathname.endsWith(".vtt") ||
+      pathname.endsWith(".cmft") ||
       pathname.includes("/subtitle") ||
       search.includes("subtitle") ||
       hasTextMimeQuery;
@@ -37,6 +47,7 @@ export function shouldProxyMediaUrl(url: string) {
       hostname.endsWith("dramahue.com") ||
       hostname.endsWith("dramahub.cc") ||
       hostname.endsWith("dramahub.me") ||
+      hostname.endsWith("cdreader.com") ||
       hostname.endsWith("goodreels.com") ||
       hostname.endsWith("goodshort.com") ||
       hostname.endsWith("shorten.watch") ||

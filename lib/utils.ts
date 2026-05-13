@@ -9,10 +9,24 @@ const UNOPTIMIZED_IMAGE_HOSTS = new Set([
   "hwztchapter.dramaboxdb.com",
   "hwztvideo.dramaboxdb.com",
   "image.fishnovel.com",
+  "cdn.shorten.watch",
+  "img.shorten.watch",
   "volcengine-forward.shorttv.live",
 ]);
 
 const HIDDEN_DISPLAY_TAG_NAMES = new Set(["free", "gratis"]);
+
+function hasSignedUrlParams(url: URL) {
+  return (
+    url.searchParams.has("auth_key") ||
+    url.searchParams.has("sign") ||
+    url.searchParams.has("Expires") ||
+    url.searchParams.has("Signature") ||
+    url.searchParams.has("X-Amz-Signature") ||
+    url.searchParams.has("X-Goog-Signature") ||
+    url.searchParams.has("__token__")
+  );
+}
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -29,6 +43,11 @@ export function filterVisibleDisplayTags(tags: string[]) {
 export function normalizeDisplayImageUrl(imageUrl: string) {
   try {
     const url = new URL(imageUrl);
+
+    if (url.hostname === "img.shorten.watch") {
+      url.hostname = "cdn.shorten.watch";
+      return url.toString();
+    }
 
     if (
       url.hostname.endsWith(".fizzopic.org") &&
@@ -59,8 +78,10 @@ export function shouldBypassImageOptimization(imageUrl: string) {
     return (
       UNOPTIMIZED_IMAGE_HOSTS.has(hostname) ||
       hostname.endsWith(".dramaboxdb.com") ||
+      hostname.endsWith(".shorten.watch") ||
       hostname.endsWith(".shorttv.live") ||
-      url.searchParams.has("auth_key")
+      hostname.endsWith(".jowo.tv") ||
+      hasSignedUrlParams(url)
     );
   } catch {
     return false;

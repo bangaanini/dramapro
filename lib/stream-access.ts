@@ -129,6 +129,10 @@ function toProviderStreamQualities(sources: unknown[]): StreamQuality[] {
       const record = source as Record<string, unknown>;
       const url = typeof record.url === "string" ? record.url.trim() : "";
       if (!url || isUnavailableStreamUrl(url)) return null;
+      const hlsKey =
+        typeof record.hlsKey === "string" && record.hlsKey.trim()
+          ? record.hlsKey.trim()
+          : null;
 
       const label =
         typeof record.quality === "string" && record.quality.trim()
@@ -147,7 +151,7 @@ function toProviderStreamQualities(sources: unknown[]): StreamQuality[] {
 
       return {
         label,
-        url: shouldProxyMediaUrl(url) ? buildMediaProxyUrl(url) : url,
+        url: shouldProxyMediaUrl(url) ? buildMediaProxyUrl(url, { hlsKey }) : url,
         mimeType,
       } satisfies StreamQuality;
     })
@@ -191,6 +195,40 @@ function encodeBase64Url(value: string) {
   return Buffer.from(value, "utf8").toString("base64url");
 }
 
+function readQueryTokenExpirySeconds(url: URL): number | null {
+  const tokenExpiry = url.searchParams
+    .get("__token__")
+    ?.match(/(?:^|~)exp=(\d{10,13})(?:~|$)/)?.[1];
+
+  if (!tokenExpiry) {
+    return null;
+  }
+
+  const parsedExpiry = Number.parseInt(tokenExpiry, 10);
+  if (!Number.isFinite(parsedExpiry)) {
+    return null;
+  }
+
+  return parsedExpiry > 10_000_000_000
+    ? Math.floor(parsedExpiry / 1000)
+    : parsedExpiry;
+}
+
+function readAuthKeyExpirySeconds(url: URL): number | null {
+  const authKey = url.searchParams.get("auth_key");
+  const head = authKey?.split("-")[0] ?? "";
+
+  if (!/^\d+$/.test(head)) {
+    return null;
+  }
+
+  const authKeyExpiry = Number.parseInt(head, 10);
+
+  return Number.isFinite(authKeyExpiry) && authKeyExpiry >= 1_000_000_000
+    ? authKeyExpiry
+    : null;
+}
+
 function readTencentPathExpiry(url: URL): number | null {
   const hostname = url.hostname.toLowerCase();
 
@@ -227,6 +265,36 @@ function readSignedUrlExpiry(sourceUrl: string): number | null {
       if (directExpires) {
         const parsedExpires = Number.parseInt(directExpires, 10);
         return Number.isFinite(parsedExpires) ? parsedExpires : null;
+      }
+
+      const queryTokenExpiry = readQueryTokenExpirySeconds(url);
+      if (queryTokenExpiry) {
+        return queryTokenExpiry;
+      }
+
+      const authKeyExpiry = readAuthKeyExpirySeconds(url);
+      if (authKeyExpiry) {
+        return authKeyExpiry;
+      }
+
+      const amzDate = url.searchParams.get("X-Amz-Date");
+      const amzExpires = Number.parseInt(url.searchParams.get("X-Amz-Expires") ?? "", 10);
+      const amzDateMatch = amzDate?.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+
+      if (amzDateMatch && Number.isFinite(amzExpires) && amzExpires > 0) {
+        const [, year, month, day, hour, minute, second] = amzDateMatch;
+        const signedAtMs = Date.UTC(
+          Number(year),
+          Number(month) - 1,
+          Number(day),
+          Number(hour),
+          Number(minute),
+          Number(second),
+        );
+
+        if (Number.isFinite(signedAtMs)) {
+          return Math.floor((signedAtMs + amzExpires * 1000) / 1000);
+        }
       }
 
       const verify = url.searchParams.get("verify");

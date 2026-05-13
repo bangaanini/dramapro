@@ -27,5 +27,5 @@ export function HomeCatalogPanel({
   data: CatalogHomePayload;
   tags: CatalogTag[];
 }) {
-  return <HomeCatalogGrid data={data} tags={tags} />;
+  return <HomeCatalogGrid data={data} tags={tags} providers={data.providerTabs} />;
 }

@@ -35,26 +35,46 @@ const CATALOG_DETAIL_TTL_MINUTES = Number.parseInt(
 const SHOULD_AUDIT_AFTER_INDEX =
   process.env.CATALOG_SYNC_AUDIT_AFTER_INDEX?.trim().toLowerCase() === "true";
 const PROVIDER_LOGO_PATHS: Record<string, string> = {
-  chill: "/provider-logos/chillshorts.webp",
-  dramabox: "/provider-logos/dramabox.png",
-  dramadash: "/provider-logos/dramadash.png",
-  dramamax: "/provider-logos/dramamax.webp",
-  dramanova: "/provider-logos/dramanova.webp",
-  dramarush: "/provider-logos/dramarush.webp",
-  dramawave: "/provider-logos/dramawave.png",
-  flickreels: "/provider-logos/flickreels.png",
-  flickshort: "/provider-logos/flickshort.png",
-  freereels: "/provider-logos/freereels.webp",
-  goodshort: "/provider-logos/goodshort.png",
-  hishort: "/provider-logos/hishort.webp",
-  litetv: "/provider-logos/liteTv.webp",
-  meloshort: "/provider-logos/meloshorts.webp",
-  microdrama: "/provider-logos/microdrama.webp",
-  netshort: "/provider-logos/netshort.png",
-  radreels: "/provider-logos/radreels.webp",
-  reelbuzz: "/provider-logos/reelbuzz.png",
-  shorten: "/provider-logos/shorten.webp",
-  shortmax: "/provider-logos/shortmax.png",
+  bilitv: "/logo-provider/bilitv.png",
+  cashdrama: "/logo-provider/cashdrama.png",
+  cubetv: "/logo-provider/cubetv.png",
+  dotdrama: "/logo-provider/dotdrama.png",
+  dramabite: "/logo-provider/dramabite.png",
+  dramabox: "/logo-provider/dramabox.png",
+  dramadash: "/logo-provider/dramadash.png",
+  dramanova: "/logo-provider/dramanova.png",
+  dramarush: "/logo-provider/dramarush.png",
+  dramawave: "/logo-provider/dramawave.png",
+  flextv: "/logo-provider/flextv.png",
+  flickreels: "/logo-provider/flickreels.png",
+  freereels: "/logo-provider/freereels.png",
+  fundrama: "/logo-provider/fundrama.png",
+  goodshort: "/logo-provider/goodshort.png",
+  hishort: "/logo-provider/hishort.png",
+  melolo: "/logo-provider/melolo.png",
+  meloshort: "/logo-provider/meloshort.png",
+  microdrama: "/logo-provider/microdrama.png",
+  minutedrama: "/logo-provider/minutedrama.png",
+  moboreels: "/logo-provider/moboreels.png",
+  netshort: "/logo-provider/netshort.png",
+  radreels: "/logo-provider/radreels.png",
+  rapidtv: "/logo-provider/rapidtv.png",
+  reelala: "/logo-provider/reelala.png",
+  reelife: "/logo-provider/reelife.png",
+  reelshort: "/logo-provider/reelshort.png",
+  sarostv: "/logo-provider/sarostv.png",
+  shortbox: "/logo-provider/shortbox.png",
+  shorten: "/logo-provider/shorten.png",
+  shortmax: "/logo-provider/shortmax.png",
+  shortsky: "/logo-provider/shortsky.png",
+  shortwave: "/logo-provider/shortwave.png",
+  shotshort: "/logo-provider/shotshort.png",
+  snackshort: "/logo-provider/snackshort.png",
+  sodareels: "/logo-provider/sodareels.png",
+  stardusttv: "/logo-provider/stardusttv.png",
+  starshort: "/logo-provider/starshort.png",
+  velolo: "/logo-provider/velolo.png",
+  vigloo: "/logo-provider/vigloo.png",
 };
 
 function publicReadySeriesWhere(platformId?: string | null): Prisma.CatalogSeriesWhereInput {
@@ -469,6 +489,7 @@ function toCatalogSeriesCard(
     playCount: string;
     tags: string[];
     platformId: string;
+    providerRawPayload?: Prisma.JsonValue | null;
     platform: {
       name: string;
     };
@@ -477,7 +498,7 @@ function toCatalogSeriesCard(
   return {
     id: series.id,
     title: series.title,
-    thumbUrl: series.coverUrl,
+    thumbUrl: displayCoverUrlForCard(series),
     platformId: series.platformId,
     platformName: series.platform.name,
     episodeCount: series.chapterCount,
@@ -485,6 +506,45 @@ function toCatalogSeriesCard(
     playCount: series.playCount,
     tags: series.tags,
   };
+}
+
+function displayCoverUrlForCard(series: {
+  coverUrl: string;
+  platformId: string;
+  providerRawPayload?: Prisma.JsonValue | null;
+}) {
+  if (series.platformId !== "shorten") return normalizeShortenImageHost(series.coverUrl) ?? "";
+
+  const raw = asCatalogJsonRecord(series.providerRawPayload);
+  const images = asCatalogJsonRecord(raw.images);
+  return (
+    normalizeShortenImageHost(stringCatalogValue(images.thumbnail)) ??
+    normalizeShortenImageHost(stringCatalogValue(raw.thumbnail)) ??
+    normalizeShortenImageHost(series.coverUrl) ??
+    ""
+  );
+}
+
+function asCatalogJsonRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function stringCatalogValue(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function normalizeShortenImageHost(value: string | null | undefined) {
+  if (!value) return null;
+
+  try {
+    const url = new URL(value);
+    if (url.hostname === "img.shorten.watch") {
+      url.hostname = "cdn.shorten.watch";
+    }
+    return url.toString();
+  } catch {
+    return value;
+  }
 }
 
 function getProviderLogoUrl(platformId: string) {
@@ -2404,7 +2464,14 @@ export async function getCatalogFeedPage(
 async function getHomepageProviderTabs(): Promise<CatalogProviderTab[]> {
   const providerGroups = await prisma.catalogSeries.groupBy({
     by: ["platformId"],
-    where: publicReadySeriesWhere(),
+    where: {
+      catalogSource: STREAMAPI_SOURCE,
+      platformId: { in: [...STREAMAPI_PROVIDER_CODES] },
+      coverUrl: { not: "" },
+      NOT: { title: { startsWith: "Untitled " } },
+      isHomepageVisible: true,
+      episodes: { some: {} },
+    },
     _count: {
       _all: true,
     },
@@ -2414,29 +2481,24 @@ async function getHomepageProviderTabs(): Promise<CatalogProviderTab[]> {
   );
   const platforms = await prisma.catalogPlatform.findMany({
     where: {
-      id: {
-        in: providerGroups.map((item) => item.platformId),
-      },
-      isHomepageVisible: true,
-    },
-    orderBy: {
-      name: "asc",
+      id: { in: [...STREAMAPI_PROVIDER_CODES] },
     },
   });
+  const platformsById = new Map(platforms.map((platform) => [platform.id, platform]));
 
-  return platforms
-    .map((platform) => ({
-      id: platform.id,
-      name: platform.name,
-      logoUrl: getProviderLogoUrl(platform.id),
-      seriesCount: countsByProvider.get(platform.id) ?? 0,
-    }))
-    .filter((platform) => platform.seriesCount > 0)
-    .sort((left, right) => {
-      const countDifference = right.seriesCount - left.seriesCount;
-
-      return countDifference || left.name.localeCompare(right.name);
-    });
+  return STREAMAPI_PROVIDER_CODES
+    .filter((code) => Boolean(getProviderLogoUrl(code)))
+    .map((code) => {
+      const platform = platformsById.get(code);
+      const displayName = platform?.name ?? code;
+      return {
+        id: code,
+        name: displayName,
+        logoUrl: getProviderLogoUrl(code),
+        seriesCount: countsByProvider.get(code) ?? 0,
+      };
+    })
+    .sort((left, right) => left.name.localeCompare(right.name));
 }
 
 export async function getCatalogShortcuts() {

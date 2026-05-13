@@ -22,12 +22,33 @@ const MISSING_TITLE_HIDDEN_REASON = "missing_provider_title";
 const PENDING_DETAIL_HIDDEN_REASON = "pending_provider_detail";
 const PLAYBACK_REFRESH_GRACE_MS = 120_000;
 const ON_DEMAND_PLAYBACK_PROVIDERS = new Set<ProviderCode>([
+  "bilitv",
+  "cashdrama",
+  "cubetv",
+  "dramabite",
   "dramabox",
+  "dramanova",
   "dramarush",
+  "flextv",
+  "freereels",
+  "goodshort",
   "hishort",
   "melolo",
+  "meloshort",
+  "moboreels",
+  "netshort",
+  "radreels",
   "reelife",
-  "reelshort"
+  "reelshort",
+  "sarostv",
+  "shortbox",
+  "shortmax",
+  "shortsky",
+  "shortwave",
+  "shotshort",
+  "snackshort",
+  "starshort",
+  "vigloo"
 ]);
 
 export type ProviderSyncDashboard = {
@@ -35,6 +56,7 @@ export type ProviderSyncDashboard = {
     code: ProviderCode;
     name: string;
     enabled: boolean;
+    isHomepageVisible: boolean;
     dramaCount: number;
     episodeCount: number;
     sections: CatalogSectionDefinition[];
@@ -84,6 +106,30 @@ function jsonRecord(value: unknown): JsonRecord {
   return value as JsonRecord;
 }
 
+function jsonStringValue(value: unknown) {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(Math.trunc(value));
+  }
+  return null;
+}
+
+function providerPlaybackExternalId(
+  provider: ProviderCode,
+  fallbackExternalId: string,
+  seriesRawPayload: JsonRecord
+) {
+  if (provider === "sarostv") {
+    return (
+      jsonStringValue(seriesRawPayload.playId) ??
+      jsonStringValue(seriesRawPayload.id) ??
+      fallbackExternalId
+    );
+  }
+
+  return fallbackExternalId;
+}
+
 function stringPayload(payload: JsonRecord, key: string, fallback: string) {
   const value = payload[key];
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
@@ -107,6 +153,13 @@ export function providerDetailParamsFromRawPayload(provider: ProviderCode, rawPa
   if (provider === "minutedrama") {
     const source = positiveIntegerValue(raw.mediaSource);
     return source ? { source } : {};
+  }
+
+  if (provider === "vigloo") {
+    const seasons = Array.isArray(raw.seasons) ? raw.seasons : [];
+    const firstSeason = jsonRecord(seasons[0]);
+    const seasonId = positiveIntegerValue(firstSeason.id);
+    return seasonId ? { seasonId } : {};
   }
 
   return {};
@@ -274,6 +327,75 @@ function parseExpiryMs(value: unknown): number | null {
   return Number.isNaN(dateValue.getTime()) ? null : dateValue.getTime();
 }
 
+function readQueryTokenExpiryMs(sourceUrl: string): number | null {
+  try {
+    const url = new URL(sourceUrl);
+    const token = url.searchParams.get("__token__");
+    const expiry = token?.match(/(?:^|~)exp=(\d{10,13})(?:~|$)/)?.[1];
+
+    if (!expiry) {
+      return null;
+    }
+
+    const parsedExpiry = Number.parseInt(expiry, 10);
+    if (!Number.isFinite(parsedExpiry)) {
+      return null;
+    }
+
+    return parsedExpiry > 10_000_000_000 ? parsedExpiry : parsedExpiry * 1000;
+  } catch {
+    return null;
+  }
+}
+
+function readAuthKeyExpiryMs(sourceUrl: string): number | null {
+  try {
+    const url = new URL(sourceUrl);
+    const authKey = url.searchParams.get("auth_key");
+    const head = authKey?.split("-")[0] ?? "";
+
+    if (!/^\d+$/.test(head)) {
+      return null;
+    }
+
+    const expiry = Number.parseInt(head, 10);
+    if (!Number.isFinite(expiry) || expiry < 1_000_000_000) {
+      return null;
+    }
+
+    return expiry * 1000;
+  } catch {
+    return null;
+  }
+}
+
+function readAwsAmzExpiryMs(sourceUrl: string): number | null {
+  try {
+    const url = new URL(sourceUrl);
+    const amzDate = url.searchParams.get("X-Amz-Date");
+    const amzExpires = Number.parseInt(url.searchParams.get("X-Amz-Expires") ?? "", 10);
+    const match = amzDate?.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+
+    if (!match || !Number.isFinite(amzExpires) || amzExpires <= 0) {
+      return null;
+    }
+
+    const [, year, month, day, hour, minute, second] = match;
+    const signedAt = Date.UTC(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+    );
+
+    return Number.isFinite(signedAt) ? signedAt + amzExpires * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
 function readTencentPathExpiryMs(sourceUrl: string): number | null {
   try {
     const url = new URL(sourceUrl);
@@ -319,8 +441,46 @@ function playbackSourceExpiryMs(source: unknown): number | null {
   }
 
   return typeof record.url === "string"
-    ? readTencentPathExpiryMs(record.url)
+    ? readQueryTokenExpiryMs(record.url) ??
+        readAuthKeyExpiryMs(record.url) ??
+        readAwsAmzExpiryMs(record.url) ??
+        readTencentPathExpiryMs(record.url)
     : null;
+}
+
+function isLegacyCdreaderMediaUrl(sourceUrl: string) {
+  try {
+    const url = new URL(sourceUrl);
+    const hostname = url.hostname.toLowerCase();
+    return (
+      (hostname === "cdreader.com" || hostname.endsWith(".cdreader.com")) &&
+      url.pathname.toLowerCase().startsWith("/video/")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function hasLegacyCdreaderMediaSource(sources: unknown[]) {
+  return sources.some((source) => {
+    if (!source || typeof source !== "object" || Array.isArray(source)) {
+      return false;
+    }
+
+    const url = (source as { url?: unknown }).url;
+    return typeof url === "string" && isLegacyCdreaderMediaUrl(url);
+  });
+}
+
+function hasHlsKeySource(sources: unknown[]) {
+  return sources.some((source) => {
+    if (!source || typeof source !== "object" || Array.isArray(source)) {
+      return false;
+    }
+
+    const hlsKey = (source as { hlsKey?: unknown }).hlsKey;
+    return typeof hlsKey === "string" && hlsKey.trim().length > 0;
+  });
 }
 
 function playbackExpiresAt(playback: CanonicalPlayback) {
@@ -348,6 +508,51 @@ function isCachedPlaybackFresh(episode: {
   if (sources.some(isExpiredPlaybackSource)) return false;
   if (!episode.playbackExpiresAt) return true;
   return episode.playbackExpiresAt.getTime() > Date.now() + PLAYBACK_REFRESH_GRACE_MS;
+}
+
+function hasBiliTvQualitySet(sources: unknown[]) {
+  const qualities = new Set(
+    sources
+      .map((source) => {
+        if (!source || typeof source !== "object" || Array.isArray(source)) {
+          return "";
+        }
+
+        const quality = (source as { quality?: unknown }).quality;
+        return typeof quality === "string" ? quality.trim().toLowerCase() : "";
+      })
+      .filter(Boolean),
+  );
+
+  return ["480p", "720p", "1080p"].every((quality) => qualities.has(quality));
+}
+
+function hasIndonesianSubtitle(subtitles: unknown[]) {
+  return subtitles.some((subtitle) => {
+    if (!subtitle || typeof subtitle !== "object" || Array.isArray(subtitle)) {
+      return false;
+    }
+
+    const record = subtitle as { lang?: unknown; language?: unknown; label?: unknown };
+    const language =
+      typeof record.lang === "string"
+        ? record.lang
+        : typeof record.language === "string"
+          ? record.language
+          : "";
+    const label = typeof record.label === "string" ? record.label : "";
+    const normalizedLanguage = language.trim().toLowerCase().replace(/_/g, "-");
+    const normalizedLabel = label.trim().toLowerCase();
+
+    return (
+      normalizedLanguage === "id" ||
+      normalizedLanguage === "id-id" ||
+      normalizedLanguage === "ind" ||
+      normalizedLanguage === "indonesia" ||
+      normalizedLanguage === "indonesian" ||
+      normalizedLabel.includes("indonesia")
+    );
+  });
 }
 
 function isUnpreparedTencentVodSource(source: unknown) {
@@ -496,8 +701,7 @@ async function ensureStreamApiPlatform(provider: ProviderCode) {
       },
       update: {
         name: adapter.name,
-        isActive: true,
-        isHomepageVisible: true
+        isActive: true
       }
     });
 
@@ -529,7 +733,10 @@ async function ensureStreamApiPlatform(provider: ProviderCode) {
 }
 
 export async function initializeStreamApiCatalog() {
-  await Promise.all(PROVIDERS.map((provider) => ensureStreamApiPlatform(provider)));
+  for (const provider of PROVIDERS) {
+    await ensureStreamApiPlatform(provider);
+  }
+
   await prisma.catalogSeries.updateMany({
     where: {
       catalogSource: { not: STREAMAPI_SOURCE }
@@ -539,6 +746,43 @@ export async function initializeStreamApiCatalog() {
       homepageHiddenReason: LEGACY_HIDDEN_REASON
     }
   });
+}
+
+export async function setProviderHomepageVisibility(
+  provider: ProviderCode,
+  isHomepageVisible: boolean
+) {
+  const adapter = getProvider(provider);
+  const platform = await prisma.catalogPlatform.upsert({
+    where: {
+      id: provider
+    },
+    create: {
+      id: provider,
+      name: adapter.name,
+      isActive: true,
+      isHomepageVisible
+    },
+    update: {
+      name: adapter.name,
+      isActive: true,
+      isHomepageVisible
+    }
+  });
+
+  await logProviderWorker({
+    level: "info",
+    message: `${adapter.name} ${isHomepageVisible ? "shown on" : "hidden from"} homepage.`,
+    meta: {
+      provider,
+      isHomepageVisible
+    }
+  });
+
+  return {
+    id: platform.id,
+    isHomepageVisible: platform.isHomepageVisible
+  };
 }
 
 async function upsertSeries(provider: ProviderCode, languageId: string, drama: CanonicalDrama) {
@@ -756,6 +1000,15 @@ export async function syncProviderDetail(provider: ProviderCode, externalId: str
     }
   }
 
+  if (provider === "sarostv" && existing?.title.trim()) {
+    drama = {
+      ...drama,
+      title: existing.title,
+      episodeCount: drama.episodeCount ?? existing.chapterCount,
+      posterUrl: drama.posterUrl ?? existing.coverUrl,
+    };
+  }
+
   const series = await upsertSeries(provider, language.id, drama);
   let episodes = await adapter.getEpisodes({ provider, externalId, lang, params: effectiveParams });
   const expectedEpisodeCount = Math.max(drama.episodeCount ?? 0, series.chapterCount ?? 0);
@@ -841,29 +1094,43 @@ export async function resolveProviderPlayback(input: {
     return null;
   }
 
-  if (isCachedPlaybackFresh(episode)) {
-    const sources = Array.isArray(episode.playbackSources)
-      ? episode.playbackSources
+  const provider = episode.series.platformId;
+  const cachedSources = Array.isArray(episode.playbackSources)
+    ? episode.playbackSources
+    : [];
+  const cachedSubtitles = Array.isArray(episode.playbackSubtitles)
+    ? episode.playbackSubtitles
+    : Array.isArray(episode.subtitles)
+      ? episode.subtitles
       : [];
+  const shouldRefreshCachedPlayback =
+    (provider === "bilitv" &&
+      (!hasBiliTvQualitySet(cachedSources) || !hasIndonesianSubtitle(cachedSubtitles))) ||
+    (provider === "moboreels" &&
+      (hasLegacyCdreaderMediaSource(cachedSources) ||
+        !hasIndonesianSubtitle(cachedSubtitles))) ||
+    (provider === "shortbox" && !hasHlsKeySource(cachedSources));
+
+  if (!shouldRefreshCachedPlayback && isCachedPlaybackFresh(episode)) {
     return {
-      provider: episode.series.platformId,
-      status: episode.isLocked ? "locked" : sources.length > 0 ? "ready" : "unavailable",
-      sources,
-      subtitles: Array.isArray(episode.playbackSubtitles)
-        ? episode.playbackSubtitles
-        : Array.isArray(episode.subtitles)
-          ? episode.subtitles
-          : [],
+      provider,
+      status: episode.isLocked ? "locked" : cachedSources.length > 0 ? "ready" : "unavailable",
+      sources: cachedSources,
+      subtitles: cachedSubtitles,
       sourceType: episode.sourceType,
       expiresAt: episode.playbackExpiresAt
     };
   }
 
-  const provider = episode.series.platformId;
   const adapter = getProvider(provider);
+  const seriesRawPayload = jsonRecord(episode.series.providerRawPayload);
   const playback = await adapter.resolvePlayback({
     provider,
-    externalId: episode.series.upstreamSeriesId,
+    externalId: providerPlaybackExternalId(
+      provider,
+      episode.series.upstreamSeriesId,
+      seriesRawPayload,
+    ),
     lang: episode.series.language.code,
     episodeId: episode.id,
     episodeExternalId: episode.upstreamEpisodeId ?? String(episode.episodeIndex),
@@ -1026,7 +1293,7 @@ export async function logProviderWorker(input: {
 }
 
 export async function getProviderSyncDashboard(): Promise<ProviderSyncDashboard> {
-  const [seriesCounts, episodeCounts, jobs, logs] = await Promise.all([
+  const [seriesCounts, episodeCounts, platformRows, jobs, logs] = await Promise.all([
     prisma.catalogSeries.groupBy({
       by: ["platformId"],
       where: { catalogSource: STREAMAPI_SOURCE },
@@ -1039,6 +1306,18 @@ export async function getProviderSyncDashboard(): Promise<ProviderSyncDashboard>
       },
       _count: { _all: true }
     }),
+    prisma.catalogPlatform.findMany({
+      where: {
+        id: {
+          in: [...PROVIDERS]
+        }
+      },
+      select: {
+        id: true,
+        isActive: true,
+        isHomepageVisible: true
+      }
+    }),
     prisma.providerSyncJob.findMany({
       orderBy: [{ createdAt: "desc" }],
       take: 30
@@ -1050,6 +1329,7 @@ export async function getProviderSyncDashboard(): Promise<ProviderSyncDashboard>
   ]);
 
   const seriesCountByProvider = new Map(seriesCounts.map((row) => [row.platformId, row._count._all]));
+  const platformById = new Map(platformRows.map((row) => [row.id, row]));
   const episodeCountBySeries = new Map(episodeCounts.map((row) => [row.seriesId, row._count._all]));
   const streamSeries = await prisma.catalogSeries.findMany({
     where: { catalogSource: STREAMAPI_SOURCE },
@@ -1061,14 +1341,19 @@ export async function getProviderSyncDashboard(): Promise<ProviderSyncDashboard>
   }
 
   return {
-    providers: getAllProviders().map((adapter) => ({
-      code: adapter.code,
-      name: adapter.name,
-      enabled: true,
-      dramaCount: seriesCountByProvider.get(adapter.code) ?? 0,
-      episodeCount: episodeCountByProvider.get(adapter.code) ?? 0,
-      sections: adapter.catalogSections
-    })),
+    providers: getAllProviders().map((adapter) => {
+      const platform = platformById.get(adapter.code);
+
+      return {
+        code: adapter.code,
+        name: adapter.name,
+        enabled: platform?.isActive ?? true,
+        isHomepageVisible: platform?.isHomepageVisible ?? true,
+        dramaCount: seriesCountByProvider.get(adapter.code) ?? 0,
+        episodeCount: episodeCountByProvider.get(adapter.code) ?? 0,
+        sections: adapter.catalogSections
+      };
+    }),
     jobs: jobs.map((job) => ({
       id: job.id,
       type: job.type,
