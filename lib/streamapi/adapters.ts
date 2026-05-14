@@ -12,12 +12,14 @@ import {
   isValidDrama
 } from "@/lib/streamapi/normalizers";
 import type {
+  CanonicalPlayback,
   CatalogInput,
   CatalogSectionDefinition,
   DramaInput,
   EpisodesInput,
   JsonRecord,
   PlaybackInput,
+  PlaybackSource,
   PlaybackSubtitle,
   ProviderAdapter,
   ProviderCatalogResult,
@@ -196,6 +198,39 @@ function goodshortChannel(lang: string) {
   if (lower.startsWith("ko")) return 565;
   if (lower.startsWith("th")) return 568;
   return 562;
+}
+
+function goodshortPlaybackFromRawEpisode(input: PlaybackInput): CanonicalPlayback | null {
+  const raw = asRecord(input.rawEpisode);
+  const cdnList = Array.isArray(raw.cdnList) ? raw.cdnList : [];
+  const sources: PlaybackSource[] = [];
+
+  for (const item of cdnList) {
+    const record = asRecord(item);
+    const url = stringRecordValue(record, "videoPath");
+    if (!url) continue;
+    sources.push({
+      url,
+      quality: "720p",
+      mimeType: "application/vnd.apple.mpegurl",
+      codec: null,
+      expiresAt: null
+    });
+  }
+
+  if (sources.length === 0) return null;
+
+  return {
+    episodeId: input.episodeId,
+    provider: "goodshort",
+    status: "ready",
+    sourceType: "hls",
+    sources,
+    subtitles: [],
+    duration: numberRecordValue(raw, "playTime"),
+    expiresAt: null,
+    providerMeta: { provider: "goodshort", source: "rawEpisode.cdnList" }
+  };
 }
 
 function freereelsSection(section: string) {
@@ -1697,8 +1732,14 @@ export class ConfiguredProviderAdapter implements ProviderAdapter {
   }
 
   async resolvePlayback(input: PlaybackInput) {
-    if (this.code === "goodshort" && process.env.ALLOW_PROVIDER_UNLOCK === "true") {
-      await this.fetch({ path: `/api/v1/unlock/${encodeURIComponent(input.externalId)}`, query: { q: input.quality ?? "720p" } });
+    if (this.code === "goodshort") {
+      const directPlayback = goodshortPlaybackFromRawEpisode(input);
+      if (directPlayback) {
+        return directPlayback;
+      }
+      if (process.env.ALLOW_PROVIDER_UNLOCK === "true") {
+        await this.fetch({ path: `/api/v1/unlock/${encodeURIComponent(input.externalId)}`, query: { q: input.quality ?? "720p" } });
+      }
     }
 
     const endpoint = this.config.playback?.(input, this.mapLang(input.lang));

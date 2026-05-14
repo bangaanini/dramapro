@@ -753,7 +753,10 @@ function collectSources(playback: JsonRecord, expiresAt: string | null): Playbac
   const qualityMap = {
     ...asRecord(playback.qualities),
     ...asRecord(playback.video),
-    ...asRecord(playback.m3u8s)
+    ...asRecord(playback.m3u8s),
+    ...(typeof playback.videoUrl === "object" && !Array.isArray(playback.videoUrl)
+      ? asRecord(playback.videoUrl)
+      : {})
   };
   const hasQualityMap = Object.values(qualityMap).some((value) =>
     Boolean(toStringValue(value)),
@@ -802,7 +805,8 @@ function collectSources(playback: JsonRecord, expiresAt: string | null): Playbac
     ["backup_url", "auto", null],
     ["videoUrl", "auto", null],
     ["stream_url", "auto", null],
-    ["streamUrl", "auto", null]
+    ["streamUrl", "auto", null],
+    ["m3u8", "auto", null]
   ] as const;
 
   for (const [key, quality, codec] of directCandidates) {
