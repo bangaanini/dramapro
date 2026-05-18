@@ -17,6 +17,10 @@ export default async function SignUpPage(props: PageProps<"/sign-up">) {
     typeof searchParams.error === "string" ? searchParams.error : null;
   const name = typeof searchParams.name === "string" ? searchParams.name : "";
   const email = typeof searchParams.email === "string" ? searchParams.email : "";
+  const telegramUsername =
+    typeof searchParams.telegramUsername === "string"
+      ? searchParams.telegramUsername
+      : "";
   const next = resolveSafeRedirectPath(
     typeof searchParams.next === "string" ? searchParams.next : "/profile",
   );
@@ -31,6 +35,7 @@ export default async function SignUpPage(props: PageProps<"/sign-up">) {
           error={error}
           initialName={name}
           initialEmail={email}
+          initialTelegramUsername={telegramUsername}
         />
       </div>
     </main>

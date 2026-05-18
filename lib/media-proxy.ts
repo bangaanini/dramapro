@@ -51,6 +51,7 @@ export function shouldProxyMediaUrl(url: string) {
       hostname.endsWith("goodreels.com") ||
       hostname.endsWith("goodshort.com") ||
       hostname.endsWith("shorten.watch") ||
+      hostname.endsWith("montagehub.xyz") ||
       hostname === "akamai-static.shorttv.live"
     );
   } catch {

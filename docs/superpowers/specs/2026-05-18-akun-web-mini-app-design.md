@@ -161,7 +161,7 @@ Berdasarkan eksplorasi `prisma/schema.prisma`:
 | `VipPayment` | `userId` | tidak ada konflik unik |
 | `AffiliateCommission` | `affiliateUserId` | relation `AffiliateOwner` |
 | `AffiliateCommission` | `referredUserId` | relation `AffiliateReferred` |
-| `AffiliateWithdrawal` | `userId` | |
+| `AffiliateWithdrawal` | `affiliateUserId` | |
 | `AffiliatePayoutProfile` | `userId` | unique 1-to-1 — kalau dua-duanya ada, pertahankan winner, hapus loser |
 | `TelegramPartnerBot` | `ownerUserId` | role admin bot partner ter-bawa otomatis di sini |
 | `DramaChannelBroadcast` | `ownerUserId` | onDelete SetNull |

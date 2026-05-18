@@ -9,7 +9,7 @@ import {
   normalizeTelegramBotUsername,
 } from "@/lib/telegram-partner-bots";
 import type { PublicUser } from "@/lib/user-auth";
-import { createUserSession } from "@/lib/user-auth";
+import { createUserSession, mapPublicUser } from "@/lib/user-auth";
 import { buildTelegramDisplayName } from "@/lib/user-identity";
 
 type TelegramInitDataUser = {
@@ -292,6 +292,7 @@ export async function createTelegramUserSessionFromInitData(
           name: true,
           affiliateCode: true,
           authProvider: true,
+          passwordHash: true,
           telegramId: true,
           telegramUsername: true,
           telegramPhotoUrl: true,
@@ -325,6 +326,7 @@ export async function createTelegramUserSessionFromInitData(
           name: true,
           affiliateCode: true,
           authProvider: true,
+          passwordHash: true,
           telegramId: true,
           telegramUsername: true,
           telegramPhotoUrl: true,
@@ -341,5 +343,5 @@ export async function createTelegramUserSessionFromInitData(
   await ensureUserAffiliateCode(user.id, user.name);
   await createUserSession(user.id);
 
-  return user satisfies PublicUser;
+  return mapPublicUser(user) satisfies PublicUser;
 }

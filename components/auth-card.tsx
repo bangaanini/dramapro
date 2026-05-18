@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Eye, EyeOff, Lock, Mail, User, X } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, Send, User, X } from "lucide-react";
 
 import { signInUserAction, signUpUserAction } from "@/app/auth/actions";
 import logoImage from "@/2.png";
@@ -17,6 +17,7 @@ type AuthCardProps = {
   error?: string | null;
   initialName?: string;
   initialEmail?: string;
+  initialTelegramUsername?: string;
   modal?: boolean;
   onClose?: () => void;
 };
@@ -47,6 +48,7 @@ export function AuthCard({
   error,
   initialName = "",
   initialEmail = "",
+  initialTelegramUsername = "",
   modal = false,
   onClose,
 }: AuthCardProps) {
@@ -162,6 +164,24 @@ export function AuthCard({
             placeholder="Alamat email"
             autoComplete="username"
           />
+
+          {isSignUp ? (
+            <div className="space-y-2">
+              <AuthInput
+                icon={<Send className="size-5" />}
+                name="telegramUsername"
+                type="text"
+                defaultValue={initialTelegramUsername}
+                placeholder="Telegram username (opsional)"
+                autoComplete="off"
+              />
+              <p className="px-1 text-xs leading-5 text-white/45">
+                Diisi kalau kamu juga pakai Layar Drama lewat Telegram. Saat
+                kamu buka mini-app nanti, akun ini akan ditawarkan untuk
+                digabungkan.
+              </p>
+            </div>
+          ) : null}
 
           <AuthInput
             icon={<Lock className="size-5" />}

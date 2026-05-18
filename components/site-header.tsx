@@ -9,12 +9,14 @@ import {
   LibraryBig,
   LogIn,
   LogOut,
+  Mail,
   Megaphone,
   MessageCircle,
   Search,
 } from "lucide-react";
 
 import { logoutUserAction } from "@/app/auth/actions";
+import { ConnectTelegramMenu } from "@/components/connect-telegram-menu";
 import { HeaderSearchForm } from "@/components/header-search-form";
 import { HeaderInstallAppButton } from "@/components/header-install-app-button";
 import { PushNotificationButton } from "@/components/push-notification-button";
@@ -262,10 +264,17 @@ export async function SiteHeader({ current }: SiteHeaderProps) {
                 <HeaderMenuLink href={telegramHref} label="Buka di Telegram" external>
                   <MessageCircle className="size-4.5" />
                 </HeaderMenuLink>
-                {user.authProvider === "local" ? (
+                {user.hasWebAccount ? (
                   <HeaderMenuLink href="/profile/password" label="Ganti Password">
                     <KeyRound className="size-4.5" />
                   </HeaderMenuLink>
+                ) : (
+                  <HeaderMenuLink href="/profile/setup-web" label="Buat Akun Web">
+                    <Mail className="size-4.5" />
+                  </HeaderMenuLink>
+                )}
+                {user.hasWebAccount && !user.telegramId ? (
+                  <ConnectTelegramMenu variant="header-link" />
                 ) : null}
                 <HeaderMenuLink href={supportHref} label="Bantuan" external>
                   <CircleHelp className="size-4.5" />

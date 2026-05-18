@@ -39,13 +39,20 @@ export async function signUpUserAction(formData: FormData) {
   const name = String(formData.get("name") ?? "");
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
+  const telegramUsernameRaw = String(formData.get("telegramUsername") ?? "");
+  const telegramUsername = telegramUsernameRaw.trim() || null;
   const next = resolveSafeRedirectPath(String(formData.get("next") ?? "/profile"));
 
-  const result = await registerUser({ name, email, password });
+  const result = await registerUser({
+    name,
+    email,
+    password,
+    telegramUsername,
+  });
 
   if (!result.ok) {
     redirect(
-      `/sign-up?error=${encodeURIComponent(result.error)}&next=${encodeURIComponent(next)}&name=${encodeURIComponent(name)}&email=${encodeURIComponent(email)}`,
+      `/sign-up?error=${encodeURIComponent(result.error)}&next=${encodeURIComponent(next)}&name=${encodeURIComponent(name)}&email=${encodeURIComponent(email)}&telegramUsername=${encodeURIComponent(telegramUsernameRaw)}`,
     );
   }
 

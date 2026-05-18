@@ -11,6 +11,7 @@ import {
   KeyRound,
   LogOut,
   LoaderCircle,
+  Mail,
   UserRound,
 } from "lucide-react";
 
@@ -18,6 +19,8 @@ import { logoutUserAction } from "@/app/auth/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ConnectTelegramMenu } from "@/components/connect-telegram-menu";
+import { MergeCandidateBanner } from "@/components/merge-candidate-banner";
 import { PushNotificationButton } from "@/components/push-notification-button";
 import {
   clearStoredPwaInstallPrompt,
@@ -50,6 +53,8 @@ type ProfileOverviewProps = {
     name: string;
     email: string | null;
     authProvider: "local" | "telegram";
+    hasWebAccount: boolean;
+    telegramId: string | null;
     telegramUsername: string | null;
     telegramPhotoUrl: string | null;
     vipStartedAt: string | null;
@@ -63,6 +68,8 @@ type ProfileResponse = {
     name: string;
     email: string | null;
     authProvider: "local" | "telegram";
+    hasWebAccount: boolean;
+    telegramId: string | null;
     telegramUsername: string | null;
     telegramPhotoUrl: string | null;
     vipStartedAt: string | null;
@@ -74,10 +81,18 @@ type ProfileResponse = {
 
 const profileMenuItems = [
   {
+    href: "/profile/setup-web",
+    label: "Buat Akun Web",
+    description: "Tambah email & password supaya bisa login lewat web juga.",
+    icon: Mail,
+    visibleWhen: "no-web-account" as const,
+  },
+  {
     href: "/profile/password",
     label: "Ganti Password",
     description: "Perbarui password akun dengan aman.",
     icon: KeyRound,
+    visibleWhen: "has-web-account" as const,
   },
 ] as const;
 
@@ -293,10 +308,12 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
     : 0;
 
   const visibleProfileMenuItems = profileMenuItems.filter((item) => {
-    if (displayUser.authProvider === "telegram" && item.href === "/profile/password") {
-      return false;
+    if (item.visibleWhen === "has-web-account") {
+      return displayUser.hasWebAccount;
     }
-
+    if (item.visibleWhen === "no-web-account") {
+      return !displayUser.hasWebAccount;
+    }
     return true;
   });
 
@@ -399,6 +416,9 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
 
   return (
     <>
+      <div className="mb-4">
+        <MergeCandidateBanner />
+      </div>
       <section className="profile-panel overflow-hidden rounded-[2rem] p-4 sm:p-5">
         <div className="rounded-[1.8rem] border border-white/10 bg-[linear-gradient(180deg,rgba(49,33,64,0.54),rgba(28,19,33,0.38))] p-4 shadow-[0_24px_60px_rgba(0,0,0,0.28)]">
           <div className="flex items-start justify-between gap-3">
@@ -432,7 +452,11 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
 
           <div className="mt-4 flex flex-wrap gap-2">
             <Badge className="border-white/12 bg-black/22 px-3 py-1.5 text-white">
-              {displayUser.authProvider === "telegram" ? "Telegram login" : "Akun web"}
+              {displayUser.telegramId && displayUser.hasWebAccount
+                ? "Telegram + Web"
+                : displayUser.telegramId
+                  ? "Telegram login"
+                  : "Akun web"}
             </Badge>
           </div>
 
@@ -519,6 +543,10 @@ export function ProfileOverview({ user, supportUrl }: ProfileOverviewProps) {
               </Link>
             );
           })}
+
+          {displayUser.hasWebAccount && !displayUser.telegramId ? (
+            <ConnectTelegramMenu />
+          ) : null}
 
           <button
             type="button"

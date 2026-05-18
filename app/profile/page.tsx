@@ -22,6 +22,8 @@ export default async function ProfilePage() {
           name: user.name,
           email: user.email,
           authProvider: user.authProvider,
+          hasWebAccount: user.hasWebAccount,
+          telegramId: user.telegramId,
           telegramUsername: user.telegramUsername,
           telegramPhotoUrl: user.telegramPhotoUrl,
           vipStartedAt: user.vipStartedAt ? user.vipStartedAt.toISOString() : null,
