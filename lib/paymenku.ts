@@ -342,6 +342,30 @@ export function getPaymenkuChannelGroup(channelCode: string | null | undefined) 
   return getPaymenkuChannelDefinition(channelCode)?.group ?? PAYMENKU_CHANNEL_GROUPS.other;
 }
 
+function parsePaymenkuExpirationDate(dateStr: string | null | undefined): Date | null {
+  const normalized = String(dateStr ?? "").trim();
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized.length === 14) {
+    const year = normalized.slice(0, 4);
+    const month = normalized.slice(4, 6);
+    const day = normalized.slice(6, 8);
+    const hour = normalized.slice(8, 10);
+    const minute = normalized.slice(10, 12);
+    const second = normalized.slice(12, 14);
+    const isoString = `${year}-${month}-${day}T${hour}:${minute}:${second}+07:00`;
+    const parsed = new Date(isoString);
+
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export function extractPaymenkuPaymentDetails(
   payload: PaymenkuCreateTransactionResponse | PaymenkuStatusResponse | null | undefined,
   channelCode?: string | null,
@@ -366,7 +390,7 @@ export function extractPaymenkuPaymentDetails(
     vaNumber,
     qrUrl: info?.qr_url ?? null,
     qrString: info?.qr_string ?? null,
-    expiresAt: info?.expiration_date ? new Date(info.expiration_date) : null,
+    expiresAt: parsePaymenkuExpirationDate(info?.expiration_date),
   };
 }
 

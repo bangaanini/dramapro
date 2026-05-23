@@ -4,6 +4,9 @@ import { ensureSeriesPlayableFresh } from "@/lib/catalog";
 import { resolveProviderPlayback } from "@/lib/provider-sync";
 import { isEpisodeVipLocked } from "@/lib/vip";
 
+const lastRefreshTimestamps = new Map<string, number>();
+const REFRESH_COOLDOWN_MS = 30_000;
+
 export type StreamResponse = {
   dramaId: string;
   provider: string;
@@ -417,17 +420,33 @@ export async function resolveDramaStreamSources({
   }
 
   if (episode && (isUnavailableStreamUrl(episode.videoUrl) || isSignedStreamUrlExpired(episode.videoUrl))) {
-    const refreshedSeries = await ensureSeriesPlayableFresh(internalDramaId, {
-      force: true,
-      hideOnFailure: true,
-    });
-    const refreshedEpisode = refreshedSeries?.episodes.find(
-      (item) => item.episodeIndex === episodeIndex,
-    );
+    const refreshKey = `${internalDramaId}:${episodeIndex}`;
+    const lastRefreshTime = lastRefreshTimestamps.get(refreshKey) ?? 0;
+    const now = Date.now();
+    const canRefresh = now - lastRefreshTime >= REFRESH_COOLDOWN_MS;
 
-    if (refreshedSeries && refreshedEpisode) {
-      series = refreshedSeries;
-      episode = refreshedEpisode;
+    if (canRefresh) {
+      lastRefreshTimestamps.set(refreshKey, now);
+
+      const refreshedSeries = await ensureSeriesPlayableFresh(internalDramaId, {
+        force: true,
+        hideOnFailure: true,
+      });
+      const refreshedEpisode = refreshedSeries?.episodes.find(
+        (item) => item.episodeIndex === episodeIndex,
+      );
+
+      if (refreshedSeries && refreshedEpisode) {
+        series = refreshedSeries;
+        episode = refreshedEpisode;
+      }
+
+      if (lastRefreshTimestamps.size > 100) {
+        const oldestKey = lastRefreshTimestamps.keys().next().value;
+        if (oldestKey) {
+          lastRefreshTimestamps.delete(oldestKey);
+        }
+      }
     }
   }
 

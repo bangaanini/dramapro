@@ -283,6 +283,20 @@ function browserSafeImageUrl(value: string | null): string | null {
       url.pathname = url.pathname.replace(/\.heic$/, ".webp");
       return url.toString();
     }
+
+    if (url.hostname.includes("cashdrama-vod.jowo.tv")) {
+      const signParam = url.searchParams.get("sign");
+      const timeParam = url.searchParams.get("t");
+
+      if (signParam && timeParam) {
+        const expiryTime = parseInt(timeParam, 16);
+        const now = Math.floor(Date.now() / 1000);
+
+        if (expiryTime < now) {
+          return null;
+        }
+      }
+    }
   } catch {
     return value;
   }
