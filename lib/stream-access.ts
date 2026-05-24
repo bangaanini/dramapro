@@ -425,6 +425,16 @@ export async function resolveDramaStreamSources({
     const now = Date.now();
     const canRefresh = now - lastRefreshTime >= REFRESH_COOLDOWN_MS;
 
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[Stream Refresh] Episode ${episodeIndex}:`, {
+        isUnavailable: isUnavailableStreamUrl(episode.videoUrl),
+        isExpired: isSignedStreamUrlExpired(episode.videoUrl),
+        canRefresh,
+        timeSinceLastRefresh: Math.floor((now - lastRefreshTime) / 1000),
+        cooldownSeconds: REFRESH_COOLDOWN_MS / 1000,
+      });
+    }
+
     if (canRefresh) {
       lastRefreshTimestamps.set(refreshKey, now);
 

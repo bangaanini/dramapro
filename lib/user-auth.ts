@@ -952,3 +952,59 @@ export async function userHasAdminVideoBypass(
 
   return Boolean(admin);
 }
+
+export async function resetUserPassword(input: {
+  email: string;
+  newPassword: string;
+}) {
+  const email = normalizeEmail(input.email);
+  const newPassword = input.newPassword.trim();
+
+  if (!email || !newPassword) {
+    return {
+      ok: false as const,
+      error: "Email dan password wajib diisi.",
+    };
+  }
+
+  if (newPassword.length < 8) {
+    return {
+      ok: false as const,
+      error: "Password minimal 8 karakter.",
+    };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: {
+      id: true,
+      email: true,
+      passwordHash: true,
+    },
+  });
+
+  if (!user) {
+    return {
+      ok: false as const,
+      error: "Email tidak ditemukan.",
+    };
+  }
+
+  if (!user.passwordHash) {
+    return {
+      ok: false as const,
+      error: "Akun ini tidak memiliki password. Gunakan login Telegram.",
+    };
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash: hashPassword(newPassword),
+    },
+  });
+
+  return {
+    ok: true as const,
+  };
+}

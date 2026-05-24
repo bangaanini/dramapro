@@ -1738,7 +1738,36 @@ export class ConfiguredProviderAdapter implements ProviderAdapter {
         return directPlayback;
       }
       if (process.env.ALLOW_PROVIDER_UNLOCK === "true") {
-        await this.fetch({ path: `/api/v1/unlock/${encodeURIComponent(input.externalId)}`, query: { q: input.quality ?? "720p" } });
+        const unlockPayload = await this.fetch({
+          path: `/api/v1/unlock/${encodeURIComponent(input.externalId)}`,
+          query: { q: input.quality ?? "720p" }
+        });
+
+        const videos = Array.isArray(unlockPayload?.videos) ? unlockPayload.videos : [];
+        const targetVideo = videos.find((v: any) =>
+          String(v?.id ?? "") === String(input.episodeExternalId) ||
+          String(v?.name ?? "").padStart(3, "0") === String(input.episodeNumber).padStart(3, "0")
+        ) as { id?: unknown; name?: unknown; url?: unknown } | undefined;
+
+        if (targetVideo?.url && typeof targetVideo.url === "string") {
+          return {
+            episodeId: input.episodeId,
+            provider: "goodshort" as const,
+            status: "ready" as const,
+            sourceType: "hls" as const,
+            sources: [{
+              url: targetVideo.url,
+              quality: "720p",
+              mimeType: "application/vnd.apple.mpegurl" as const,
+              codec: null,
+              expiresAt: null
+            }],
+            subtitles: [],
+            duration: null,
+            expiresAt: null,
+            providerMeta: { provider: "goodshort" as const, source: "unlock" }
+          };
+        }
       }
     }
 

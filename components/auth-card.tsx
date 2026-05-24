@@ -5,16 +5,17 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Eye, EyeOff, Lock, Mail, Send, User, X } from "lucide-react";
 
-import { signInUserAction, signUpUserAction } from "@/app/auth/actions";
+import { signInUserAction, signUpUserAction, resetPasswordUserAction } from "@/app/auth/actions";
 import logoImage from "@/2.png";
 import { cn } from "@/lib/utils";
 
-type AuthMode = "sign-in" | "sign-up";
+type AuthMode = "sign-in" | "sign-up" | "reset-password";
 
 type AuthCardProps = {
   mode: AuthMode;
   next: string;
   error?: string | null;
+  success?: string | null;
   initialName?: string;
   initialEmail?: string;
   initialTelegramUsername?: string;
@@ -46,6 +47,7 @@ export function AuthCard({
   mode,
   next,
   error,
+  success,
   initialName = "",
   initialEmail = "",
   initialTelegramUsername = "",
@@ -57,6 +59,7 @@ export function AuthCard({
   const [lastName, setLastName] = useState(initialNameParts.lastName);
   const [showPassword, setShowPassword] = useState(false);
   const isSignUp = mode === "sign-up";
+  const isResetPassword = mode === "reset-password";
   const combinedName = `${firstName} ${lastName}`.trim();
 
   return (
@@ -103,103 +106,159 @@ export function AuthCard({
             />
           </div>
           <h1 className="mt-5 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-            {isSignUp ? "Gabung Layar Drama" : "Selamat Datang Kembali"}
+            {isResetPassword
+              ? "Reset Password"
+              : isSignUp
+                ? "Gabung Layar Drama"
+                : "Selamat Datang Kembali"}
           </h1>
           <p className="mt-3 text-sm font-medium text-white/42 sm:text-base">
-            {isSignUp
-              ? "Buat akun untuk mulai menonton"
-              : "Masuk untuk melanjutkan petualangan dramamu"}
+            {isResetPassword
+              ? "Masukkan email untuk reset password"
+              : isSignUp
+                ? "Buat akun untuk mulai menonton"
+                : "Masuk untuk melanjutkan petualangan dramamu"}
           </p>
         </div>
 
-        <div className="mt-7 grid grid-cols-2 rounded-[1.15rem] border border-white/7 bg-white/[0.045] p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-          <AuthTab
-            active={!isSignUp}
-            href={modal ? "?auth=sign-in" : authHref("sign-in", next)}
-            onClick={modal ? onClose : undefined}
-          >
-            Masuk
-          </AuthTab>
-          <AuthTab
-            active={isSignUp}
-            href={modal ? "?auth=sign-up" : authHref("sign-up", next)}
-            onClick={modal ? onClose : undefined}
-          >
-            Buat Akun
-          </AuthTab>
-        </div>
+        {!isResetPassword ? (
+          <div className="mt-7 grid grid-cols-2 rounded-[1.15rem] border border-white/7 bg-white/[0.045] p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+            <AuthTab
+              active={!isSignUp}
+              href={modal ? "?auth=sign-in" : authHref("sign-in", next)}
+              onClick={modal ? onClose : undefined}
+            >
+              Masuk
+            </AuthTab>
+            <AuthTab
+              active={isSignUp}
+              href={modal ? "?auth=sign-up" : authHref("sign-up", next)}
+              onClick={modal ? onClose : undefined}
+            >
+              Buat Akun
+            </AuthTab>
+          </div>
+        ) : null}
 
         <form
-          action={isSignUp ? signUpUserAction : signInUserAction}
+          action={
+            isResetPassword
+              ? resetPasswordUserAction
+              : isSignUp
+                ? signUpUserAction
+                : signInUserAction
+          }
           className="mt-7 space-y-4"
         >
-          <input type="hidden" name="next" value={next} />
+          {!isResetPassword ? <input type="hidden" name="next" value={next} /> : null}
 
-          {isSignUp ? (
+          {isResetPassword ? (
             <>
-              <input type="hidden" name="name" value={combinedName} />
-              <div className="grid gap-4 sm:grid-cols-2">
-                <AuthInput
-                  icon={<User className="size-5" />}
-                  value={firstName}
-                  onValueChange={setFirstName}
-                  placeholder="Nama depan"
-                  autoComplete="given-name"
-                />
-                <AuthInput
-                  value={lastName}
-                  onValueChange={setLastName}
-                  placeholder="Nama belakang"
-                  autoComplete="family-name"
-                />
-              </div>
-            </>
-          ) : null}
-
-          <AuthInput
-            icon={<Mail className="size-5" />}
-            name="email"
-            type="email"
-            defaultValue={initialEmail}
-            placeholder="Alamat email"
-            autoComplete="username"
-          />
-
-          {isSignUp ? (
-            <div className="space-y-2">
               <AuthInput
-                icon={<Send className="size-5" />}
-                name="telegramUsername"
-                type="text"
-                defaultValue={initialTelegramUsername}
-                placeholder="Telegram username (opsional)"
-                autoComplete="off"
+                icon={<Mail className="size-5" />}
+                name="email"
+                type="email"
+                defaultValue={initialEmail}
+                placeholder="Alamat email"
+                autoComplete="username"
+                required
               />
-              <p className="px-1 text-xs leading-5 text-white/45">
-                Diisi kalau kamu juga pakai Layar Drama lewat Telegram. Saat
-                kamu buka mini-app nanti, akun ini akan ditawarkan untuk
-                digabungkan.
-              </p>
-            </div>
-          ) : null}
+              <AuthInput
+                icon={<Lock className="size-5" />}
+                name="newPassword"
+                type={showPassword ? "text" : "password"}
+                placeholder="Password Baru (min. 8 karakter)"
+                autoComplete="new-password"
+                required
+                trailing={
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((current) => !current)}
+                    className="inline-flex size-9 items-center justify-center rounded-full text-white/38 transition hover:bg-white/8 hover:text-white"
+                    aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+                  >
+                    {showPassword ? <EyeOff className="size-4.5" /> : <Eye className="size-4.5" />}
+                  </button>
+                }
+              />
+              <AuthInput
+                icon={<Lock className="size-5" />}
+                name="confirmPassword"
+                type={showPassword ? "text" : "password"}
+                placeholder="Konfirmasi Password Baru"
+                autoComplete="new-password"
+                required
+              />
+            </>
+          ) : (
+            <>
+              {isSignUp ? (
+                <>
+                  <input type="hidden" name="name" value={combinedName} />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <AuthInput
+                      icon={<User className="size-5" />}
+                      value={firstName}
+                      onValueChange={setFirstName}
+                      placeholder="Nama depan"
+                      autoComplete="given-name"
+                    />
+                    <AuthInput
+                      value={lastName}
+                      onValueChange={setLastName}
+                      placeholder="Nama belakang"
+                      autoComplete="family-name"
+                    />
+                  </div>
+                </>
+              ) : null}
 
-          <AuthInput
-            icon={<Lock className="size-5" />}
-            name="password"
-            type={showPassword ? "text" : "password"}
-            placeholder={isSignUp ? "Kata Sandi (min. 8 karakter)" : "Kata Sandi"}
-            autoComplete={isSignUp ? "new-password" : "current-password"}
-            trailing={
-              <button
-                type="button"
-                onClick={() => setShowPassword((current) => !current)}
-                className="inline-flex size-9 items-center justify-center rounded-full text-white/38 transition hover:bg-white/8 hover:text-white"
-                aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
-              >
-                {showPassword ? <EyeOff className="size-4.5" /> : <Eye className="size-4.5" />}
-              </button>
-            }
-          />
+              <AuthInput
+                icon={<Mail className="size-5" />}
+                name="email"
+                type="email"
+                defaultValue={initialEmail}
+                placeholder="Alamat email"
+                autoComplete="username"
+              />
+
+              {isSignUp ? (
+                <div className="space-y-2">
+                  <AuthInput
+                    icon={<Send className="size-5" />}
+                    name="telegramUsername"
+                    type="text"
+                    defaultValue={initialTelegramUsername}
+                    placeholder="Telegram username (opsional)"
+                    autoComplete="off"
+                  />
+                  <p className="px-1 text-xs leading-5 text-white/45">
+                    Diisi kalau kamu juga pakai Layar Drama lewat Telegram. Saat
+                    kamu buka mini-app nanti, akun ini akan ditawarkan untuk
+                    digabungkan.
+                  </p>
+                </div>
+              ) : null}
+
+              <AuthInput
+                icon={<Lock className="size-5" />}
+                name="password"
+                type={showPassword ? "text" : "password"}
+                placeholder={isSignUp ? "Kata Sandi (min. 8 karakter)" : "Kata Sandi"}
+                autoComplete={isSignUp ? "new-password" : "current-password"}
+                trailing={
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((current) => !current)}
+                    className="inline-flex size-9 items-center justify-center rounded-full text-white/38 transition hover:bg-white/8 hover:text-white"
+                    aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+                  >
+                    {showPassword ? <EyeOff className="size-4.5" /> : <Eye className="size-4.5" />}
+                  </button>
+                }
+              />
+            </>
+          )}
 
           {error ? (
             <div className="rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-100">
@@ -207,12 +266,40 @@ export function AuthCard({
             </div>
           ) : null}
 
+          {success ? (
+            <div className="rounded-2xl border border-green-400/20 bg-green-500/10 px-4 py-3 text-sm leading-6 text-green-100">
+              {success}
+            </div>
+          ) : null}
+
+          {!isSignUp && !isResetPassword ? (
+            <div className="flex justify-end">
+              <Link
+                href="/reset-password"
+                className="text-sm font-medium text-white/52 transition hover:text-accent"
+              >
+                Lupa Password?
+              </Link>
+            </div>
+          ) : null}
+
           <button
             type="submit"
             className="h-14 w-full rounded-[1.05rem] bg-[linear-gradient(90deg,#f0064f,#ff7a45,#ff982f)] px-5 text-base font-semibold text-white shadow-[0_18px_46px_rgba(255,86,49,0.34)] transition hover:brightness-110 active:scale-[0.985]"
           >
-            {isSignUp ? "Buat Akun" : "Masuk"}
+            {isResetPassword ? "Reset Password" : isSignUp ? "Buat Akun" : "Masuk"}
           </button>
+
+          {isResetPassword ? (
+            <div className="flex justify-center">
+              <Link
+                href="/sign-in"
+                className="text-sm font-medium text-white/52 transition hover:text-accent"
+              >
+                Kembali ke Halaman Masuk
+              </Link>
+            </div>
+          ) : null}
         </form>
       </div>
     </section>
