@@ -7,6 +7,13 @@ import {
   resolveDuitkuExpiryPeriod,
 } from "@/lib/duitku";
 import {
+  checkPakasirTransactionStatus,
+  createPakasirTransaction,
+  extractPakasirPaymentDetails,
+  normalizePakasirStatus,
+  parsePakasirAmount,
+} from "@/lib/pakasir";
+import {
   checkPaymenkuTransactionStatus,
   createPaymenkuTransaction,
   extractPaymenkuPaymentDetails,
@@ -169,6 +176,85 @@ async function checkDuitkuCheckoutStatus(
   };
 }
 
+async function createPakasirCheckout(
+  gateway: PaymentGatewayRuntimeConfig,
+  input: CreatePaymentTransactionInput,
+): Promise<CreatePaymentTransactionResult> {
+  const projectSlug = gateway.merchantId;
+
+  if (!projectSlug.trim()) {
+    throw new Error("Pakasir project slug belum diisi di Merchant ID.");
+  }
+
+  const payload = await createPakasirTransaction(gateway.secret!, projectSlug, {
+    order_id: input.referenceId,
+    amount: input.amount,
+    method: input.channelCode,
+  });
+
+  if (!payload.payment) {
+    throw new Error(payload.message || payload.error || "Pakasir tidak mengembalikan payment data.");
+  }
+
+  const paymentDetails = extractPakasirPaymentDetails(payload, input.channelCode);
+
+  return {
+    providerTransactionId: payload.payment.order_id,
+    referenceId: payload.payment.order_id,
+    amount: parsePakasirAmount(payload.payment.total_payment),
+    status: normalizePakasirStatus("pending"),
+    payUrl: `https://app.pakasir.com/pay/${projectSlug}/${input.amount}?order_id=${encodeURIComponent(input.referenceId)}`,
+    qrUrl: null,
+    qrString: paymentDetails.qrString,
+    expiresAt: paymentDetails.expiresAt,
+    providerPayload: payload as unknown as object,
+    channelCode: input.channelCode,
+    channelName: paymentDetails.channelName,
+    channelGroup: paymentDetails.group,
+    bankName: paymentDetails.bankName,
+    vaNumber: paymentDetails.vaNumber,
+  };
+}
+
+async function checkPakasirCheckoutStatus(
+  gateway: PaymentGatewayRuntimeConfig,
+  orderId: string,
+  amount: number,
+): Promise<CheckPaymentStatusResult> {
+  const projectSlug = gateway.merchantId;
+
+  if (!projectSlug.trim()) {
+    throw new Error("Pakasir project slug belum diisi di Merchant ID.");
+  }
+
+  const payload = await checkPakasirTransactionStatus(
+    gateway.secret!,
+    projectSlug,
+    orderId,
+    amount,
+  );
+
+  if (!payload.transaction) {
+    throw new Error(payload.message || payload.error || "Pakasir tidak mengembalikan transaction data.");
+  }
+
+  const paymentDetails = extractPakasirPaymentDetails(payload);
+
+  return {
+    providerTransactionId: payload.transaction.order_id ?? null,
+    amount: parsePakasirAmount(payload.transaction.amount),
+    status: normalizePakasirStatus(payload.transaction.status),
+    payUrl: null,
+    qrUrl: null,
+    qrString: paymentDetails.qrString,
+    expiresAt: paymentDetails.expiresAt,
+    providerPayload: payload as unknown as object,
+    channelGroup: paymentDetails.group,
+    bankName: paymentDetails.bankName,
+    vaNumber: paymentDetails.vaNumber,
+  };
+}
+
 export async function createActiveGatewayTransaction(
   input: CreatePaymentTransactionInput,
 ) {
@@ -185,6 +271,11 @@ export async function createActiveGatewayTransaction(
         gateway,
         result: await createDuitkuCheckout(gateway, input),
       };
+    case "pakasir":
+      return {
+        gateway,
+        result: await createPakasirCheckout(gateway, input),
+      };
     default:
       throw new Error(`${gateway.displayName} belum tersedia untuk checkout.`);
   }
@@ -193,6 +284,7 @@ export async function createActiveGatewayTransaction(
 export async function checkGatewayTransactionStatus(
   provider: PaymentGatewayProvider,
   providerTransactionIdOrReferenceId: string,
+  amount?: number,
 ) {
   const activeGateway = await getActivePaymentGateway();
   const gateway =
@@ -209,6 +301,10 @@ export async function checkGatewayTransactionStatus(
             throw new Error("Duitku belum memiliki Merchant ID.");
           }
 
+          if (provider === "pakasir" && !config.merchantId.trim()) {
+            throw new Error("Pakasir belum memiliki project slug di Merchant ID.");
+          }
+
           return config;
         });
 
@@ -217,6 +313,11 @@ export async function checkGatewayTransactionStatus(
       return checkPaymenkuCheckoutStatus(gateway, providerTransactionIdOrReferenceId);
     case "duitku":
       return checkDuitkuCheckoutStatus(gateway, providerTransactionIdOrReferenceId);
+    case "pakasir":
+      if (!amount) {
+        throw new Error("Pakasir membutuhkan amount untuk check status.");
+      }
+      return checkPakasirCheckoutStatus(gateway, providerTransactionIdOrReferenceId, amount);
     default:
       throw new Error(`${provider} belum tersedia untuk sinkronisasi status.`);
   }

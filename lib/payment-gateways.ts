@@ -4,6 +4,7 @@ import { decryptPaymentSecret } from "@/lib/payment-crypto";
 export const PAYMENT_GATEWAY_PROVIDERS = [
   "paymenku",
   "duitku",
+  "pakasir",
   "xendit",
   "midtrans",
   "tripay",
@@ -103,6 +104,17 @@ export const PAYMENT_GATEWAY_DEFINITIONS: Array<{
     capability: {
       supportsInlineQr: true,
       supportsRedirectCheckout: true,
+      supportsWebhook: true,
+      supportsStatusPolling: true,
+      implemented: true,
+    },
+  },
+  {
+    provider: "pakasir",
+    displayName: "Pakasir",
+    capability: {
+      supportsInlineQr: true,
+      supportsRedirectCheckout: false,
       supportsWebhook: true,
       supportsStatusPolling: true,
       implemented: true,

@@ -11,6 +11,10 @@ import {
   DUITKU_PRIMARY_CHANNELS,
   resolveDuitkuEnabledChannelCodes,
 } from "@/lib/duitku";
+import {
+  PAKASIR_PRIMARY_CHANNELS,
+  resolvePakasirEnabledChannelCodes,
+} from "@/lib/pakasir";
 import { listPaymentGatewayConfigs } from "@/lib/payment-gateways";
 import {
   PAYMENKU_PRIMARY_CHANNELS,
@@ -94,12 +98,16 @@ export default async function AdminPaymentGatewaysPage(
               ? resolvePaymenkuEnabledChannelCodes(gateway.configJson)
               : gateway.provider === "duitku"
                 ? resolveDuitkuEnabledChannelCodes(gateway.configJson)
+              : gateway.provider === "pakasir"
+                ? resolvePakasirEnabledChannelCodes(gateway.configJson)
               : [];
           const gatewayChannels =
             gateway.provider === "paymenku"
               ? PAYMENKU_PRIMARY_CHANNELS
               : gateway.provider === "duitku"
                 ? DUITKU_PRIMARY_CHANNELS
+              : gateway.provider === "pakasir"
+                ? PAKASIR_PRIMARY_CHANNELS
                 : [];
 
           return (
@@ -290,9 +298,11 @@ export default async function AdminPaymentGatewaysPage(
                         ? "Mode Paymenku mengikuti API key yang dipakai: sk_test untuk simulator dan sk_live untuk production. Config JSON mode tidak dipakai oleh adapter Paymenku."
                         : gateway.provider === "duitku"
                           ? 'Duitku memakai Merchant ID sebagai merchantCode, Secret sebagai API key, dan Config JSON mode "sandbox" atau "production". Callback URL: /api/payment/duitku/callback.'
-                        : gateway.capability.implemented
-                          ? "Gateway ini sudah siap dipakai checkout VIP setelah credential valid disimpan."
-                          : "Gateway ini baru disiapkan untuk konfigurasi awal. Adapter API akan ditambahkan di fase berikutnya."}
+                          : gateway.provider === "pakasir"
+                            ? "Pakasir memakai Merchant ID sebagai project slug, Secret sebagai API key. Mode sandbox/production mengikuti API key. Webhook URL: /api/payment/pakasir/callback."
+                            : gateway.capability.implemented
+                              ? "Gateway ini sudah siap dipakai checkout VIP setelah credential valid disimpan."
+                              : "Gateway ini baru disiapkan untuk konfigurasi awal. Adapter API akan ditambahkan di fase berikutnya."}
                     </div>
 
                     <Button type="submit" className="w-full">

@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { VipCheckoutPanel } from "@/components/vip-checkout-panel";
 import { VipPaymentSelector } from "@/components/vip-payment-selector";
 import { getDuitkuCheckoutChannels } from "@/lib/duitku";
+import { getPakasirCheckoutChannels } from "@/lib/pakasir";
 import {
   getPaymenkuCheckoutChannels,
   PAYMENKU_PRIMARY_CHANNELS,
@@ -40,6 +41,8 @@ export default async function VipPage(props: PageProps<"/vip">) {
       ? getPaymenkuCheckoutChannels(activeGateway.configJson)
       : activeGateway?.provider === "duitku"
         ? getDuitkuCheckoutChannels(activeGateway.configJson)
+      : activeGateway?.provider === "pakasir"
+        ? getPakasirCheckoutChannels(activeGateway.configJson)
       : PAYMENKU_PRIMARY_CHANNELS;
   const checkoutPayment =
     checkoutReferenceId && user

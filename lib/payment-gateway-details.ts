@@ -4,6 +4,11 @@ import {
   type DuitkuStatusResponse,
 } from "@/lib/duitku";
 import {
+  extractPakasirPaymentDetails,
+  type PakasirCreateTransactionResponse,
+  type PakasirTransactionDetailResponse,
+} from "@/lib/pakasir";
+import {
   extractPaymenkuPaymentDetailsFromPayloads,
   type PaymenkuCreateTransactionResponse,
   type PaymenkuStatusResponse,
@@ -20,6 +25,13 @@ export function extractGatewayPaymentDetailsFromPayloads(
     return extractDuitkuPaymentDetailsFromPayloads(
       preferredPayload as DuitkuCreateTransactionResponse | DuitkuStatusResponse | null | undefined,
       fallbackPayload as DuitkuCreateTransactionResponse | DuitkuStatusResponse | null | undefined,
+      channelCode,
+    );
+  }
+
+  if (provider === "pakasir") {
+    return extractPakasirPaymentDetails(
+      (preferredPayload ?? fallbackPayload) as PakasirCreateTransactionResponse | PakasirTransactionDetailResponse | null | undefined,
       channelCode,
     );
   }

@@ -9,6 +9,10 @@ import {
   resolveDuitkuEnabledChannelCodes,
 } from "@/lib/duitku";
 import {
+  getPakasirChannelGroup,
+  resolvePakasirEnabledChannelCodes,
+} from "@/lib/pakasir";
+import {
   getPaymenkuChannelGroup,
   resolvePaymenkuEnabledChannelCodes,
 } from "@/lib/paymenku";
@@ -164,7 +168,9 @@ export async function createVipPaymentSession(input: {
       ? resolvePaymenkuEnabledChannelCodes(activeGateway.configJson)
       : activeGateway.provider === "duitku"
         ? resolveDuitkuEnabledChannelCodes(activeGateway.configJson)
-      : [activeGateway.defaultChannelCode];
+        : activeGateway.provider === "pakasir"
+          ? resolvePakasirEnabledChannelCodes(activeGateway.configJson)
+          : [activeGateway.defaultChannelCode];
 
   if (!enabledChannelCodes.includes(channelCode)) {
     redirect(
@@ -276,6 +282,7 @@ export async function syncVipPaymentStatus(referenceId: string, userId: string) 
     payment.gatewayProvider === "duitku"
       ? payment.referenceId
       : payment.providerTransactionId || payment.referenceId,
+    payment.gatewayProvider === "pakasir" ? payment.amount : undefined,
   );
 
   return applyVipPaymentGatewayResult(payment.id, payload);
