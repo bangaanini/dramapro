@@ -571,6 +571,12 @@ export async function saveTelegramSettingsAction(formData: FormData) {
         telegramAdminUsernames,
       },
     });
+
+    // Sync admin Telegram IDs ke tabel AdminUser
+    const { syncAdminTelegramIds } = await import("@/lib/admin-telegram-sync");
+    await syncAdminTelegramIds().catch((error) => {
+      console.error("[Admin Settings] Failed to sync admin Telegram IDs:", error);
+    });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Pengaturan Telegram gagal disimpan.";
