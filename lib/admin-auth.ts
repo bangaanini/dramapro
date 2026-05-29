@@ -93,6 +93,7 @@ export async function getPrimaryAdminForSession() {
       id: true,
       email: true,
       name: true,
+      telegramId: true,
     },
   });
 
@@ -108,6 +109,7 @@ export async function getPrimaryAdminForSession() {
       id: true,
       email: true,
       name: true,
+      telegramId: true,
     },
   });
 }

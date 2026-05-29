@@ -338,6 +338,7 @@ model AdminUser {
   email                     String                     @unique
   name                      String
   passwordHash              String
+  telegramId                String?
   sessions                  AdminSession[]
   pushNotificationCampaigns PushNotificationCampaign[]
   createdAt                 DateTime                   @default(now())
@@ -769,32 +770,34 @@ model PaymentGatewayConfig {
 }
 
 model VipPayment {
-  id                    String                 @id @default(uuid()) @db.Uuid
-  userId                String                 @db.Uuid
-  vipPricePlanId        String                 @db.Uuid
-  referenceId           String                 @unique
-  gatewayProvider       PaymentGatewayProvider @default(paymenku)
-  providerTransactionId String?                @unique
-  channelCode           String
-  channelName           String                 @default("")
-  amount                Int
-  paidAmount            Int?
-  currency              String                 @default("IDR")
-  status                VipPaymentStatus       @default(pending)
-  payUrl                String
-  qrUrl                 String?
-  qrString              String?
-  returnUrl             String
-  expiresAt             DateTime?
-  lastCheckedAt         DateTime?
-  activatedAt           DateTime?
-  providerPayload       Json?
-  statusPayload         Json?
-  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  plan                  VipPricePlan           @relation(fields: [vipPricePlanId], references: [id], onDelete: Restrict)
-  affiliateCommission   AffiliateCommission?
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
+  id                       String                 @id @default(uuid()) @db.Uuid
+  userId                   String                 @db.Uuid
+  vipPricePlanId           String                 @db.Uuid
+  referenceId              String                 @unique
+  gatewayProvider          PaymentGatewayProvider @default(paymenku)
+  providerTransactionId    String?                @unique
+  channelCode              String
+  channelName              String                 @default("")
+  amount                   Int
+  paidAmount               Int?
+  currency                 String                 @default("IDR")
+  status                   VipPaymentStatus       @default(pending)
+  payUrl                   String
+  qrUrl                    String?
+  qrString                 String?
+  returnUrl                String
+  expiresAt                DateTime?
+  lastCheckedAt            DateTime?
+  activatedAt              DateTime?
+  providerPayload          Json?
+  statusPayload            Json?
+  adminNotificationSentAt  DateTime?
+  adminNotificationError   String                 @default("")
+  user                     User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan                     VipPricePlan           @relation(fields: [vipPricePlanId], references: [id], onDelete: Restrict)
+  affiliateCommission      AffiliateCommission?
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
 
   @@index([userId, status, createdAt])
   @@index([vipPricePlanId, createdAt])

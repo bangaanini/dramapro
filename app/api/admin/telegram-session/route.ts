@@ -5,6 +5,7 @@ import {
   getPrimaryAdminForSession,
 } from "@/lib/admin-auth";
 import { getTelegramSettings } from "@/lib/app-settings";
+import { prisma } from "@/lib/prisma";
 import { isMainTelegramAdminIdentity } from "@/lib/telegram-admin";
 import { verifyTelegramInitData } from "@/lib/telegram-auth";
 
@@ -58,6 +59,15 @@ export async function POST(request: NextRequest) {
     }
 
     const admin = await getPrimaryAdminForSession();
+
+    // Update telegramId admin jika belum tersimpan
+    if (admin.telegramId !== verified.user.id) {
+      await prisma.adminUser.update({
+        where: { id: admin.id },
+        data: { telegramId: verified.user.id },
+      });
+    }
+
     await createAdminSession(admin.id);
 
     return NextResponse.json({

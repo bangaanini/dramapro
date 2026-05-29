@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { notifyAdminForPayment } from "@/lib/admin-payment-notifications";
 import { DEFAULT_AFFILIATE_SETTINGS, getAffiliateTier } from "@/lib/affiliate";
 import {
   normalizeDuitkuChannelCode,
@@ -366,6 +367,7 @@ export async function applyVipPaymentGatewayResult(
 
   if (syncedPayment?.status === "paid") {
     await notifyPartnerBotCommissionForPayment(paymentId);
+    await notifyAdminForPayment(paymentId);
   }
 
   return syncedPayment;
