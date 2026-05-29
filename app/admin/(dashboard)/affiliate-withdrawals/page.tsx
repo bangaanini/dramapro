@@ -28,7 +28,9 @@ export default async function AdminAffiliateWithdrawalsPage(
   const [pendingWithdrawals, recentReviewed] = await Promise.all([
     prisma.affiliateWithdrawal.findMany({
       where: {
-        status: "pending",
+        status: {
+          in: ["pending", "approved"],
+        },
       },
       include: {
         affiliateUser: {
@@ -49,7 +51,7 @@ export default async function AdminAffiliateWithdrawalsPage(
     prisma.affiliateWithdrawal.findMany({
       where: {
         status: {
-          in: ["approved", "paid", "rejected"],
+          in: ["paid", "rejected"],
         },
       },
       include: {
@@ -84,8 +86,8 @@ export default async function AdminAffiliateWithdrawalsPage(
         </p>
 
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          <StatCard label="Pending" value={String(pendingWithdrawals.length)} />
-          <StatCard label="Recent reviewed" value={String(recentReviewed.length)} />
+          <StatCard label="Pending review" value={String(pendingWithdrawals.filter(w => w.status === "pending").length)} />
+          <StatCard label="Approved" value={String(pendingWithdrawals.filter(w => w.status === "approved").length)} />
           <StatCard
             label="Mode review"
             value={pendingWithdrawals.length > 0 ? "Aktif" : "Santai"}
@@ -114,10 +116,10 @@ export default async function AdminAffiliateWithdrawalsPage(
               </div>
               <div>
                 <h2 className="text-xl font-semibold text-white">
-                  Withdrawal pending
+                  Withdrawal menunggu aksi
                 </h2>
                 <p className="text-sm text-[var(--muted)]">
-                  Permintaan terbaru yang menunggu tindakan admin.
+                  Pending review dan approved, siap untuk diproses atau ditandai paid.
                 </p>
               </div>
             </div>
@@ -213,9 +215,9 @@ export default async function AdminAffiliateWithdrawalsPage(
                 <CheckCircle2 className="size-5" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-white">Riwayat review</h2>
+                <h2 className="text-xl font-semibold text-white">Riwayat selesai</h2>
                 <p className="text-sm text-[var(--muted)]">
-                  Status terbaru yang sudah ditindak admin.
+                  Withdrawal yang sudah paid atau rejected.
                 </p>
               </div>
             </div>
