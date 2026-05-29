@@ -61,10 +61,11 @@ export async function POST(request: NextRequest) {
     const admin = await getPrimaryAdminForSession();
 
     // Update telegramId admin jika belum tersimpan
-    if (admin.telegramId !== verified.user.id) {
+    const telegramId = String(verified.user.id);
+    if (admin.telegramId !== telegramId) {
       await prisma.adminUser.update({
         where: { id: admin.id },
-        data: { telegramId: verified.user.id },
+        data: { telegramId },
       });
     }
 
