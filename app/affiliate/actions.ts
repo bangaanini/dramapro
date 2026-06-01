@@ -211,7 +211,7 @@ export async function requestAffiliateWithdrawalAction() {
   }, 0);
 
   const totalWithdrawn = withdrawalGroups.reduce((sum, item) => {
-    if (item.status !== "approved" && item.status !== "paid") {
+    if (item.status !== "paid") {
       return sum;
     }
 
@@ -333,7 +333,7 @@ export async function requestPartnerBotWithdrawalAction(botUsername: string) {
     return sum + (item._sum.amount ?? 0);
   }, 0);
   const totalWithdrawn = withdrawalGroups.reduce((sum, item) => {
-    if (item.status !== "approved" && item.status !== "paid") {
+    if (item.status !== "paid") {
       return sum;
     }
 

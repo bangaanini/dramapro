@@ -190,7 +190,9 @@ export async function getAdminUsersTableData(input?: {
 
     if (item.status === "pending") {
       current.pendingAmount += amount;
-    } else if (item.status === "approved" || item.status === "paid") {
+    } else if (item.status === "approved") {
+      current.pendingAmount += amount;
+    } else if (item.status === "paid") {
       current.withdrawnAmount += amount;
     }
 
