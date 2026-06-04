@@ -1,9 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { extractGatewayPaymentDetailsFromPayloads } from "@/lib/payment-gateway-details";
+import { parsePakasirAmount } from "@/lib/pakasir";
 import { prisma } from "@/lib/prisma";
 import { getUserFromRequest } from "@/lib/user-auth";
 import { syncVipPaymentStatus } from "@/lib/vip-payments";
+
+function extractPakasirTotalPayment(
+  provider: string,
+  providerPayload: unknown,
+) {
+  if (provider !== "pakasir" || !providerPayload) {
+    return null;
+  }
+
+  const payload = providerPayload as Record<string, unknown> | null | undefined;
+
+  if (!payload) {
+    return null;
+  }
+
+  const payment = payload.payment as Record<string, unknown> | null | undefined;
+  const transaction = payload.transaction as Record<string, unknown> | null | undefined;
+  const totalPayment = payment?.total_payment ?? transaction?.amount;
+
+  return parsePakasirAmount(
+    typeof totalPayment === "string" || typeof totalPayment === "number"
+      ? totalPayment
+      : null,
+  );
+}
 
 export const runtime = "nodejs";
 
@@ -40,6 +66,9 @@ export async function GET(
     payment.channelCode,
   );
 
+  const resolvedPaidAmount =
+    payment.paidAmount ?? extractPakasirTotalPayment(payment.gatewayProvider, payment.providerPayload) ?? payment.amount;
+
   return NextResponse.json({
     referenceId: payment.referenceId,
     status: payment.status,
@@ -48,7 +77,7 @@ export async function GET(
     qrString: payment.qrString,
     expiresAt: payment.expiresAt?.toISOString() ?? null,
     activatedAt: payment.activatedAt?.toISOString() ?? null,
-    amount: payment.paidAmount ?? payment.amount,
+    amount: resolvedPaidAmount,
     currency: payment.currency,
     planName: payment.plan.name,
     channelCode: payment.channelCode,

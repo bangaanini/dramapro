@@ -58,19 +58,36 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Payment not found." }, { status: 404 });
   }
 
-  const statusResult =
-    payload.status === "completed"
-      ? await checkGatewayTransactionStatus("pakasir", payload.order_id, payment.amount)
-      : {
-          providerTransactionId: payload.order_id,
-          amount: parsePakasirAmount(payload.amount),
-          status: normalizePakasirStatus(payload.status),
-          payUrl: null,
-          qrUrl: null,
-          qrString: null,
-          expiresAt: null,
-          providerPayload: payload,
-        };
+  const normalizedStatus = normalizePakasirStatus(payload.status);
+
+  let statusResult;
+  if (normalizedStatus === "paid") {
+    statusResult = {
+      providerTransactionId: payload.order_id,
+      amount: parsePakasirAmount(payload.amount),
+      status: "paid" as const,
+      payUrl: null,
+      qrUrl: null,
+      qrString: null,
+      expiresAt: null,
+      providerPayload: payload,
+    };
+  } else {
+    try {
+      statusResult = await checkGatewayTransactionStatus("pakasir", payload.order_id, payment.amount);
+    } catch {
+      statusResult = {
+        providerTransactionId: payload.order_id,
+        amount: parsePakasirAmount(payload.amount),
+        status: normalizedStatus,
+        payUrl: null,
+        qrUrl: null,
+        qrString: null,
+        expiresAt: null,
+        providerPayload: payload,
+      };
+    }
+  }
 
   await applyVipPaymentGatewayResult(payment.id, statusResult);
 
