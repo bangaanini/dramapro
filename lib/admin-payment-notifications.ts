@@ -43,39 +43,57 @@ function resolvePaymentSource(input: {
 export async function notifyAdminForPayment(vipPaymentId: string) {
   console.log("[Admin Notification] Starting for payment:", vipPaymentId);
 
-  const payment = await prisma.vipPayment.findUnique({
-    where: {
-      id: vipPaymentId,
-    },
-    include: {
-      user: {
-        select: {
-          name: true,
-          telegramUsername: true,
-          referredByPartnerBot: {
-            select: {
-              botUsername: true,
+  const payment = await prisma.$transaction(async (tx) => {
+    const record = await tx.vipPayment.findUnique({
+      where: {
+        id: vipPaymentId,
+      },
+      include: {
+        user: {
+          select: {
+            name: true,
+            telegramUsername: true,
+            referredByPartnerBot: {
+              select: {
+                botUsername: true,
+              },
             },
           },
         },
-      },
-      plan: {
-        select: {
-          name: true,
-          durationDays: true,
+        plan: {
+          select: {
+            name: true,
+            durationDays: true,
+          },
         },
       },
-    },
+    });
+
+    console.log("[Admin Notification] Payment found:", {
+      id: record?.id,
+      status: record?.status,
+      adminNotificationSentAt: record?.adminNotificationSentAt,
+    });
+
+    if (!record || record.status !== "paid" || record.adminNotificationSentAt) {
+      console.log("[Admin Notification] Skipping - payment not eligible");
+      return null;
+    }
+
+    await tx.vipPayment.update({
+      where: {
+        id: record.id,
+        adminNotificationSentAt: null,
+      },
+      data: {
+        adminNotificationSentAt: new Date(),
+      },
+    });
+
+    return record;
   });
 
-  console.log("[Admin Notification] Payment found:", {
-    id: payment?.id,
-    status: payment?.status,
-    adminNotificationSentAt: payment?.adminNotificationSentAt,
-  });
-
-  if (!payment || payment.status !== "paid" || payment.adminNotificationSentAt) {
-    console.log("[Admin Notification] Skipping - payment not eligible");
+  if (!payment) {
     return;
   }
 
@@ -144,15 +162,16 @@ export async function notifyAdminForPayment(vipPaymentId: string) {
     }
   }
 
-  await prisma.vipPayment.update({
-    where: {
-      id: payment.id,
-    },
-    data: {
-      adminNotificationSentAt: errors.length === 0 ? new Date() : null,
-      adminNotificationError: errors.length > 0 ? errors.join("; ") : "",
-    },
-  });
+  if (errors.length > 0) {
+    await prisma.vipPayment.update({
+      where: {
+        id: payment.id,
+      },
+      data: {
+        adminNotificationError: errors.join("; "),
+      },
+    });
+  }
 
   console.log("[Admin Notification] Completed. Errors:", errors.length);
 }
